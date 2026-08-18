@@ -30,11 +30,14 @@ Antigravity / Gemini CLI).
 | Plugin manifest | `plugin.json` (spec §5) |
 | MCP server manifest | `mcp.json` (spec §7, type=stdio) |
 | Skill frontmatter | `skills/octopus-pet/SKILL.md` (agentskills.io) |
-| Plugin entrypoint | `bin/octopus-pet` (per spec §9.2, single-token command) |
-| React 前端 | `app/src/` (components · state · hooks · ipc · data · styles) |
-| Rust 后端 | `src-tauri/src/` (lib · main · mcp_stdio · state_bridge · http_fallback) |
+| Plugin entrypoint | `bin/octopus-pet` (spec §9.2; dev=本地构建优先, 发布=bin/octopus-pet.bin 兜底) |
+| **提交的 release 产物** | `bin/octopus-pet.bin` (~13MB, 内嵌 spritesheet; `release-plugin.sh` 生成, **commit 时一起提交**) |
+| 状态逻辑单点 | `src-tauri/src/actions.rs` (MCP/HTTP 唯一的 apply_* 实现) |
+| 状态镜像回写 | `src-tauri/src/state_bridge.rs::sync_state` (webview→Rust, 只写不 emit) |
+| React 前端 | `app/src/` (components · state · hooks · data · styles) |
+| Rust 后端 | `src-tauri/src/` (lib · main · actions · mcp_stdio · state_bridge · http_fallback) |
 | 14 spritesheet | `app/public/assets/octopus/spritesheet-{01..14}-*.webp` |
-| Spritesheet manifest | `app/src/data/spritesheet-manifest.json` |
+| Spritesheet manifest | `app/src/data/spritesheet-manifest.json` (**唯一副本**, 生成脚本输出这里) |
 | 14 场景素材审计 | `docs/octopus-assets-audit.md` (W1 D1 产物) |
 | 变更历史 | `CHANGELOG.md` (Keep a Changelog 1.1.0) |
 | CI | `.github/workflows/ci.yml` (spec lint · asset audit · spritesheet regen · Rust build · Vitest) |
@@ -43,12 +46,17 @@ Antigravity / Gemini CLI).
 
 - **plugin 三件套** (`plugin.json` + `mcp.json` + `skills/.../SKILL.md`) 是 spec 必填.
   改任一文件后必跑 `bash scripts/lint-octopus-plugin.sh` 校验 (16/16).
-- **改 MCP wrapper 默认值/参数**: 三处一起改 — `__init__` 默认值 + `_xxx_props()` 的
-  `inputSchema` 描述 + 调用点 `arguments.get()`. 缺一就 drift.
-- **改 FSM**: 14 场景常量在 `app/src/state/types.ts` (`SCENE_ORDER` + `BUBBLE_BY_SCENE`)
-  + `octopus-fsm.ts` 两处需同步. 改完跑 `cd app && npm test` (16 tests).
+- **状态逻辑改 `actions.rs` 单点**: 场景校验 / ≤12 字截断 / bubble 3s / affection+5
+  只在 `src-tauri/src/actions.rs`。MCP stdio / HTTP fallback 都委托它, 不要在新入口
+  复制逻辑。状态权威是前端 XState, Rust `SharedState` 只是镜像 (sync_state 回写).
+- **改场景清单 (14 场景)**: 三处同步 — `app/src/state/types.ts` (SCENE_ORDER) +
+  `app/src/data/spritesheet-manifest.json` (scenes[].sceneId) + `src-tauri/src/mcp_stdio.rs`
+  (SCENES). 改完跑 `bash scripts/check-scenes-sync.sh` (CI 也会跑).
 - **改 spritesheet**: 141 帧是源头真理. 真要改, 从 `~/Works/octopus-worker-meme` 抽,
-  跑 `extract-and-link-octopus-frames.sh` + `spritesheet-builder.sh`.
+  跑 `extract-and-link-octopus-frames.sh` + `spritesheet-builder.sh` + `generate-spritesheet-manifest.sh`.
+- **发布产物 `bin/octopus-pet.bin` 提交进 git**: 跑 `release-plugin.sh` 后 `git add bin/octopus-pet.bin`
+  随 commit 提交 (repo 本身即插件, clone 零构建可加载). 产物必须走
+  `cargo tauri build --no-bundle` — 裸 `cargo build` 增量会跳过 asset 嵌入 (binary < 5MB = 缺 assets).
 - **WebP 硬上限 16383px**: 141 帧单行 27072px 超限, 所以 2 行 71 列布局是硬约束,
   不要试图改回单行.
 - **macOS BSD `find` symlink 穿透 bug**: 6/14 场景的 `frames-final/` 是 symlink.
@@ -64,6 +72,8 @@ Antigravity / Gemini CLI).
   但本项目统一 `app/src/state/octopus-fsm.test.ts` 这种贴近源文件风格.
 - **Tauri icon 强制 RGBA**: Tauri 2 `generate_context!` 编译时读 icon, 必须 RGBA.
   PIL 走一遍 `.convert('RGBA')`.
+- **Tauri beforeBuildCommand 以项目根为 CWD**: `tauri.conf.json` 里的命令用
+  `npm --prefix app run build` (项目根视角), 不要写 `../app` (会解析到项目外).
 
 ## 脚本
 
@@ -71,8 +81,13 @@ Antigravity / Gemini CLI).
 # 验证 (CI 跑全套)
 bash scripts/lint-octopus-plugin.sh            # 16/16 spec schema 校验
 bash scripts/audit-octopus-assets.sh           # 14 场景素材盘点
+bash scripts/check-scenes-sync.sh              # 14 场景三源一致 (types.ts / manifest / mcp_stdio.rs)
 bash scripts/spritesheet-builder.sh --all      # 141 帧 PNG → 14 张 .webp
-bash scripts/generate-spritesheet-manifest.sh  # React 用的 JSON manifest
+bash scripts/generate-spritesheet-manifest.sh  # React 用的 JSON manifest (唯一副本 src/data/)
+
+# 发布 (产出 bin/octopus-pet.bin 提交物 + dist/octopus-pet-plugin/ 分发)
+bash scripts/release-plugin.sh                 # cargo tauri build --no-bundle + 冒烟
+# 注意: 发布后 git add bin/octopus-pet.bin 随 commit 提交
 
 # 素材重建 (W1 D1 已完成, 平时不重跑)
 OCTOPUS_SOURCE_ROOT=~/Works/octopus-worker-meme \
@@ -80,7 +95,7 @@ OCTOPUS_SOURCE_ROOT=~/Works/octopus-worker-meme \
 
 # 测试
 cd app && npm test                             # Vitest 16 FSM tests
-cd src-tauri && cargo test                     # 5 MCP stdio roundtrip tests
+cd src-tauri && cargo test                     # 8 MCP stdio roundtrip tests
 
 # 本地开发
 cd app && npm install

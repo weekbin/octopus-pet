@@ -109,7 +109,18 @@ mcode 启动时自动 spawn 章鱼 .app，14 个"打工人"场景简单轮转，
 
 ---
 
-## 仓库结构
+## 仓库结构 (四分类)
+
+> **组件面** = spec 契约 (插件被发现/加载) · **开发面** = 源码 (进 git) · **产物面** = 提交的运行物 (repo 即插件) · **中间产物** = 可重建 (gitignored)
+
+| 分类 | 目录/文件 | 说明 |
+|------|----------|------|
+| 组件面 | `plugin.json` / `mcp.json` / `skills/` / `bin/octopus-pet` | spec 固定位置 (§4.2 §6.1 §7.2) |
+| 产物面 | `bin/octopus-pet.bin` | release 二进制 (~13MB, 内嵌 spritesheet), **提交进 git**, clone 即插件可加载 |
+| 开发面 | `app/` | Tauri webview 前端 (React 19 + XState 5) |
+| 开发面 | `src-tauri/` | Rust 后端 (actions.rs = 状态逻辑单点; state_bridge = 镜像回写) |
+| 开发面 | `scripts/` / `docs/` | 构建/校验/发布脚本 + 文档 |
+| 中间产物 | `app/dist/` `src-tauri/target/` `src-tauri/gen/` `dist/` | gitignored, 可重建 |
 
 ```
 octopus-pet/
@@ -122,53 +133,45 @@ octopus-pet/
 ├── skills/
 │   └── octopus-pet/
 │       └── SKILL.md               # agentskills.io
+├── bin/
+│   ├── octopus-pet                # entrypoint 桥 (spec §9.2): 本地构建优先, .bin 兜底
+│   └── octopus-pet.bin            # release 二进制 (提交, clone 即用)
 ├── scripts/
 │   ├── audit-octopus-assets.sh    # 14 场景盘点
+│   ├── check-scenes-sync.sh       # 14 场景三源一致 (types.ts/manifest/mcp_stdio.rs)
 │   ├── extract-and-link-octopus-frames.sh  # ffmpeg 抽 01-04 + symlink archive
-│   ├── spritesheet-builder.sh     # 14 .webp 拼图
-│   ├── generate-spritesheet-manifest.sh  # React 用的 JSON manifest
-│   └── lint-octopus-plugin.sh     # spec 合规校验
+│   ├── generate-spritesheet-manifest.sh    # 唯一 manifest → app/src/data/
+│   ├── lint-octopus-plugin.sh     # spec 合规校验 (16/16)
+│   ├── release-plugin.sh          # 发布: 二进制 + 插件目录 + 冒烟
+│   └── spritesheet-builder.sh     # 14 .webp 拼图
 ├── docs/
 │   └── octopus-assets-audit.md    # 14 场景盘点文档
 ├── app/                           # Tauri webview (React + Vite)
-│   ├── package.json
-│   ├── vite.config.ts
-│   ├── tsconfig.json
-│   ├── index.html
+│   ├── package.json / vite.config.ts / index.html
 │   ├── src/
-│   │   ├── main.tsx
-│   │   ├── App.tsx
-│   │   ├── components/
-│   │   │   ├── OctopusPet.tsx     # 200×200 透明窗口 root
-│   │   │   └── Bubble.tsx
-│   │   ├── state/
-│   │   │   ├── types.ts           # 14 OctopusScene + OctopusState + events
-│   │   │   ├── scenes.ts          # spritesheet manifest types
-│   │   │   └── octopus-fsm.ts     # XState v5 machine
-│   │   ├── hooks/
-│   │   │   ├── useTauriWindowDrag.ts
-│   │   │   └── useMcpBridge.ts
+│   │   ├── main.tsx / App.tsx
+│   │   ├── components/            # OctopusPet.tsx (200×200 窗口 root) / Bubble.tsx
+│   │   ├── state/                 # types.ts (14 场景) / octopus-fsm.ts (XState v5) / scenes.ts
+│   │   ├── hooks/                 # useMcpBridge / useTauriWindowDrag / useStateSync (镜像回写)
 │   │   ├── data/
-│   │   │   └── spritesheet-manifest.json
-│   │   ├── styles/
-│   │   │   └── global.css
-│   │   └── vite-env.d.ts
+│   │   │   └── spritesheet-manifest.json   # 唯一 manifest (import 打包)
+│   │   └── styles/global.css
 │   └── public/
 │       └── assets/octopus/        # 14 spritesheet-*.webp (9.1MB total)
 ├── src-tauri/                     # Tauri Rust backend
-│   ├── Cargo.toml
-│   ├── build.rs
-│   ├── tauri.conf.json
-│   ├── capabilities/
-│   │   └── default.json
-│   ├── icons/                     # 32x32, 128x128, icon.png 占位
+│   ├── Cargo.toml / Cargo.lock / build.rs / tauri.conf.json
+│   ├── capabilities/default.json
+│   ├── icons/                     # 32x32, 128x128, icon.png (RGBA)
+│   ├── tests/mcp_roundtrip.rs     # 8 MCP stdio roundtrip tests
 │   └── src/
-│       ├── main.rs
-│       ├── lib.rs                 # Tauri Builder + MCP stdio spawn
-│       ├── mcp_stdio.rs           # MCP 2024-11-05 server (V1 stub, 6 tools)
-│       └── state_bridge.rs        # tauri::command (get_state/force_scene/ask/pet)
-└── bin/
-    └── octopus-pet                # plugin entrypoint (per spec §9.2)
+│       ├── main.rs                # --mcp-stdio headless / GUI 双模式入口
+│       ├── lib.rs                 # Builder + single-instance + HTTP fallback
+│       ├── actions.rs             # 状态逻辑单点 (apply_show/ask/pet + emit)
+│       ├── mcp_stdio.rs           # MCP 2024-11-05 server (6 tools, 委托 actions)
+│       ├── state_bridge.rs        # get_state / sync_state (镜像)
+│       └── http_fallback.rs       # HTTP :9527 (dev-only, 委托 actions)
+└── dist/                          # 发布组装目录 (gitignored)
+    └── octopus-pet-plugin/        # release-plugin.sh 产出, 可独立加载
 ```
 
 ---
@@ -197,18 +200,33 @@ npm run tauri:dev
 ### 构建发布版
 
 ```bash
-# macOS .app
+# macOS .app (给普通用户)
 npm run tauri:build
 # 产物: src-tauri/target/release/bundle/macos/Octopus Pet.app
 #       src-tauri/target/release/octopus-pet (裸二进制)
+
+# 插件发布物 (给 mcode 等 agent 客户端) — 推荐
+bash scripts/release-plugin.sh
+# 产物:
+#   bin/octopus-pet.bin       ← release 二进制 (~13MB, 提交进 git)
+#   dist/octopus-pet-plugin/  ← 可独立加载的插件目录 (可选分发)
+# 注意: 发布后 git add bin/octopus-pet.bin 随 commit 提交 (repo 即插件)
 ```
 
-### 在 mcode 里加载 (开发模式)
+### 作为插件加载 (两种方式)
 
-1. `tauri build` 一次, 产物在 `src-tauri/target/release/bundle/macos/`
-2. mcode 设置 → Plugins → "Add local plugin" → 选 `~/Documents/cute/`
-3. mcode 重启 → 章鱼 .app 自动 spawn
-4. 在 mcode Agent 里: `mcp__octopus-pet__pet_list_states` 应返回 14 场景
+**方式 A: 直接加载 repo(开发/发布通用)**
+1. mcode 设置 → Plugins → "Add local plugin" → 选 `~/Documents/cute/`
+2. mcode 重启 → 章鱼 .app 自动 spawn
+3. 在 mcode Agent 里: `mcp__octopus-pet__pet_list_states` 应返回 14 场景
+4. 二进制解析: 本地 `cargo build` 产物优先, 无本地构建时用提交的 `bin/octopus-pet.bin`(clone 零构建可加载)
+
+**方式 B: 加载发布包(干净分发)**
+1. `bash scripts/release-plugin.sh` → 指向 `dist/octopus-pet-plugin/`
+2. 该目录是 spec 合规插件根(plugin.json + mcp.json + skills/ + bin/ 二进制), 可拷贝分发
+
+> `bin/octopus-pet.bin` 是 author 机器编译的 **macOS arm64** 产物。其他架构 /
+> 想用最新代码: 本地 `cargo build --release` 后覆盖, 或直接依赖本地构建优先逻辑。
 
 ---
 

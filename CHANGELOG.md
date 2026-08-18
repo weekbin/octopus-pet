@@ -6,22 +6,31 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- FSM 8s 轮转卡 `stay-late` bug: `rotateScene` 恒用 `nextScene(initialContext.scene)`,
+  任何场景 8s 后都切到 stay-late. 改为 `nextScene(context.scene)`, 补 14 场景全量轮转回归测试.
+- HTTP :9527 fallback 断链: POST /show|/ask|/pet 只写 SharedState 不 emit,
+  前端不响应. 现持有 AppHandle, 委托 actions 后 emit 事件.
+
+### Changed
+- **状态权威收敛**: XState 是唯一状态权威, Rust `SharedState` 降级为只读镜像,
+  webview 经 `sync_state` 回写 (字段级节流, 防 60fps 轰炸 IPC). `pet_get_state` /
+  HTTP /state 与屏幕显示一致.
+- 业务逻辑单点: 场景校验 / ≤12 字截断 / bubble 3s / affection+5 收敛到
+  `src-tauri/src/actions.rs`, MCP stdio / HTTP fallback 全部委托 (原 4 处重复).
+- 删 3 个死 tauri command (`force_scene`/`ask`/`pet`, 前端从未 invoke).
+- 删孤立 `frame` 字段 (`OctopusState` + `SharedState`, 渲染帧由组件 useState 持有).
+- spritesheet-manifest.json 单源化: 唯一副本 `app/src/data/` (生成脚本输出改这里),
+  删 public 双生副本.
+- 14 场景清单三源一致性由 `scripts/check-scenes-sync.sh` 校验 (CI 挂载).
+
 ### Added
-- Tauri 2 + React 19 + Vite 6 + XState 5 + TypeScript scaffold
-- 200×200 transparent always-on-top no-decoration window (`tauri.conf.json`)
-- 14-scene XState v5 FSM with 8s rotation, click/pet/drag/ask events
-- 14 spritesheet .webp (141 frames each, 2 rows × 71 cols, 13632×384, WebP q80)
-- Rust MCP stdio server (modelcontextprotocol.io 2024-11-05) with 6 tools
-- `bin/octopus-pet` plugin entrypoint script (agent-plugins.org spec §9.2)
-- Plugin spec compliance: plugin.json + mcp.json + skills/octopus-pet/SKILL.md
-- 16 unit tests for FSM (Vitest) — all passing
-- 5 integration tests for MCP stdio roundtrip (Rust) — defined
-- 6 helper scripts in `scripts/`:
-  - `audit-octopus-assets.sh` (14 scenes + 3 root-cause differences)
-  - `extract-and-link-octopus-frames.sh` (ffmpeg 01-04 + symlink archive)
-  - `spritesheet-builder.sh` (141 frames → 2-row WebP grid)
-  - `generate-spritesheet-manifest.sh` (React loader metadata)
-  - `lint-octopus-plugin.sh` (16/16 spec checks)
+- `scripts/release-plugin.sh`: 发布二进制 (必须走 `cargo tauri build --no-bundle`,
+  裸 cargo 增量会跳过 asset 嵌入) → `bin/octopus-pet.bin` (提交进 git) +
+  `dist/octopus-pet-plugin/` (可独立加载插件目录) + MCP 冒烟.
+- `bin/octopus-pet.bin` 提交进 git: repo clone 即插件可加载, 零本地构建.
+- `src-tauri/Cargo.lock` 恢复提交 (应用项目可复现构建, 之前被误 ignore).
+- `app/src/hooks/useStateSync.ts`: FSM → Rust 镜像回写.
 
 ### Known Limitations (V1)
 - **Single-instance only** (`tauri-plugin-single-instance`): first mcode session wins, subsequent sessions' MCP calls fail silently. Multi-session shared pet deferred to V1.1+ via Unix domain socket forwarding.
@@ -29,9 +38,8 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 - 141 frames → 8s rotation causes half-cycle scene swaps (single loop is 11.75s)
 - No mcode task event → scene mapping (mcode has no good hook yet)
 - macOS only (V2 will add Windows)
+- `bin/octopus-pet.bin` 是 author 机器 macOS arm64 产物, 其他架构需本地构建
 - No audio, no custom skins, no multi-screen, no startup-on-boot, no right-click menu beyond pet
-- `.app` bundle not yet generated (tauri-cli install in progress)
-- GUI window not yet visually verified (no display in headless test env)
 
 ## [0.1.0] - 2026-08-18 (W1 D1 + W1 D2)
 
