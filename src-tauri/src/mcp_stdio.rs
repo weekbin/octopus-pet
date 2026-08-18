@@ -129,7 +129,7 @@ async fn handle_request(
                         "properties": { "text": { "type": "string", "maxLength": 12 } },
                         "required": ["text"]
                     })),
-                    tool_schema(TOOL_PET_GET_STATE, "查当前 OctopusState (含 scene/frame/bubble/affection/position)", json!({"type": "object"})),
+                    tool_schema(TOOL_PET_GET_STATE, "查当前 OctopusState (含 scene/bubble/affection/position)", json!({"type": "object"})),
                     tool_schema(TOOL_PET_SET_STATE, "pet_show 别名", json!({
                         "type": "object",
                         "properties": { "state": { "type": "string", "enum": SCENES } },
