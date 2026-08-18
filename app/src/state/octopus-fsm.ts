@@ -28,7 +28,6 @@ function pickBubble(scene: OctopusScene, rng: () => number = Math.random): strin
 
 const initialContext: OctopusState = {
   scene: "pretend-busy",
-  frame: 0,
   bubble: null,
   autoNextAt: Date.now() + ROTATION_INTERVAL_MS,
   bubbleHideAt: null,
@@ -42,9 +41,8 @@ export const octopusMachine = setup({
     events: {} as OctopusEvent,
   },
   actions: {
-    rotateScene: assign(() => ({
-      scene: nextScene(initialContext.scene), // overridden by guard logic
-      frame: 0,
+    rotateScene: assign(({ context }) => ({
+      scene: nextScene(context.scene),
       autoNextAt: Date.now() + ROTATION_INTERVAL_MS,
       bubble: null as string | null,
       bubbleHideAt: null as number | null,
@@ -53,7 +51,6 @@ export const octopusMachine = setup({
       if (event.type !== "FORCE_SCENE") return {};
       return {
         scene: event.scene,
-        frame: 0,
         autoNextAt: event.now + ROTATION_INTERVAL_MS,
         bubble: null,
         bubbleHideAt: null,
@@ -126,7 +123,6 @@ export const octopusMachine = setup({
         ROTATE_NOW: {
           actions: assign(({ context }) => ({
             scene: nextScene(context.scene),
-            frame: 0,
             autoNextAt: Date.now() + ROTATION_INTERVAL_MS,
             bubble: null as string | null,
             bubbleHideAt: null as number | null,

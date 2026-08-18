@@ -23,7 +23,6 @@ describe("octopus-fsm", () => {
     it("starts on pretend-busy", () => {
       const actor = createActor(octopusMachine).start();
       expect(actor.getSnapshot().context.scene).toBe("pretend-busy");
-      expect(actor.getSnapshot().context.frame).toBe(0);
       expect(actor.getSnapshot().context.bubble).toBeNull();
       expect(actor.getSnapshot().context.affection).toBe(0);
     });
@@ -40,6 +39,25 @@ describe("octopus-fsm", () => {
       expect(seen).toEqual([...SCENE_ORDER]);
       // After 14, wraps to first
       expect(s).toBe(SCENE_ORDER[0]);
+    });
+  });
+
+  describe("TIMER_TICK rotation (regression: was stuck on stay-late)", () => {
+    it("rotates to the correct next scene from EVERY starting scene", () => {
+      // Regression for the rotateScene bug where nextScene(initialContext.scene)
+      // always computed from "pretend-busy", so any scene rotated to "stay-late".
+      for (const scene of SCENE_ORDER) {
+        const actor = createActor(octopusMachine).start();
+        actor.send({ type: "FORCE_SCENE", scene, now: Date.now() });
+        const autoNextAt = actor.getSnapshot().context.autoNextAt;
+        actor.send({ type: "TIMER_TICK", now: autoNextAt + 100 });
+        const i = SCENE_ORDER.indexOf(scene);
+        const expected = SCENE_ORDER[(i + 1) % SCENE_ORDER.length];
+        expect(
+          actor.getSnapshot().context.scene,
+          `from ${scene} should rotate to ${expected}`,
+        ).toBe(expected);
+      }
     });
   });
 
@@ -90,14 +108,6 @@ describe("octopus-fsm", () => {
       const actor = createActor(octopusMachine).start();
       actor.send({ type: "FORCE_SCENE", scene: "breakdown", now: Date.now() });
       expect(actor.getSnapshot().context.scene).toBe("breakdown");
-    });
-
-    it("resets frame to 0", () => {
-      const actor = createActor(octopusMachine).start();
-      // Hack: set frame > 0
-      // (we can't directly set frame without exposing action; we just verify after force scene it's 0)
-      actor.send({ type: "FORCE_SCENE", scene: "payday", now: Date.now() });
-      expect(actor.getSnapshot().context.frame).toBe(0);
     });
   });
 

@@ -48,8 +48,6 @@ export const BUBBLE_BY_SCENE: Record<OctopusScene, readonly string[]> = {
 export interface OctopusState {
   /** Current pet scene. */
   scene: OctopusScene;
-  /** Current frame index within the scene's spritesheet (0..frameCount-1). */
-  frame: number;
   /** Bubble text shown above the pet, or null when no bubble. */
   bubble: string | null;
   /** Wall-clock ms timestamp at which to auto-rotate to the next scene. */
