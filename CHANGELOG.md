@@ -16,6 +16,8 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
   旧 4 个 command 是死代码从未被 invoke, bug 被掩盖; C4 接线后才暴露 (GUI 实测发现).
 
 ### Changed
+- **窗口 200×200 → 192×192 (= 素材尺寸, 零边距)**: 去掉素材四周 4px 透明缝隙
+  (透出桌面色会看起来像白边), 素材完全铺满窗口.
 - **状态权威收敛**: XState 是唯一状态权威, Rust `SharedState` 降级为只读镜像,
   webview 经 `sync_state` 回写 (字段级节流, 防 60fps 轰炸 IPC). `pet_get_state` /
   HTTP /state 与屏幕显示一致.

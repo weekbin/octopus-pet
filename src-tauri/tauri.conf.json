@@ -14,8 +14,8 @@
       {
         "label": "main",
         "title": "🐙 Octopus Pet",
-        "width": 200,
-        "height": 200,
+        "width": 192,
+        "height": 192,
         "resizable": false,
         "fullscreen": false,
         "decorations": false,

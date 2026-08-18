@@ -15,7 +15,7 @@ Antigravity / Gemini CLI).
 |---|---|
 | 状态 | W1 D2 (W1 D1 ✅, D2 🔄) |
 | 栈 | Tauri 2 · React 19 · Vite 6 · XState 5 · Rust 1.77+ |
-| 窗口 | 200×200 · transparent · no-decoration · alwaysOnTop · skipTaskbar |
+| 窗口 | 192×192 (=素材尺寸, 零边距) · transparent · no-decoration · alwaysOnTop · skipTaskbar |
 | 14 场景 | pretend-busy → stay-late → breakdown → lying-flat → multi-tasking → payday → salary-rejected → treat-milk-tea → friday-5pm → toilet-slacking → touch-fish → waiting-m3pro → soul-leaving → multitask |
 | 6 MCP tools | pet_show · pet_ask · pet_get_state · pet_set_state · pet_pet · pet_list_states |
 | 14 spritesheet | 141 帧/张, 2 行 × 71 列, 13632×384 px, WebP lossy q80, 总 9.1MB |

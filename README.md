@@ -12,7 +12,7 @@ mcode 启动时自动 spawn 章鱼 .app，14 个"打工人"场景 8s 自动轮�
 | 阶段 | 状态 | 备注 |
 |------|------|------|
 | **W1 D1** | ✅ 完成 | 14 spritesheet + 6 scripts + plugin 三件套 + GitHub repo |
-| **W1 D2** | ✅ 完成 | Tauri 2 scaffold + 透明 200×200 窗口 + React mount + MCP stdio stub |
+| **W1 D2** | ✅ 完成 | Tauri 2 scaffold + 透明 192×192 窗口 + React mount + MCP stdio stub |
 | **W1 D3** | ✅ 完成 | XState 14 状态 FSM + 8s 轮转 + 14 spritesheet 渲染 + 单击/右键摸头/拖动 |
 | **W1 D4** | ✅ 完成 | 单实例插件 + 状态权威收敛 (XState 唯一权威, sync_state 镜像回写) + HTTP 断链修复 |
 | **W2** | ✅ 完成 | Rust MCP server 完整化 (6 tools, 8 roundtrip tests, headless 直写) |
@@ -52,7 +52,7 @@ mcode 启动时自动 spawn 章鱼 .app，14 个"打工人"场景 8s 自动轮�
 ```
 
 **栈**: Tauri 2 (Rust + React 19 + Vite 6 + XState 5)  
-**窗口**: 200×200, transparent, no decorations, alwaysOnTop, skipTaskbar  
+**窗口**: 192×192 (= 素材尺寸, 零边距), transparent, no decorations, alwaysOnTop, skipTaskbar  
 **状态权威**: XState (前端 FSM) → `sync_state` 回写 Rust `SharedState` 镜像;协议入口 (MCP/HTTP) 只调 `actions.rs` 发事件  
 **场景**: 14 (pretend-busy, stay-late, breakdown, lying-flat, multi-tasking, payday, salary-rejected, treat-milk-tea, friday-5pm, toilet-slacking, touch-fish, waiting-m3pro, soul-leaving, multitask)
 
@@ -153,7 +153,7 @@ octopus-pet/
 │   ├── package.json / vite.config.ts / index.html
 │   ├── src/
 │   │   ├── main.tsx / App.tsx
-│   │   ├── components/            # OctopusPet.tsx (200×200 窗口 root) / Bubble.tsx
+│   │   ├── components/            # OctopusPet.tsx (192×192 窗口 root, 素材铺满) / Bubble.tsx
 │   │   ├── state/                 # types.ts (14 场景) / octopus-fsm.ts (XState v5) / scenes.ts
 │   │   ├── hooks/                 # useMcpBridge / useTauriWindowDrag / useStateSync (镜像回写)
 │   │   ├── data/

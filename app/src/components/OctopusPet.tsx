@@ -2,7 +2,7 @@
 // Per plan §1.9.3: shows the current scene's spritesheet, animates the frame index,
 // renders a bubble above the head, and handles click/drag interactions.
 //
-// The 200x200 transparent window IS the pet — no chrome, no decorations, always-on-top.
+// The 192x192 transparent window (== sprite size, zero margin) IS the pet — no chrome, no decorations, always-on-top.
 
 import { useEffect, useRef, useState } from "react";
 import { useMachine } from "@xstate/react";
@@ -20,8 +20,8 @@ import manifestJson from "../data/spritesheet-manifest.json";
 const manifest = manifestJson as unknown as SpritesheetManifest;
 
 const SPRITE_SIZE = 192;
-const WINDOW_SIZE = 200;
-const SPRITE_OFFSET = Math.floor((WINDOW_SIZE - SPRITE_SIZE) / 2); // 4
+const WINDOW_SIZE = 192; // == SPRITE_SIZE: 素材完全铺满窗口, 零边距
+const SPRITE_OFFSET = 0; // 无 4px 边距 (原 200 窗口留缝, 透出桌面色看起来像白边)
 
 export function OctopusPet() {
   const [state, send, actor] = useMachine(octopusMachine);
