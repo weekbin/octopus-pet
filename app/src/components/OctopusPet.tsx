@@ -14,6 +14,7 @@ import { getSceneMeta, getSpritesheetUrl, frameToGrid } from "../state/scenes";
 import { Bubble } from "./Bubble";
 import { useTauriWindowDrag } from "../hooks/useTauriWindowDrag";
 import { useMcpBridge } from "../hooks/useMcpBridge";
+import { useStateSync } from "../hooks/useStateSync";
 import manifestJson from "../data/spritesheet-manifest.json";
 
 const manifest = manifestJson as unknown as SpritesheetManifest;
@@ -23,7 +24,7 @@ const WINDOW_SIZE = 200;
 const SPRITE_OFFSET = Math.floor((WINDOW_SIZE - SPRITE_SIZE) / 2); // 4
 
 export function OctopusPet() {
-  const [state, send] = useMachine(octopusMachine);
+  const [state, send, actor] = useMachine(octopusMachine);
   const dragRef = useRef<HTMLDivElement>(null);
   const [frame, setFrame] = useState(0);
 
@@ -34,6 +35,10 @@ export function OctopusPet() {
 
   // Bridge MCP server events from Rust → FSM events.
   useMcpBridge(send);
+
+  // Mirror FSM context (single source of truth) back to Rust SharedState,
+  // so pet_get_state / HTTP /state match what's on screen.
+  useStateSync(actor);
 
   // Frame counter: advance at FRAME_INTERVAL_MS; reset on scene change.
   useEffect(() => {
