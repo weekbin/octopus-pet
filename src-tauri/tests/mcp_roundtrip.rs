@@ -143,3 +143,39 @@ fn multiple_sequential_requests() {
     assert_eq!(responses[1]["id"], 2);
     assert_eq!(responses[2]["id"], 3);
 }
+
+#[test]
+fn state_persists_across_calls() {
+    // pet_show payday, then pet_get_state, then pet_pet; verify state changes persist.
+    let responses = run_mcp(&[
+        r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"pet_show","arguments":{"state":"payday"}}}"#,
+        r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"pet_pet","arguments":{}}}"#,
+        r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"pet_get_state","arguments":{}}}"#,
+    ]);
+    assert_eq!(responses.len(), 3);
+    let state_text = responses[2]["result"]["content"][0]["text"]
+        .as_str()
+        .expect("get_state returns text");
+    let state: serde_json::Value = serde_json::from_str(state_text).expect("state is JSON");
+    assert_eq!(state["scene"], "payday", "pet_show should persist");
+    assert_eq!(state["affection"], 5, "pet_pet should bump affection to 5");
+    assert_eq!(state["bubble"], "啊~", "pet_pet should set bubble");
+}
+
+#[test]
+fn show_rejects_unknown_scene() {
+    let responses = run_mcp(&[r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"pet_show","arguments":{"state":"NOT_A_SCENE"}}}"#]);
+    assert!(responses[0]["error"].is_object());
+    assert_eq!(responses[0]["error"]["code"], -32602);
+}
+
+#[test]
+fn list_states_returns_14() {
+    let responses = run_mcp(&[r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"pet_list_states","arguments":{}}}"#]);
+    let text = responses[0]["result"]["content"][0]["text"]
+        .as_str()
+        .expect("list returns text");
+    let arr: serde_json::Value = serde_json::from_str(text).expect("list is JSON array");
+    let arr = arr.as_array().expect("must be array");
+    assert_eq!(arr.len(), 14, "exactly 14 scenes per plan §1.9.2");
+}
