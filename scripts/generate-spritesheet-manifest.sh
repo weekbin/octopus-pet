@@ -10,7 +10,7 @@
 #   - alphaMode             : "RGB" | "RGBA" (for V2 transparent rendering)
 #   - fileName              : spritesheet-<scene>.webp
 #
-# Output: app/public/assets/octopus/spritesheet-manifest.json
+# Output: app/src/data/spritesheet-manifest.json  (the ONLY copy; imported by the frontend)
 #
 # Usage:
 #   scripts/generate-spritesheet-manifest.sh [--assets-dir <dir>] [--output <path>]
@@ -21,7 +21,8 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
 
 ASSETS_DIR="$PROJECT_ROOT/app/public/assets/octopus"
-OUTPUT="$ASSETS_DIR/spritesheet-manifest.json"
+# 唯一 manifest: 前端 import 的路径 (app/src/data/), 不再是 public 副本
+OUTPUT="$PROJECT_ROOT/app/src/data/spritesheet-manifest.json"
 
 # 14 scenes in plan order (§1.9.2 OctopusScene enum)
 SCENES=(
