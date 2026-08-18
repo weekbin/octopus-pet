@@ -1,19 +1,26 @@
 # Octopus Pet — gitignore
-# Generated 2026-08-18
+# 四分类: 组件面/开发面 提交; 中间产物/本地噪音 忽略。
+# 可分发产物 (bin/octopus-pet.bin, spritesheet webp, manifest) 提交 — repo 即插件。
+# 注意: gitignore 不支持行内注释, 所有 # 必须单独成行。
 
-# Tauri build artifacts
+# ── 中间产物 (可重建, 不提交) ──────────────────────────────
 src-tauri/target/
-src-tauri/Cargo.lock
 src-tauri/gen/
-src-tauri/WixTools/
 src-tauri/.tauri/
-src-tauri/icons/.DS_Store
+src-tauri/WixTools/
 app/dist/
 app/node_modules/
 app/.vite/
 app/tsconfig.tsbuildinfo
+dist/
+app/public/assets/octopus/spritesheet-*.miff
 
-# Editor / OS
+# ── 本地构建/审计缓存 ─────────────────────────────────────
+.local-audit/
+.local-frames/
+OCTOPUS_DATA/
+
+# ── Editor / OS ────────────────────────────────────────────
 .DS_Store
 .idea/
 .vscode/
@@ -21,35 +28,26 @@ app/tsconfig.tsbuildinfo
 *.swo
 *~
 
-# Logs
+# ── Logs ───────────────────────────────────────────────────
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Local config / secrets
+# ── Local config / secrets ─────────────────────────────────
 .env
 .env.local
 *.local
 secrets/
 secrets.json
-OCTOPUS_DATA/
 
-# Backup / temp
+# ── Backup / temp ──────────────────────────────────────────
 *.bak
 *.tmp
 .cache/
 
-# Spritesheet intermediate (regeneratable)
-app/public/assets/octopus/spritesheet-*.miff
-
-# Local audit / extraction caches
-.local-audit/
-.local-frames/
-
-# Tauri plugin dev builds
-target/
-
-# Unrelated docs (not part of octopus-pet)
+# ── 无关文档 (不属于 octopus-pet) ─────────────────────────
 codebuddy-integration-gap-report.md
+
+# 注: src-tauri/Cargo.lock 必须提交 (应用项目可复现构建, CI cache key 依赖它)
