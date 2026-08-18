@@ -3,54 +3,57 @@
 > A coral-pink octopus desktop pet for **mcode** (MiniMax Code / Mavis) — built as an
 > [agent-plugins.org v1.0.0](https://agent-plugins.org/specification) plugin.
 
-mcode 启动时自动 spawn 章鱼 .app，14 个"打工人"场景简单轮转，单击弹气泡，双击下一场景，拖动桌面位置，6 个 MCP tools 让 mcode Agent 远程控制。跨 8 客户端 portable (mcode / Cursor / Claude Code / VS Code / Codex / Kiro / Antigravity / Gemini CLI)。
+mcode 启动时自动 spawn 章鱼 .app，14 个"打工人"场景 8s 自动轮转，单击弹气泡、右键摸头 (+亲密度)、拖动换位置，6 个 MCP tools 让 mcode Agent 远程控制。跨 8 客户端 portable (mcode / Cursor / Claude Code / VS Code / Codex / Kiro / Antigravity / Gemini CLI)。repo 本身即插件：`bin/octopus-pet.bin` 提交进 git，clone 零构建即可加载。
 
 ---
 
-## 状态 (W1 D2 进行中)
+## 状态 (2026-08-18, 架构重构后)
 
 | 阶段 | 状态 | 备注 |
 |------|------|------|
 | **W1 D1** | ✅ 完成 | 14 spritesheet + 6 scripts + plugin 三件套 + GitHub repo |
-| **W1 D2** | 🔄 进行中 | Tauri 2 scaffold + 透明 200×200 窗口 + React mount |
-| **W1 D3** | ⏳ | XState 14 状态 FSM + 8s 轮转 + 14 spritesheet 渲染 |
-| **W1 D4** | ⏳ | 单击/双击/拖动交互 + 气泡 + 右键菜单 |
-| **W1 D5** | ⏳ | W1 demo 验收: 章鱼 .app 启动 → 14 场景轮转 |
-| **W2** | ⏳ | Rust MCP server 完整化 (6 tools 走 MCP 2024-11-05) |
-| **W3** | ⏳ | mcode 集成验证 (启动 → spawn → 通信) |
-| **W3.5** | ⏳ | 跨客户端 portable 验证 (Cursor / Claude Code) |
-| **W4** | ⏳ | 交互打磨 + 性能 (启动 < 3s, 体积 < 30MB) |
-| **W5** | ⏳ | `tauri build` + GitHub release v0.1.0 |
+| **W1 D2** | ✅ 完成 | Tauri 2 scaffold + 透明 200×200 窗口 + React mount + MCP stdio stub |
+| **W1 D3** | ✅ 完成 | XState 14 状态 FSM + 8s 轮转 + 14 spritesheet 渲染 + 单击/右键摸头/拖动 |
+| **W1 D4** | ✅ 完成 | 单实例插件 + 状态权威收敛 (XState 唯一权威, sync_state 镜像回写) + HTTP 断链修复 |
+| **W2** | ✅ 完成 | Rust MCP server 完整化 (6 tools, 8 roundtrip tests, headless 直写) |
+| **W1.1+** | ⏳ | mcode 任务事件 → 场景 映射 (mcode 钩子) / 多 session 共享 (UDS 转发) |
+| **W3** | ⏳ | mcode 集成验证 (spawn → 通信) + 跨客户端 portable 验证 |
+| **W4/W5** | ⏳ | 交互打磨 + 性能 (启动 < 3s, 体积 < 30MB) + GitHub release |
 
 ---
 
-## 架构 (per plan §1.8 + §1.9)
+## 架构 (状态权威模型, 2026-08-18 重构)
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
 │  mcode 桌面端 (v3.0.65+)                                              │
 │  ┌────────────────────────────────────────────────────────────┐     │
-│  │ Plugin loader (走 spec)                                     │     │
-│  │   → 发现 ~/Documents/cute/plugin.json                       │     │
-│  │   → 读 mcp.json, type=stdio, command=./bin/octopus-pet      │     │
-│  │   → spawn 进程, args=[--mcp-stdio]                          │     │
+│  │ Plugin loader (spec §6.1 固定位置发现)                       │     │
+│  │   plugin.json → mcp.json → command=./bin/octopus-pet       │     │
+│  │   spawn 进程, args=[--mcp-stdio]                            │     │
 │  └────────────────────────────────────────────────────────────┘     │
 │                          │ stdio (JSON-RPC 2.0)                      │
 │                          ▼                                           │
-│  ┌────────────────────────────────────────────────────────────┐     │
-│  │  Octopus Pet.app  (Tauri 2 + Rust)                          │     │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌──────────────────┐     │     │
-│  │  │  MCP stdio  │  │  Tauri      │  │  WebView         │     │     │
-│  │  │  server     │◄─┤  main.rs    │◄─┤  React + XState  │     │     │
-│  │  │  (Rust)     │  │  200×200    │  │  14 FSM states   │     │     │
-│  │  │  6 tools    │  │  透明窗口   │  │  14 spritesheets │     │     │
-│  │  └─────────────┘  └─────────────┘  └──────────────────┘     │     │
-│  └────────────────────────────────────────────────────────────┘     │
+│  ┌────────────────── Octopus Pet (Tauri 2 + Rust) ─────────────────┐ │
+│  │  Rust 进程                                                       │ │
+│  │  MCP stdio ──┐                                                  │ │
+│  │  HTTP :9527 ──┼→ actions.rs (唯一逻辑点) ─→ emit 事件            │ │
+│  │  (dev-only)  │    apply_show / apply_ask / apply_pet            │ │
+│  │               │                                                 │ │
+│  │  SharedState ──← sync_state (invoke) ←─────────────────┐        │ │
+│  │  (只读镜像)                                              │        │ │
+│  │                                                         │        │ │
+│  │  WebView (React 19)                                     │        │ │
+│  │  XState FSM (唯一状态权威) ─────────────────────────────┘        │ │
+│  │    14 场景 8s 轮转 · 气泡 · 亲密度 · 位置                         │ │
+│  │    单击/右键摸头/拖动 + 14 spritesheet 渲染                       │ │
+│  └──────────────────────────────────────────────────────────────────┘ │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
 **栈**: Tauri 2 (Rust + React 19 + Vite 6 + XState 5)  
 **窗口**: 200×200, transparent, no decorations, alwaysOnTop, skipTaskbar  
+**状态权威**: XState (前端 FSM) → `sync_state` 回写 Rust `SharedState` 镜像;协议入口 (MCP/HTTP) 只调 `actions.rs` 发事件  
 **场景**: 14 (pretend-busy, stay-late, breakdown, lying-flat, multi-tasking, payday, salary-rejected, treat-milk-tea, friday-5pm, toilet-slacking, touch-fish, waiting-m3pro, soul-leaving, multitask)
 
 ---
@@ -87,9 +90,9 @@ mcode 启动时自动 spawn 章鱼 .app，14 个"打工人"场景简单轮转，
 - ✅ `mcp.json.mcpServers[].type` = `"stdio"` (spec §7.2.1, closed union)
 - ✅ 所有 plugin-relative path 以 `./` 开头 (spec §4.1)
 - ✅ `command` 是 single token, 不带 shell metachars (spec §9.2)
-- ✅ `args`/`env` 只用 `${PLUGIN_ROOT}` + `${PLUGIN_DATA}` 占位符 (spec §9.2, closed set)
+- ✅ `args`/`env` 未使用 spec 以外的占位符 (spec §9.2, closed set: 仅 `${PLUGIN_ROOT}` + `${PLUGIN_DATA}`)
 - ✅ `skills/octopus-pet/SKILL.md` 含 agentskills.io frontmatter (`name` + `description`)
-- ✅ 客户端特定扩展走 `com.mavis/` (reverse-domain, spec §8.2)
+- ✅ 无客户端扩展 (`extensions` / reverse-domain 目录), 保持跨客户端 portable (spec §8 是 OPTIONAL)
 
 **16/16 lint checks pass** (`scripts/lint-octopus-plugin.sh`)。
 
@@ -233,7 +236,7 @@ bash scripts/release-plugin.sh
 ## 重新生成素材 (W1 D1 已完成, 通常不需要重跑)
 
 ```bash
-# 1. 抽 01-04 帧 + symlink 5 archive 场景 (ffmpeg)
+# 1. 抽 01-04 帧 + symlink archive 场景 (ffmpeg)
 OCTOPUS_SOURCE_ROOT=~/Works/octopus-worker-meme scripts/extract-and-link-octopus-frames.sh
 
 # 2. 拼 14 张 spritesheet (ImageMagick)
