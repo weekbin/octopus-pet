@@ -41,3 +41,73 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running octopus-pet application");
 }
+
+/// Headless MCP stdio server (no Tauri window). Used by `--mcp-stdio` mode for
+/// CLI testing without spawning the GUI.
+pub async fn run_mcp_only() -> Result<(), Box<dyn std::error::Error>> {
+    use tokio::io::{AsyncBufReadExt, BufReader};
+    let stdin = tokio::io::stdin();
+    let mut reader = BufReader::new(stdin);
+    let mut buf = String::new();
+    tracing::info!("MCP stdio server starting (headless mode)");
+
+    loop {
+        buf.clear();
+        let n = reader.read_line(&mut buf).await?;
+        if n == 0 {
+            tracing::info!("MCP stdio: EOF, exiting");
+            break;
+        }
+        let line = buf.trim();
+        if line.is_empty() {
+            continue;
+        }
+        // V1 stub: just echo back initialize / tools/list / tools/call
+        match serde_json::from_str::<serde_json::Value>(line) {
+            Ok(req) => {
+                let id = req.get("id").cloned().unwrap_or(serde_json::Value::Null);
+                let method = req.get("method").and_then(|v| v.as_str()).unwrap_or("");
+                let resp = match method {
+                    "initialize" => serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": id,
+                        "result": {
+                            "protocolVersion": "2024-11-05",
+                            "serverInfo": {"name": "octopus-pet", "version": env!("CARGO_PKG_VERSION")},
+                            "capabilities": {"tools": {}}
+                        }
+                    }),
+                    "tools/list" => serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": id,
+                        "result": {
+                            "tools": [
+                                {"name": "pet_show", "description": "切场景"},
+                                {"name": "pet_ask", "description": "弹气泡"},
+                                {"name": "pet_get_state", "description": "查状态"},
+                                {"name": "pet_set_state", "description": "pet_show 别名"},
+                                {"name": "pet_pet", "description": "摸头"},
+                                {"name": "pet_list_states", "description": "14 场景列表"}
+                            ]
+                        }
+                    }),
+                    "tools/call" => serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": id,
+                        "result": {"content": [{"type": "text", "text": "stub ok"}], "isError": false}
+                    }),
+                    _ => serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": id,
+                        "error": {"code": -32601, "message": format!("method not found: {}", method)}
+                    }),
+                };
+                println!("{}", serde_json::to_string(&resp)?);
+            }
+            Err(e) => {
+                tracing::warn!("bad JSON: {} (line: {:?})", e, line);
+            }
+        }
+    }
+    Ok(())
+}
