@@ -12,9 +12,10 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 use tokio::io::{AsyncBufReadExt, BufReader};
 
+use crate::actions;
 use crate::state_bridge::SharedState;
 
 #[derive(Debug, Deserialize)]
@@ -162,61 +163,27 @@ async fn handle_tool_call(
 ) -> JsonRpcResponse {
     let name = params.get("name").and_then(|v| v.as_str()).unwrap_or("");
     let args = params.get("arguments").cloned().unwrap_or(json!({}));
+    let now = now_ms();
 
     match name {
         TOOL_PET_SHOW | TOOL_PET_SET_STATE => {
             let scene = args.get("state").and_then(|v| v.as_str()).unwrap_or("");
-            if !SCENES.contains(&scene) {
-                return err_response(id, -32602, format!("unknown scene: {}", scene));
+            match actions::apply_show(app, state, scene, now) {
+                Ok(msg) => text_response(id, msg),
+                Err(e) => err_response(id, -32602, e),
             }
-            // Update shared state
-            {
-                let mut s = state.lock().expect("state lock");
-                s.scene = scene.to_string();
-                s.frame = 0;
-                s.bubble = None;
-                s.bubble_hide_at = None;
-            }
-            // Emit tauri event (webview will react)
-            if let Some(app) = app {
-                let _ = app.emit(
-                    "octopus://event",
-                    json!({"type": "FORCE_SCENE", "scene": scene, "now": now_ms()}),
-                );
-            }
-            text_response(id, format!("switched to {}", scene))
         }
         TOOL_PET_ASK => {
             let text = args.get("text").and_then(|v| v.as_str()).unwrap_or("");
-            if text.is_empty() {
-                return err_response(id, -32602, "text is required".to_string());
+            match actions::apply_ask(app, state, text, now) {
+                Ok(msg) => text_response(id, msg),
+                Err(e) => err_response(id, -32602, e),
             }
-            let truncated: String = text.chars().take(12).collect();
-            {
-                let mut s = state.lock().expect("state lock");
-                s.bubble = Some(truncated.clone());
-                s.bubble_hide_at = Some(now_ms() + 3000);
-            }
-            if let Some(app) = app {
-                let _ = app.emit(
-                    "octopus://event",
-                    json!({"type": "ASK", "text": truncated, "now": now_ms()}),
-                );
-            }
-            text_response(id, format!("bubble: {}", truncated))
         }
-        TOOL_PET_PET => {
-            {
-                let mut s = state.lock().expect("state lock");
-                s.affection = (s.affection + 5).min(100);
-                s.bubble = Some("啊~".to_string());
-                s.bubble_hide_at = Some(now_ms() + 3000);
-            }
-            if let Some(app) = app {
-                let _ = app.emit("octopus://event", json!({"type": "PET", "now": now_ms()}));
-            }
-            text_response(id, "petted (+5 affection)".to_string())
-        }
+        TOOL_PET_PET => match actions::apply_pet(app, state, now) {
+            Ok(msg) => text_response(id, msg),
+            Err(e) => err_response(id, -32602, e),
+        },
         TOOL_PET_GET_STATE => {
             let s = state.lock().expect("state lock");
             let state_json = serde_json::to_string(&*s).unwrap_or_else(|_| "{}".to_string());

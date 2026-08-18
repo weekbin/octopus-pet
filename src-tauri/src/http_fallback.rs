@@ -13,20 +13,29 @@
 //   POST /ask             → {"text": "hello"}         (ask bubble)
 //   POST /pet             → {}                        (pet, affection +5)
 //
+// POST 端点全部委托给 actions::apply_* (唯一逻辑点), 与 MCP 行为一致,
+// 并持有 AppHandle → emit "octopus://event" → 前端 XState 实时响应。
+//
 // We use plain TCP + hand-rolled HTTP/1.1 (no framework) to keep the binary
 // small and avoid pulling axum/hyper. octocat-pet is a tiny app; HTTP fallback
 // is dev-only.
 
-use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use tauri::AppHandle;
+
+use crate::actions;
 use crate::mcp_stdio::SCENES;
 use crate::state_bridge::SharedState;
 
-pub fn start(state: Arc<Mutex<SharedState>>, port: u16) -> std::io::Result<()> {
+pub fn start(
+    app: Option<AppHandle>,
+    state: Arc<Mutex<SharedState>>,
+    port: u16,
+) -> std::io::Result<()> {
     let listener = TcpListener::bind(("127.0.0.1", port))?;
     let bound_port = listener.local_addr()?.port();
     tracing::info!("HTTP fallback listening on http://127.0.0.1:{}", bound_port);
@@ -36,8 +45,9 @@ pub fn start(state: Arc<Mutex<SharedState>>, port: u16) -> std::io::Result<()> {
         match stream {
             Ok(s) => {
                 let state = state.clone();
+                let app = app.clone();
                 std::thread::spawn(move || {
-                    if let Err(e) = handle_client(s, state) {
+                    if let Err(e) = handle_client(s, app.as_ref(), state) {
                         tracing::warn!("HTTP client error: {:?}", e);
                     }
                 });
@@ -48,7 +58,11 @@ pub fn start(state: Arc<Mutex<SharedState>>, port: u16) -> std::io::Result<()> {
     Ok(())
 }
 
-fn handle_client(mut stream: TcpStream, state: Arc<Mutex<SharedState>>) -> std::io::Result<()> {
+fn handle_client(
+    mut stream: TcpStream,
+    app: Option<&AppHandle>,
+    state: Arc<Mutex<SharedState>>,
+) -> std::io::Result<()> {
     stream.set_read_timeout(Some(Duration::from_secs(5)))?;
     stream.set_write_timeout(Some(Duration::from_secs(5)))?;
 
@@ -83,7 +97,7 @@ fn handle_client(mut stream: TcpStream, state: Arc<Mutex<SharedState>>) -> std::
     }
 
     // Route
-    let (status, ctype, resp_body) = route(method, path, &body, state);
+    let (status, ctype, resp_body) = route(method, path, &body, app, state);
     write_response(&mut stream, status, status_text(status), ctype, &resp_body)
 }
 
@@ -91,6 +105,7 @@ fn route(
     method: &str,
     path: &str,
     body: &[u8],
+    app: Option<&AppHandle>,
     state: Arc<Mutex<SharedState>>,
 ) -> (u16, &'static str, Vec<u8>) {
     let body_str = String::from_utf8_lossy(body).to_string();
@@ -112,49 +127,51 @@ fn route(
         ("POST", "/show") => {
             let v: serde_json::Value = serde_json::from_str(&body_str).unwrap_or_default();
             let scene = v.get("state").and_then(|x| x.as_str()).unwrap_or("");
-            if !SCENES.contains(&scene) {
-                return (
+            let now = now_ms();
+            match actions::apply_show(app, &state, scene, now) {
+                Ok(msg) => (
+                    200,
+                    "application/json",
+                    format!(r#"{{"ok":true,"message":"{}"}}"#, msg).into_bytes(),
+                ),
+                Err(e) => (
                     400,
                     "application/json",
-                    br#"{"error":"unknown scene"}"#.to_vec(),
-                );
+                    format!(r#"{{"error":"{}"}}"#, e).into_bytes(),
+                ),
             }
-            let mut s = state.lock().expect("state lock");
-            s.scene = scene.to_string();
-            s.frame = 0;
-            (
-                200,
-                "application/json",
-                format!(r#"{{"ok":true,"scene":"{}"}}"#, scene).into_bytes(),
-            )
         }
         ("POST", "/ask") => {
             let v: serde_json::Value = serde_json::from_str(&body_str).unwrap_or_default();
-            let text = v
-                .get("text")
-                .and_then(|x| x.as_str())
-                .unwrap_or("")
-                .to_string();
-            let truncated: String = text.chars().take(12).collect();
-            let mut s = state.lock().expect("state lock");
-            s.bubble = Some(truncated.clone());
-            s.bubble_hide_at = Some(now_ms() + 3000);
-            (
-                200,
-                "application/json",
-                format!(r#"{{"ok":true,"bubble":"{}"}}"#, truncated).into_bytes(),
-            )
+            let text = v.get("text").and_then(|x| x.as_str()).unwrap_or("");
+            let now = now_ms();
+            match actions::apply_ask(app, &state, text, now) {
+                Ok(msg) => (
+                    200,
+                    "application/json",
+                    format!(r#"{{"ok":true,"message":"{}"}}"#, msg).into_bytes(),
+                ),
+                Err(e) => (
+                    400,
+                    "application/json",
+                    format!(r#"{{"error":"{}"}}"#, e).into_bytes(),
+                ),
+            }
         }
         ("POST", "/pet") => {
-            let mut s = state.lock().expect("state lock");
-            s.affection = (s.affection + 5).min(100);
-            s.bubble = Some("啊~".to_string());
-            s.bubble_hide_at = Some(now_ms() + 3000);
-            (
-                200,
-                "application/json",
-                format!(r#"{{"ok":true,"affection":{}}}"#, s.affection).into_bytes(),
-            )
+            let now = now_ms();
+            match actions::apply_pet(app, &state, now) {
+                Ok(msg) => (
+                    200,
+                    "application/json",
+                    format!(r#"{{"ok":true,"message":"{}"}}"#, msg).into_bytes(),
+                ),
+                Err(e) => (
+                    400,
+                    "application/json",
+                    format!(r#"{{"error":"{}"}}"#, e).into_bytes(),
+                ),
+            }
         }
         _ => (404, "text/plain", b"not found".to_vec()),
     }
@@ -193,10 +210,4 @@ fn now_ms() -> u64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0)
-}
-
-// (HashMap kept to avoid an "unused import" warning if I add a hashmap later)
-#[allow(dead_code)]
-fn _unused_hashmap() -> HashMap<String, String> {
-    HashMap::new()
 }

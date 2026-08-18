@@ -1,16 +1,19 @@
-// state_bridge.rs — Commands callable from the webview via `invoke()`,
-// plus the SharedState struct used by both the webview and the HTTP fallback.
+// state_bridge.rs — Commands callable from the webview via invoke(),
+// plus the SharedState mirror queried by MCP / HTTP.
+//
+// 状态权威是前端 XState。Rust 侧 SharedState 只是只读镜像:
+//   - webview 每次 FSM context 变化 → invoke sync_state 回写 (只写不 emit)
+//   - actions.rs 的 apply_* 在有 webview 时也会写一份 (emit 前同步),
+//     headless (--mcp-stdio) 时直写供 CLI 查询
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
-use tauri::{AppHandle, State};
+use tauri::State;
 
-/// Process-wide shared state. The webview updates it via tauri::command
-/// (force_scene/ask/pet), and the HTTP fallback reads from it.
-#[derive(Debug, Serialize, Clone)]
+/// 状态镜像 (XState 的投影, 无 frame — 渲染帧由前端组件持有)。
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SharedState {
     pub scene: String,
-    pub frame: u32,
     pub bubble: Option<String>,
     #[serde(rename = "bubbleHideAt")]
     pub bubble_hide_at: Option<u64>,
@@ -18,7 +21,7 @@ pub struct SharedState {
     pub position: Position,
 }
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Position {
     pub x: i32,
     pub y: i32,
@@ -28,13 +31,23 @@ impl Default for SharedState {
     fn default() -> Self {
         Self {
             scene: "pretend-busy".to_string(),
-            frame: 0,
             bubble: None,
             bubble_hide_at: None,
             affection: 0,
             position: Position { x: 100, y: 100 },
         }
     }
+}
+
+/// webview → Rust 的镜像回写载荷 (与前端 OctopusState 的同步字段对齐)。
+#[derive(Debug, Deserialize)]
+pub struct SyncPayload {
+    pub scene: String,
+    pub bubble: Option<String>,
+    #[serde(rename = "bubbleHideAt")]
+    pub bubble_hide_at: Option<u64>,
+    pub affection: u32,
+    pub position: Position,
 }
 
 #[derive(Serialize)]
@@ -52,74 +65,21 @@ pub fn get_state(state: State<'_, Mutex<SharedState>>) -> StateResponse {
     }
 }
 
+/// XState 权威状态的镜像回写。只写不 emit (emit 方向是 Rust → webview,
+/// 这里反向, 无循环)。
 #[tauri::command]
-pub fn force_scene(
-    scene: String,
+pub fn sync_state(
+    payload: SyncPayload,
     state: State<'_, Mutex<SharedState>>,
-    app: AppHandle,
 ) -> StateResponse {
     let mut s = state.lock().expect("state lock");
-    s.scene = scene.clone();
-    s.frame = 0;
-    use tauri::Emitter;
-    let _ = app.emit(
-        "octopus://event",
-        serde_json::json!({"type": "FORCE_SCENE", "scene": scene, "now": now_ms()}),
-    );
+    s.scene = payload.scene;
+    s.bubble = payload.bubble;
+    s.bubble_hide_at = payload.bubble_hide_at;
+    s.affection = payload.affection.min(100);
+    s.position = payload.position;
     StateResponse {
         ok: true,
-        message: format!("forced scene: {}", s.scene),
+        message: "synced".to_string(),
     }
-}
-
-#[tauri::command]
-pub fn ask(
-    text: String,
-    state: State<'_, Mutex<SharedState>>,
-    app: AppHandle,
-) -> StateResponse {
-    let truncated: String = text.chars().take(12).collect();
-    let mut s = state.lock().expect("state lock");
-    s.bubble = Some(truncated.clone());
-    s.bubble_hide_at = Some(now_ms() + 3000);
-    use tauri::Emitter;
-    let _ = app.emit(
-        "octopus://event",
-        serde_json::json!({"type": "ASK", "text": truncated, "now": now_ms()}),
-    );
-    StateResponse {
-        ok: true,
-        message: format!("asked: {}", truncated),
-    }
-}
-
-#[tauri::command]
-pub fn pet(state: State<'_, Mutex<SharedState>>, app: AppHandle) -> StateResponse {
-    let mut s = state.lock().expect("state lock");
-    s.affection = (s.affection + 5).min(100);
-    s.bubble = Some("啊~".to_string());
-    s.bubble_hide_at = Some(now_ms() + 3000);
-    use tauri::Emitter;
-    let _ = app.emit(
-        "octopus://event",
-        serde_json::json!({"type": "PET", "now": now_ms()}),
-    );
-    StateResponse {
-        ok: true,
-        message: format!("petted, affection: {}", s.affection),
-    }
-}
-
-fn now_ms() -> u64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
-}
-
-#[allow(dead_code)]
-fn _suppress_unused() {
-    // Force the AppHandle import to be used (for future events emit in commands).
-    let _: Option<AppHandle> = None;
 }

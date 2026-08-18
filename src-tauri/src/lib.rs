@@ -7,6 +7,7 @@
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
+mod actions;
 mod http_fallback;
 mod mcp_stdio;
 mod state_bridge;
@@ -25,23 +26,6 @@ pub fn run() {
         .init();
 
     let shared: Arc<Mutex<SharedState>> = Arc::new(Mutex::new(SharedState::default()));
-
-    // Optional HTTP fallback (env: OCTOPUS_HTTP_FALLBACK=true, OCTOPUS_PORT=9527)
-    if std::env::var("OCTOPUS_HTTP_FALLBACK")
-        .map(|v| v == "true" || v == "1")
-        .unwrap_or(false)
-    {
-        let port: u16 = std::env::var("OCTOPUS_PORT")
-            .ok()
-            .and_then(|p| p.parse().ok())
-            .unwrap_or(9527);
-        let http_state = shared.clone();
-        std::thread::spawn(move || {
-            if let Err(e) = http_fallback::start(http_state, port) {
-                tracing::error!("HTTP fallback failed: {:?}", e);
-            }
-        });
-    }
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
@@ -64,8 +48,29 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .manage(shared.clone())
         .setup(move |app| {
-            // Spawn the MCP stdio server. Pass shared state for cross-component consistency.
             let app_handle = app.handle().clone();
+
+            // Optional HTTP fallback (env: OCTOPUS_HTTP_FALLBACK=true, OCTOPUS_PORT=9527).
+            // Started here (not before the builder) because we need an AppHandle
+            // to emit "octopus://event" so the webview reacts to HTTP writes.
+            if std::env::var("OCTOPUS_HTTP_FALLBACK")
+                .map(|v| v == "true" || v == "1")
+                .unwrap_or(false)
+            {
+                let port: u16 = std::env::var("OCTOPUS_PORT")
+                    .ok()
+                    .and_then(|p| p.parse().ok())
+                    .unwrap_or(9527);
+                let http_state = shared.clone();
+                let http_app = app_handle.clone();
+                std::thread::spawn(move || {
+                    if let Err(e) = http_fallback::start(Some(http_app), http_state, port) {
+                        tracing::error!("HTTP fallback failed: {:?}", e);
+                    }
+                });
+            }
+
+            // Spawn the MCP stdio server. Pass shared state for cross-component consistency.
             let mcp_state = shared.clone();
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = mcp_stdio::serve(Some(app_handle), mcp_state).await {
@@ -76,9 +81,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             state_bridge::get_state,
-            state_bridge::force_scene,
-            state_bridge::ask,
-            state_bridge::pet,
+            state_bridge::sync_state,
         ])
         .run(tauri::generate_context!())
         .expect("error while running octopus-pet application");
