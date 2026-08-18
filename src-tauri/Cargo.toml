@@ -1,0 +1,33 @@
+[package]
+name = "octopus-pet"
+version = "0.1.0"
+description = "Coral-pink octopus desktop pet — Tauri 2 + MCP stdio server"
+authors = ["weekbin"]
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "octopus_pet_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
+thiserror = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

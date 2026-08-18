@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# bin/octopus-pet — Plugin entrypoint script (per agent-plugins.org spec §9.2).
+#
+# mcode / other MCP-capable clients invoke this script as:
+#   command = "./bin/octopus-pet"
+#   args    = ["--mcp-stdio"]
+#
+# This script:
+#   1. Locates the Tauri .app bundle (production) or the cargo target binary (dev)
+#   2. Forwards all CLI args to the inner binary
+#   3. Connects the binary's stdio to our own stdio (so MCP JSON-RPC flows through)
+#
+# Per spec §9.2, `${PLUGIN_ROOT}` is the absolute path to the plugin root (where
+# plugin.json lives). We default to the script's own directory.
+
+set -euo pipefail
+
+# Resolve plugin root: script's parent's parent.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_ROOT="${PLUGIN_ROOT:-$SCRIPT_DIR/..}"
+PLUGIN_ROOT="$(cd "$PLUGIN_ROOT" && pwd)"
+
+# Locate the inner binary. Search order:
+#   1. ${PLUGIN_ROOT}/src-tauri/target/release/octopus-pet       (cargo build --release)
+#   2. ${PLUGIN_ROOT}/src-tauri/target/debug/octopus-pet         (cargo build / tauri dev)
+#   3. ${PLUGIN_ROOT}/dist/macos/Octopus Pet.app/Contents/MacOS/octopus-pet  (tauri build --bundles app)
+#   4. ${PLUGIN_ROOT}/dist/macos-arm64/Octopus Pet.app/Contents/MacOS/octopus-pet
+INNER_BIN=""
+for candidate in \
+  "${PLUGIN_ROOT}/src-tauri/target/release/octopus-pet" \
+  "${PLUGIN_ROOT}/src-tauri/target/debug/octopus-pet" \
+  "${PLUGIN_ROOT}/dist/macos/Octopus Pet.app/Contents/MacOS/octopus-pet" \
+  "${PLUGIN_ROOT}/dist/macos-arm64/Octopus Pet.app/Contents/MacOS/octopus-pet"; do
+  if [ -x "$candidate" ]; then
+    INNER_BIN="$candidate"
+    break
+  fi
+done
+
+if [ -z "$INNER_BIN" ]; then
+  echo "ERROR: octopus-pet inner binary not found." >&2
+  echo "Looked in:" >&2
+  echo "  ${PLUGIN_ROOT}/src-tauri/target/{release,debug}/octopus-pet" >&2
+  echo "  ${PLUGIN_ROOT}/dist/macos{,/arm64}/Octopus Pet.app/Contents/MacOS/octopus-pet" >&2
+  echo "Build with: (cd ${PLUGIN_ROOT}/src-tauri && cargo build --release)" >&2
+  echo "       or:  (cd ${PLUGIN_ROOT} && npm run tauri:build)" >&2
+  exit 127
+fi
+
+# Forward stdio. exec replaces this shell process with the binary, so signals
+# and stdio are connected cleanly.
+exec "$INNER_BIN" "$@"

@@ -1,0 +1,59 @@
+/* Octopus Pet — global styles
+   Per plan §1.9.3: transparent window, no decorations, always-on-top.
+   The window IS the pet — body and html are fully transparent.
+*/
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  background: transparent !important;
+  overflow: hidden;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  /* Tauri 2 transparent window: body must be fully transparent. */
+  background: transparent;
+}
+
+/* Disable text selection and drag defaults in the pet window. */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-app-region: no-drag; /* Tauri drag handled in JS */
+}
+
+/* Bubble pop animation */
+@keyframes bubble-pop {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.85);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+}
+
+/* Drag visual feedback */
+.octopus-pet:active {
+  cursor: grabbing;
+}
+
+/* Hide everything outside the pet bounds — Tauri window is exactly 200x200,
+   so this is mostly defensive. */
+canvas {
+  display: block;
+}
