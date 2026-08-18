@@ -7,7 +7,7 @@
 //     headless (--mcp-stdio) 时直写供 CLI 查询
 
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tauri::State;
 
 /// 状态镜像 (XState 的投影, 无 frame — 渲染帧由前端组件持有)。
@@ -57,7 +57,7 @@ pub struct StateResponse {
 }
 
 #[tauri::command]
-pub fn get_state(state: State<'_, Mutex<SharedState>>) -> StateResponse {
+pub fn get_state(state: State<'_, Arc<Mutex<SharedState>>>) -> StateResponse {
     let s = state.lock().expect("state lock");
     StateResponse {
         ok: true,
@@ -70,7 +70,7 @@ pub fn get_state(state: State<'_, Mutex<SharedState>>) -> StateResponse {
 #[tauri::command]
 pub fn sync_state(
     payload: SyncPayload,
-    state: State<'_, Mutex<SharedState>>,
+    state: State<'_, Arc<Mutex<SharedState>>>,
 ) -> StateResponse {
     let mut s = state.lock().expect("state lock");
     s.scene = payload.scene;

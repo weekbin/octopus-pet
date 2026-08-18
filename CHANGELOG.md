@@ -11,6 +11,9 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
   任何场景 8s 后都切到 stay-late. 改为 `nextScene(context.scene)`, 补 14 场景全量轮转回归测试.
 - HTTP :9527 fallback 断链: POST /show|/ask|/pet 只写 SharedState 不 emit,
   前端不响应. 现持有 AppHandle, 委托 actions 后 emit 事件.
+- **sync_state command 从未工作**: `State<Mutex<SharedState>>` 与 `.manage(Arc<Mutex<SharedState>>)`
+  类型不匹配, invoke 报 "state not managed". 改为 `State<Arc<Mutex<SharedState>>>` —
+  旧 4 个 command 是死代码从未被 invoke, bug 被掩盖; C4 接线后才暴露 (GUI 实测发现).
 
 ### Changed
 - **状态权威收敛**: XState 是唯一状态权威, Rust `SharedState` 降级为只读镜像,

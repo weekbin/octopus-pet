@@ -7,6 +7,7 @@
 
 import { useEffect, useRef } from "react";
 import type { ActorRefFrom } from "xstate";
+import { invoke } from "@tauri-apps/api/core";
 import { octopusMachine } from "../state/octopus-fsm";
 import type { OctopusState } from "../state/types";
 
@@ -54,8 +55,6 @@ export function useStateSync(actor: Actor) {
       lastRef.current = next;
       (async () => {
         try {
-          // Lazy import: browser dev 模式没有 tauri 后端, catch 掉
-          const { invoke } = await import("@tauri-apps/api/core");
           await invoke("sync_state", { payload: next });
         } catch {
           // browser dev mode — no tauri backend
