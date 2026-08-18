@@ -97,6 +97,7 @@ mcode 启动时自动 spawn 章鱼 .app，14 个"打工人"场景简单轮转，
 
 ## 已知 V1 限制 (留 V2 增量)
 
+- **单实例 only (tauri-plugin-single-instance)**: 多 mcode session 场景下, 首个 session 启动的章鱼 .app 赢了, 后续 session 的 .app 立即被 kill, 后续 session 的 MCP tool call 失败 (没有 stdio 接). 真正的多 session 共享留 V1.1+ (走 Unix domain socket 转发).
 - **RGB 无 alpha**: 14/14 场景 PNG 是 720×720 RGB (背景是实色), 不是透明. Tauri 透明窗口里章鱼显示成 RGB 矩形, 不会跟桌面融合. V2 用图像分割 / chroma key 加 alpha.
 - **141 帧 (3× 计划值)**: 状态机 8s 轮转会半截切换场景 (单循环 ~11.75s). V1 接受, V2 调帧率.
 - **mcode 事件 → 章鱼 切状态 不做**: mcode 暂时没好钩子, V1 简单 timer 轮转. V1.1+ 接 mcode 钩子.

@@ -5,6 +5,7 @@
 // (webview / MCP / HTTP) see the same picture.
 
 use std::sync::{Arc, Mutex};
+use tauri::Manager;
 
 mod http_fallback;
 mod mcp_stdio;
@@ -43,6 +44,22 @@ pub fn run() {
     }
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            // Second instance tried to launch. The plugin already killed it
+            // (the second .app process exits immediately). We're in the FIRST
+            // instance's callback now. We log the event and could optionally
+            // surface it to the user (e.g. toast, or focus the existing window).
+            tracing::warn!(
+                "another octopus-pet instance tried to launch (args={:?}); ignored (V1 single-instance)",
+                args
+            );
+            // Bring our window to the front so the user knows we're alive.
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+                let _ = window.unminimize();
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .manage(shared.clone())

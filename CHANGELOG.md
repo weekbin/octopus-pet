@@ -24,6 +24,7 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
   - `lint-octopus-plugin.sh` (16/16 spec checks)
 
 ### Known Limitations (V1)
+- **Single-instance only** (`tauri-plugin-single-instance`): first mcode session wins, subsequent sessions' MCP calls fail silently. Multi-session shared pet deferred to V1.1+ via Unix domain socket forwarding.
 - RGB rendering only (no alpha channel) — 14/14 scenes
 - 141 frames → 8s rotation causes half-cycle scene swaps (single loop is 11.75s)
 - No mcode task event → scene mapping (mcode has no good hook yet)
