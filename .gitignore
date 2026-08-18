@@ -1,0 +1,54 @@
+# Octopus Pet — gitignore
+# Generated 2026-08-18
+
+# Tauri build artifacts
+src-tauri/target/
+src-tauri/Cargo.lock
+src-tauri/gen/
+src-tauri/WixTools/
+src-tauri/.tauri/
+src-tauri/icons/.DS_Store
+app/dist/
+app/node_modules/
+app/.vite/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local config / secrets
+.env
+.env.local
+*.local
+secrets/
+secrets.json
+OCTOPUS_DATA/
+
+# Backup / temp
+*.bak
+*.tmp
+.cache/
+
+# Spritesheet intermediate (regeneratable)
+app/public/assets/octopus/spritesheet-*.miff
+
+# Local audit / extraction caches
+.local-audit/
+.local-frames/
+
+# Tauri plugin dev builds
+target/
+
+# Unrelated docs (not part of octopus-pet)
+codebuddy-integration-gap-report.md

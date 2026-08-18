@@ -1,0 +1,11 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "octopus-pet",
+  "version": "1.0.0",
+  "description": "Coral-pink octopus desktop pet that lives in your Mac. Auto-spawned by spec-conformant agent clients as a stdio MCP server; reacts to agent task state with idle / working / error / ... animations. Reuses assets from the octopus-meme skill.",
+  "author": { "name": "weekbin" },
+  "homepage": "https://github.com/weekbin/octopus-pet",
+  "repository": "https://github.com/weekbin/octopus-pet",
+  "license": "MIT",
+  "keywords": ["pet", "desktop", "mcp", "octopus", "打工人", "agent-skills"]
+}

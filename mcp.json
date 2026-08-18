@@ -1,0 +1,14 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "octopus-pet": {
+      "type": "stdio",
+      "command": "./bin/octopus-pet",
+      "args": ["--mcp-stdio"],
+      "env": {
+        "OCTOPUS_PORT": "9527",
+        "OCTOPUS_HTTP_FALLBACK": "true"
+      }
+    }
+  }
+}
