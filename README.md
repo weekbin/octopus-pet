@@ -195,16 +195,19 @@ cd app && npm install
 cd ../src-tauri && cargo build
 cd ..
 
-# 启动 (Vite dev server + Tauri window)
-npm run tauri:dev
-# 或: cd src-tauri && cargo tauri dev
+# 启动 (Vite dev server 自动起 + Tauri 窗口)
+cd src-tauri && cargo tauri dev
+# 或从 app/ 目录: npm run tauri:dev (脚本内部 cd 到 src-tauri)
 ```
+
+> 注意: `tauri.conf.json` 在 `src-tauri/`, tauri CLI 必须从 `src-tauri/` 跑
+> (或经 app/package.json 的 `tauri:dev` 脚本, 它内部 `cd ../src-tauri`)。
 
 ### 构建发布版
 
 ```bash
 # macOS .app (给普通用户)
-npm run tauri:build
+cd src-tauri && cargo tauri build
 # 产物: src-tauri/target/release/bundle/macos/Octopus Pet.app
 #       src-tauri/target/release/octopus-pet (裸二进制)
 
