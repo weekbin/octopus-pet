@@ -12,17 +12,18 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.iter().any(|a| a == "--mcp-stdio") {
         // Headless: just run the MCP stdio server, no Tauri window.
+        // Use stderr for tracing (stdout is reserved for JSON-RPC over stdio).
+        use tracing_subscriber::EnvFilter;
+        let filter = EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| EnvFilter::new("info"));
+        tracing_subscriber::fmt()
+            .with_env_filter(filter)
+            .with_writer(std::io::stderr)
+            .with_ansi(false)
+            .init();
+
         let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
-        rt.block_on(async {
-            // The MCP stdio server doesn't need a Tauri AppHandle for V1 stub;
-            // it just logs. We pass a dummy by creating a minimal builder.
-            // For now: log and read stdin forever.
-            tracing_subscriber::fmt()
-                .with_env_filter(
-                    tracing_subscriber::EnvFilter::try_from_default_env()
-                        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-                )
-                .init();
+        let _ = rt.block_on(async {
             tracing::info!("octopus-pet --mcp-stdio mode (V1 stub, no Tauri window)");
             octopus_pet_lib::run_mcp_only().await
         });

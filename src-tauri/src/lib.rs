@@ -10,11 +10,13 @@ mod state_bridge;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    use tracing_subscriber::EnvFilter;
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info"));
     tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-        )
+        .with_env_filter(filter)
+        .with_writer(std::io::stderr)
+        .with_ansi(false)
         .init();
 
     tauri::Builder::default()
@@ -91,11 +93,35 @@ pub async fn run_mcp_only() -> Result<(), Box<dyn std::error::Error>> {
                             ]
                         }
                     }),
-                    "tools/call" => serde_json::json!({
-                        "jsonrpc": "2.0",
-                        "id": id,
-                        "result": {"content": [{"type": "text", "text": "stub ok"}], "isError": false}
-                    }),
+                    "tools/call" => {
+                        let tool_name = req.get("params")
+                            .and_then(|p| p.get("name"))
+                            .and_then(|n| n.as_str())
+                            .unwrap_or("");
+                        let args = req.get("params")
+                            .and_then(|p| p.get("arguments"))
+                            .cloned()
+                            .unwrap_or(serde_json::json!({}));
+                        let text = match tool_name {
+                            "pet_show" | "pet_set_state" => format!(
+                                "switched to {}",
+                                args.get("state").and_then(|v| v.as_str()).unwrap_or("?")
+                            ),
+                            "pet_ask" => format!(
+                                "bubble: {}",
+                                args.get("text").and_then(|v| v.as_str()).unwrap_or("?")
+                            ),
+                            "pet_pet" => "petted (+5 affection)".to_string(),
+                            "pet_get_state" => "scene=pretend-busy frame=0 bubble=null affection=0".to_string(),
+                            "pet_list_states" => "14 scenes: pretend-busy, stay-late, breakdown, lying-flat, multi-tasking, payday, salary-rejected, treat-milk-tea, friday-5pm, toilet-slacking, touch-fish, waiting-m3pro, soul-leaving, multitask".to_string(),
+                            other => format!("unknown tool: {}", other),
+                        };
+                        serde_json::json!({
+                            "jsonrpc": "2.0",
+                            "id": id,
+                            "result": {"content": [{"type": "text", "text": text}], "isError": false}
+                        })
+                    }
                     _ => serde_json::json!({
                         "jsonrpc": "2.0",
                         "id": id,

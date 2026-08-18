@@ -31,3 +31,8 @@ codegen-units = 1
 lto = true
 opt-level = "s"
 strip = true
+
+# Integration tests need the binary built first.
+[[test]]
+name = "mcp_roundtrip"
+path = "tests/mcp_roundtrip.rs"

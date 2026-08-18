@@ -11,6 +11,7 @@ src-tauri/icons/.DS_Store
 app/dist/
 app/node_modules/
 app/.vite/
+app/tsconfig.tsbuildinfo
 
 # Editor / OS
 .DS_Store
