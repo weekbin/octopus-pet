@@ -19,8 +19,8 @@ import manifestJson from "../data/spritesheet-manifest.json";
 
 const manifest = manifestJson as unknown as SpritesheetManifest;
 
-const SPRITE_SIZE = 192;
-const WINDOW_SIZE = 192; // == SPRITE_SIZE: 素材完全铺满窗口, 零边距
+const SPRITE_SIZE = 116;
+const WINDOW_SIZE = 116; // == SPRITE_SIZE: 素材完全铺满窗口, 零边距
 const SPRITE_OFFSET = 0; // 无 4px 边距 (原 200 窗口留缝, 透出桌面色看起来像白边)
 
 export function OctopusPet() {
@@ -80,23 +80,20 @@ export function OctopusPet() {
         send({ type: "PET", now: Date.now() } as OctopusEvent);
       }}
     >
-      <div
-        className="octopus-sprite"
+      <img
+        src="/assets/octopus/breath-idle.png"
+        alt="breath-idle"
         style={{
           position: "absolute",
           top: SPRITE_OFFSET,
           left: SPRITE_OFFSET,
           width: SPRITE_SIZE,
           height: SPRITE_SIZE,
-          backgroundImage: `url(${getSpritesheetUrl(state.context.scene, manifest)})`,
-          backgroundPosition: `-${col * SPRITE_SIZE}px -${row * SPRITE_SIZE}px`,
-          backgroundSize: `${meta.width}px ${meta.height}px`,
-          backgroundRepeat: "no-repeat",
-          imageRendering: "auto",
           pointerEvents: "none",
+          imageRendering: "auto",
         }}
-        data-scene={state.context.scene}
-        data-frame={row * meta.cols + col}
+        data-scene="breath-idle"
+        data-frame={frame}
       />
       {state.context.bubble && (
         <Bubble text={state.context.bubble} />

@@ -54,6 +54,12 @@ Antigravity / Gemini CLI).
   (SCENES). 改完跑 `bash scripts/check-scenes-sync.sh` (CI 也会跑).
 - **改 spritesheet**: 141 帧是源头真理. 真要改, 从 `~/Works/octopus-worker-meme` 抽,
   跑 `extract-and-link-octopus-frames.sh` + `spritesheet-builder.sh` + `generate-spritesheet-manifest.sh`.
+- **换桌宠 idle 动画素材**: 走 `docs/breath-pipeline.md` 完整流程 (image_synthesize
+  立绘 → gen_videos 慢眨眼 → ffmpeg 抽帧 → flood-fill 抠图 → 持续睁眼+加速眨眼
+  拼接 → APNG 输出). 关键阈值: flood-fill `edge_thresh=50` (避免抠掉嘴内部深红),
+  APNG `disposal=0` (避免 PIL 合并相同帧), tauri.conf.json `macOSPrivateApi: true`
+  (macOS 透明必需). 不用 GIF (透明兼容差), 不用 WebM with alpha (ffmpeg 实际输出
+  yuv420p 不带 alpha).
 - **发布产物 `bin/octopus-pet.bin` 提交进 git**: 跑 `release-plugin.sh` 后 `git add bin/octopus-pet.bin`
   随 commit 提交 (repo 本身即插件, clone 零构建可加载). 产物必须走
   `cargo tauri build --no-bundle` — 裸 `cargo build` 增量会跳过 asset 嵌入 (binary < 5MB = 缺 assets).

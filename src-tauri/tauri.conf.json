@@ -10,12 +10,13 @@
     "frontendDist": "../app/dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "label": "main",
         "title": "🐙 Octopus Pet",
-        "width": 192,
-        "height": 192,
+        "width": 116,
+        "height": 116,
         "resizable": false,
         "fullscreen": false,
         "decorations": false,

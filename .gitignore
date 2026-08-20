@@ -50,4 +50,9 @@ secrets.json
 # ── 无关文档 (不属于 octopus-pet) ─────────────────────────
 codebuddy-integration-gap-report.md
 
+# ── 素材探索过程 (本地参考, 不入 git) ────────────────────
+# V1 探索期: 立绘/视频/抠图帧/对比图等中间产物 (~300MB).
+# V2 重做素材链 (绿幕 + 标图), 这些都作废.
+art/
+
 # 注: src-tauri/Cargo.lock 必须提交 (应用项目可复现构建, CI cache key 依赖它)
