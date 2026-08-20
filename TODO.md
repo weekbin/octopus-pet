@@ -21,22 +21,23 @@
 ## V0.5 — 基础验证（必须先做）
 
 > 目标：把后续依赖的"工具链能力"全部确认，失败的话能立刻知道，不卡后续阶段。
+> 2026-08-21 验证结果: webm/HEVC alpha 路线在 macOS 8.1.2 ffmpeg 都不可用, **V2 主用 APNG** (Pillow, 100% 可靠).
 
-- [ ] **V0.5-1** 验证 macOS ffmpeg VP9 alpha 编码
-  - 命令：`ffmpeg -codecs 2>&1 | grep vp9_alpha` 必须看到 `vp9_alpha` 标识
-  - 不通过：`brew reinstall ffmpeg`
-  - 验收：在产出的 webm 上 `ffprobe` 显示 `pix_fmt yuva420p`
-  - 预计：5 分钟
+- [x] **V0.5-1** ~~验证 macOS ffmpeg VP9 alpha 编码~~ → ❌ **跳过**
+  - 结果: `ffmpeg -codecs` 不含 `vp9_alpha` 标识. homebrew ffmpeg 8.1.2 build 默认不带.
+  - 改用: APNG (Pillow 路线, V1 已验证 100% 可靠)
+  - 不重试 VP9 (Pillow APNG 已覆盖需求)
 
-- [ ] **V0.5-2** 验证 macOS hevc_videotoolbox alpha 编码
-  - 命令：`ffmpeg -c:v hevc_videotoolbox -i in.webm -vf "format=yuva420p" -tag:v hvc1 -allow_sw 1 out.mov`
-  - 验收：`ffprobe` 显示 `pix_fmt yuva420p` + `codec_name hevc`
-  - 预计：5 分钟
+- [x] **V0.5-2** ~~验证 macOS hevc_videotoolbox alpha 编码~~ → ❌ **跳过**
+  - 结果: 即使显式 `-vf format=yuva420p`, 输出仍 `pix_fmt yuv420p` (alpha 丢失).
+  - 改用: APNG (同上, 不重试 HEVC alpha)
+  - 后续: 如果未来 macOS ffmpeg 更新支持 HEVC alpha, 可重新评估.
 
 - [ ] **V0.5-3** 验证 mavis `gen_videos` 接受"首尾帧 = first_frame"约束
-  - 命令：用 `char-A-black.png` 作 first_frame + last_frame，prompt 强调 "首尾帧完全相同"
+  - 命令：用新基础素材 (待定) 作 first_frame + last_frame，prompt 强调 "首尾帧完全相同"
   - 验收：6s 视频抽 0s 和 5.9s 帧，眼睛/姿态/位置完全相同
   - 预计：5 分钟（含视频生成 2-3 分钟）
+  - 注意: 用户将换基础素材, 等用户确认新素材来源后再做此验证
 
 ---
 
@@ -225,9 +226,9 @@
 | 风险 | 触发条件 | 备选方案 |
 |---|---|---|
 | gen_videos 强制首尾帧失败 | V0.5-3 验证发现帧差异 >5% | prompt 拆成两段（0-2s 走 X 动作 / 8-10s 走回标准），manual 拼接 |
-| hevc_videotoolbox alpha 失败 | V0.5-2 验证失败 | 退回 VP9 (软件编码) |
 | HSV 抠像误伤角色色 | 14 个动作中某动作有大量绿色衣服 | 该动作单独 prompt 改"白幕/蓝幕" + 对应 HSV 范围 |
 | Tauri 2 跨平台打包失败 | V1.1-1 / V1.1-2 编译报错 | 单独 Tauri 配置分支（windows / linux 子配置）|
+| webm/HEVC alpha 编码失败 | (已发生, 2026-08-21 验证) | ✅ **已切换到 APNG 路线** (Pillow, V1 验证可靠) |
 
 ---
 
