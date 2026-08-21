@@ -128,8 +128,10 @@
 
 - [ ] **V2.2-4** 端到端跑通 1 个动作（"待机呼吸"）的完整管线
   - 依赖：V2.2-1 ~ V2.2-3
-  - 流程：标图 → gen_videos 10s 绿幕视频 → chroma 抠像 → normalize 归一化 → encode HEVC alpha
+  - 流程：标图 → `gen_videos` **6s 绿幕视频** (Hailuo-2.3 默认) → chroma 抠像 → normalize 归一化 → encode HEVC alpha
+  - **V2 时长决策 (2026-08-21)**: 用 `gen_videos` 工具默认 6s + Hailuo-2.3, 不用 H3 (贵), 不用 10s
   - 验收：输出的 webm 透明背景 + 角色稳定 + 脚底对齐
+  - 预计：1 小时 (跟 V0.5-3 验证同流程, 6s 数据已验证 96.65% 相似)
   - 预计：1 小时
 
 - [ ] **V2.2-5** 批量生产 14 个动作（覆盖当前 14 scene）
@@ -149,7 +151,8 @@
     12. waiting-m3pro (等新电脑)
     13. soul-leaving (灵魂出窍)
     14. multitask (三线程)
-  - 每动作 10s 绿幕视频 → 1 个 webm
+  - 每动作 **6s 绿幕视频** → 1 个 webm
+  - 工具: `gen_videos` 同步 (Hailuo-2.3 默认) — 不用 H3 (贵, account credits)
   - 预计：3-4 小时（每动作 2-3 分钟 × 14 = 30 分钟 + 处理时间）
 
 - [ ] **V2.2-6** 写 `prompts/octopus-greenscreen-prompt.md` 模板
