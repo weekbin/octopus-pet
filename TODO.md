@@ -109,12 +109,12 @@
 
 ### V2.2 — 绿幕生产管线（学 dsh-pet，4 步脚本）
 
-- [ ] **V2.2-1** 写 `scripts/chroma_greenscreen.py`（HSV 色相 70~170° 抠绿幕）
-  - 依赖：V2.1-1（标准图）
-  - 参考：dsh-pet `chromakey` 用 `format=yuva420p` + HSV 色相方案
-  - 函数：`greenscreen_to_transparent(mp4_path) -> webm_path`
-  - 依赖：numpy + Pillow（**不依赖 scipy**）
-  - 预计：30 分钟
+- [x] **V2.2-1** ✅ 写 `scripts/extract-chromakey-apng.py`（chroma key v3 + APNG 一键）
+  - 落地日期: 2026-08-21 (W1 D5, 01-detective-study 验证 PASS)
+  - 公式: `greenness = clip((G - max(R,B) - 10) / 20, 0, 1)` (v1 公式对中性色高光抠成半透明 → v3 修复)
+  - 流程: ffmpeg 抽帧 (15fps) → resize 192×192 → chroma key v3 → APNG 50 帧 × 132ms = 6.6s
+  - 文档: `docs/v2-h3-to-pet-workflow.md` (4 步完整流程, 13 动作复用指南)
+  - 已知限制: H3 绿幕反射进眼镜片 (V2.1 待修, 改 prompt 加 "no green tint reflection in eyes")
 
 - [ ] **V2.2-2** 写 `scripts/normalize_2160x1215.py`（归一化 + 脚底 y 固定）
   - 函数：归一化到 2160×1215，脚底固定在 y = 1215×0.85 = 1033

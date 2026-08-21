@@ -7,6 +7,15 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **V2 视频 → 桌宠 APNG 完整流程**: `docs/v2-h3-to-pet-workflow.md` 沉淀 H3 双图 →
+  ffmpeg 15fps 抽帧 → chroma key v3 → 192×192 APNG 4 步管线. 01-detective-study
+  桌宠集成验证 PASS (50 帧 × 132ms = 6.6s 循环, 2.3MB).
+- **chroma key v3 公式**: `greenness = clip((G - max(R,B) - 10) / 20, 0, 1)`. v1 公式
+  对中性色 (白色高光, 章鱼眼反光) 抠成半透明 → 眼睛高光变透明 bug. v3 让中性色
+  alpha=255 完全不透明. 沉淀在 `scripts/extract-chromakey-apng.py` (13 动作复用).
+- **H3 + `last_frame_image` 双图模式**: 首末帧严格一致 96.58% 相似 (Hailuo-2.3
+  物理做不到 40-45%). 走 `~/.minimax/agents/mavis/skills/h3-dual-image-video-gen/`,
+  包含 run_h3_video.py + verify_h3_video.py + evals/ 案例归档.
 - **VP9 alpha 编码 (V2 备用)**: `scripts/encode-webm-alpha.sh` 封装 ffmpeg-full Cellar
   locate + 双向 alpha 验证 (encoder help 预检 + ffprobe TAG:alpha_mode=1 后检).
   30 帧 RGBA → 8KB webm + alpha 真保留. V1 主用 APNG, V2 长动作 (>50 帧) 走这条,

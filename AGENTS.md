@@ -44,6 +44,8 @@ Antigravity / Gemini CLI).
 | **V0.5-3 验证产物** | `docs/v053-validation/` (gen_videos 6s 视频 + 0s/5.5s 对比帧, 96.65% 相似) |
 | **V2.1 标准图** (V2 idle 起点) | `art/octopus-frames/standard-char-1x1.png` (3/4 视角, 1:1, 绿幕, 1920×1920; `art/` 在 .gitignore) |
 | **V2 绿幕清洗脚本** | `scripts/remove-hat-greenscreen.py` (V2.1 14 动作复用) |
+| **V2 视频 → 桌宠 APNG 流程** | `docs/v2-h3-to-pet-workflow.md` (4 步: H3 双图 → 抽帧 → chroma key v3 → APNG, 01-detective-study 首跑通) |
+| **V2 抽帧 + chroma key + APNG 一键脚本** | `scripts/extract-chromakey-apng.py` (v3 公式沉淀, 13 动作复用) |
 
 ## 协作规则 (根因型, 别打地鼠)
 
@@ -63,6 +65,12 @@ Antigravity / Gemini CLI).
   APNG `disposal=0` (避免 PIL 合并相同帧), tauri.conf.json `macOSPrivateApi: true`
   (macOS 透明必需). 不用 GIF (透明兼容差). V1 默认 APNG, V2 长动作可走 WebM VP9 alpha
   (见下面"ffmpeg-full 接入"规则).
+- **V2 视频 → 桌宠 APNG (H3 / gen_videos 走完)**: 走 `docs/v2-h3-to-pet-workflow.md` 完整 4 步 (H3 双图 → ffmpeg 15fps 抽帧 → chroma key v3 → 192×192 APNG). 关键坑:
+  - **chroma key v3 公式** (`G - max(R,B)` 阈值法, `clip((diff - 10) / 20, 0, 1)`) — v1 公式 `clip(diff / 60 + 0.5)` 对中性色 (白色高光, 章鱼眼反光) 抠成半透明, **v3 让中性色 alpha=255 完全不透明**. 详见 `scripts/extract-chromakey-apng.py`.
+  - **Tauri webview 不自动 reload `public/` 资源** — 替换 sprite 必须 kill 章鱼进程, `cargo tauri dev` 自动重启才生效.
+  - **screencapture 截透明窗口必须用 `-l <window_id>`** — `-R x,y,w,h` 截不到透明 (穿透). 章鱼窗口 ID 用 swift CGWindowList 查 (osascript 报的 position 是 window-relative 不是屏幕坐标).
+  - **H3 + `last_frame_image` 双图模式是首末一致循环视频唯一解** — Hailuo-2.3 物理做不到 (0s vs 5.5s 40-45% 相似, 道具不消失). 走 `~/.minimax/agents/mavis/skills/h3-dual-image-video-gen/`.
+  - **H3 绿幕反射进眼镜片** (V2.1 待修) — 章鱼眼镜下半部出现绿色横带, 治本改 prompt 加 "no green tint reflection in eyes". 13/14 动作无此问题, 当前 01-detective-study 接受.
 - **ffmpeg-full 接入 (VP9 alpha 编码)**: 走 WebM with alpha 必须用
   `brew install ffmpeg-full` (keg-only, 不在 PATH). **Homebrew standard ffmpeg 的
   `ffmpeg -codecs` 不显示 `vp9_alpha` 标志,误导性失败** — ffmpeg-full 的
