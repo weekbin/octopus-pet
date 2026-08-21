@@ -27,13 +27,19 @@ export function OctopusPet() {
   useStateSync(actor);
 
   // V2.1 调度: 监听 video.onEnded 切 scene
+  // 关键: deps 加 state.context.scene, scene 变时 useEffect 重跑, 重新绑定
+  // 新 video 元素 (key 变导致 React 重新挂载) 的 ended 事件.
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
     const handleEnded = () => send({ type: "SCENE_ENDED", now: Date.now() } as OctopusEvent);
     video.addEventListener("ended", handleEnded);
     return () => video.removeEventListener("ended", handleEnded);
-  }, [send]);
+    // 关键: deps 加 state.context.scene. scene 变 (key 变 → 重新挂载 video 元素)
+    // 时, useEffect 重跑, 重新绑定新 video 元素的 ended 事件.
+    // 不加这个 dep, onEnded 只在初始 video 元素触发一次, 后续新 video 元素
+    // 没人监听 → scene 一直停在第一个 scene.
+  }, [send, state.context.scene]);
 
   // V2.1 渲染: requestAnimationFrame 循环抓 video 帧到 canvas + chroma key
   useEffect(() => {
