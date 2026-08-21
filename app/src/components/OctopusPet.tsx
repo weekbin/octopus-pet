@@ -26,19 +26,28 @@ export function OctopusPet() {
   useMcpBridge(send);
   useStateSync(actor);
 
-  // V2.1 调度: 监听 video.onEnded 切 scene
-  // 关键: deps 加 state.context.scene, scene 变时 useEffect 重跑, 重新绑定
-  // 新 video 元素 (key 变导致 React 重新挂载) 的 ended 事件.
+  // V2.1 调度: 用 video.timeupdate 触发切 scene, 替代 onEnded.
+  // 根因: WKWebView 上 webm VP9 的 ended 事件有时不可靠 (尤其当 video 元素被 React
+  // 重新挂载 + 立即 autoplay 时). timeupdate 事件稳定, 60Hz 触发, 准到 16ms.
+  // 切 scene 条件: video.currentTime >= video.duration - 0.05 (留 50ms 余量, 避免
+  // 视频还没播完就切). 第二次循环时 React 重挂载 video 元素, useEffect 重跑
+  // 重新绑定 timeupdate 监听, scene 继续切.
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    const handleEnded = () => send({ type: "SCENE_ENDED", now: Date.now() } as OctopusEvent);
-    video.addEventListener("ended", handleEnded);
-    return () => video.removeEventListener("ended", handleEnded);
-    // 关键: deps 加 state.context.scene. scene 变 (key 变 → 重新挂载 video 元素)
-    // 时, useEffect 重跑, 重新绑定新 video 元素的 ended 事件.
-    // 不加这个 dep, onEnded 只在初始 video 元素触发一次, 后续新 video 元素
-    // 没人监听 → scene 一直停在第一个 scene.
+    const handleTimeUpdate = () => {
+      // 视频自然播完最后一帧 → 切 scene. (1/15s 一帧, 0.05s 提前避免跨帧判定)
+      if (
+        video.duration > 0 &&
+        video.currentTime >= video.duration - 0.05
+      ) {
+        send({ type: "SCENE_ENDED", now: Date.now() } as OctopusEvent);
+      }
+    };
+    video.addEventListener("timeupdate", handleTimeUpdate);
+    return () => video.removeEventListener("timeupdate", handleTimeUpdate);
+    // 关键: deps 加 state.context.scene, scene 变时 useEffect 重跑, 重新绑定
+    // 新 video 元素的 timeupdate 监听 (因为 React 重新挂载 video 元素).
   }, [send, state.context.scene]);
 
   // V2.1 渲染: requestAnimationFrame 循环抓 video 帧到 canvas + chroma key

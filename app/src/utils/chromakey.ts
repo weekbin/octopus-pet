@@ -1,20 +1,63 @@
-// chromakey.ts — JS 实时 chroma key v3 公式 (从 PIL 搬).
+// chromakey.ts — JS 实时 chroma key (HSV 色相方案, 跟 dsh-pet 同源).
 //
-// 跟 scripts/extract-chromakey-apng.py 的 chromakey_v3 完全等价, 用于 V2.1 桌宠
-// 渲染 webm 视频时实时透明化绿幕. 性能: 192×192 60fps < 5ms/帧.
+// 设计原则:
+//   - 用 HSV 色相 (60-180° 绿相) 判绿, 不依赖 RGB 差值
+//   - 软边界 (60-80° / 160-180°) 渐变过渡
+//   - 饱和度/明度 阈值 (避免误伤低饱和度的浅色高光 / 黑色阴影)
+//   - 性能: 192×192 60fps < 5ms/帧
 //
-// 公式:
-//   diff = g - max(r, b)
-//   is_green = g > 100 && r < 150 && b < 150 && diff > 30
-//   greenness = is_green ? 1 : clamp((diff - 10) / 20, 0, 1)
-//   alpha = round((1 - greenness) * 255)
-//
-// 关键修复: v1 公式 `clip(diff / 60 + 0.5)` 对中性色 (白色高光, 章鱼眼反光) 抠成
-// 半透明 (alpha=127.5). v3 改方向 `clip((diff - 10) / 20)`, 中性色 alpha=255 完全
-// 不透明. 详见 scripts/extract-chromakey-apng.py docstring.
+// 为什么改用 HSV 色相 (vs 之前 RGB 差值 v3):
+//   - H3 视频的" 半绿" 像素 (章鱼眼睛 RGB(2,244,1), 触手 RGB(59,153,5), 帽子高光
+//     RGB(45,225,30)) 用 RGB 差值会被误判为绿幕抠掉 → 眼睛/触手/高光半透明
+//   - HSV 色相 70-170° 严格判绿相, RGB 中性像素 (高光) 饱和度低被排除
+//   - dsh-pet 验证: 99.6% 清除绿幕, 不误伤" 半绿" 像素
+//   - 详见: https://github.com/PC2005-cloud/dsh-pet/blob/main/DESIGN.md
+
+/** RGB (0-255) → HSV (h: 0-360, s: 0-1, v: 0-1). */
+function rgbToHsv(r: number, g: number, b: number): [number, number, number] {
+  const rn = r / 255;
+  const gn = g / 255;
+  const bn = b / 255;
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
+  const d = max - min;
+  const v = max;
+  const s = max === 0 ? 0 : d / max;
+  let h = 0;
+  if (d > 0) {
+    if (max === rn) h = ((gn - bn) / d) % 6;
+    else if (max === gn) h = (bn - rn) / d + 2;
+    else h = (rn - gn) / d + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  return [h, s, v];
+}
 
 /**
- * 在 ImageData 上原地应用 chroma key v3. 修改 alpha 通道.
+ * 计算 chroma greenness (0=完全不绿, 1=完全绿幕), HSV 色相方案.
+ *
+ * 判绿条件 (跟 dsh-pet 一致):
+ *   - 色相 60-180° (绿相 60° + 边距)
+ *   - 饱和度 ≥0.15
+ *   - 明度 ≥0.15
+ * 软边界 (60-70° / 170-180°) 渐变, 避免硬切
+ */
+function chromaGreenness(r: number, g: number, b: number): number {
+  const [h, s, v] = rgbToHsv(r, g, b);
+  // 饱和度或明度太低 → 不是绿幕 (深黑/灰白)
+  if (s < 0.15 || v < 0.15) return 0;
+  // 严格绿色相 70-170° → 完全绿
+  if (h >= 70 && h <= 170) return 1;
+  // 软边界: 60-70° (从黄到绿过渡) + 170-180° (从绿到青过渡)
+  if (h >= 60 && h < 70) return (h - 60) / 10;  // 0 → 1
+  if (h > 170 && h <= 180) return (180 - h) / 10;  // 0 → 1
+  // 其他色相 (红 0-60, 蓝 180-360) → 完全不绿
+  return 0;
+}
+
+/**
+ * 在 ImageData 上原地应用 HSV chroma key. 修改 alpha 通道.
  *
  * @param imageData Canvas ImageData 对象 (会被原地修改)
  * @returns 修改后的同一个 imageData (链式)
@@ -26,29 +69,7 @@ export function applyChromakeyV3(imageData: ImageData): ImageData {
     const r = d[i];
     const g = d[i + 1];
     const b = d[i + 2];
-
-    // diff = g - max(r, b), 整数运算 (WebAssembly 后端优化)
-    const maxRB = r > b ? r : b;
-    const diff = g - maxRB;
-
-    // 严格绿色判断
-    const isGreen = g > 100 && r < 150 && b < 150 && diff > 30;
-
-    // 软边界: 0 (diff ≤ 10) → 1.0 (diff ≥ 30)
-    // 用位运算 + 整数乘法 (比 Math.max/Math.min 快 ~2x)
-    let greenness: number;
-    if (isGreen) {
-      greenness = 1;
-    } else if (diff <= 10) {
-      greenness = 0;
-    } else if (diff >= 30) {
-      greenness = 1;
-    } else {
-      greenness = (diff - 10) / 20;
-    }
-
-    // alpha = round((1 - greenness) * 255)
-    // 优化: 直接查表 (0/0.05/0.10/.../1.0 共 21 个值)
+    const greenness = chromaGreenness(r, g, b);
     d[i + 3] = Math.round((1 - greenness) * 255);
   }
   return imageData;
