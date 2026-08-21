@@ -138,40 +138,71 @@
 
 ## Step 5: 视频生成 (Gen Videos)
 
-**目的**: 用 mavis `connector__matrix__gen_videos` 把完整 prompt 转成 10s mp4。
+**目的**: 用 mavis 视频生成工具把完整 prompt 转成 10s mp4。
 
 **输入**:
 - 完整 prompt (Step 4 输出)
 - V2.1 标准图 (作 first_frame, OSS URL)
+- 可选: 参考图 (如 02-explore-detective.png 作帽子风格)
 
 **输出**:
-- 1 个 mp4 (10s, 768P 或 1080P, 6s 或 10s)
+- 1 个 mp4 (10s, 768P 或 2K, 6s/10s/15s)
 
-**API 调用模板**:
+### 工具路径 (3 选 1)
+
+| 路径 | 工具 + Model | Duration | 768P | 1080P | first+last | Audio | 同步 |
+|------|-------------|----------|------|-------|-----------|-------|------|
+| A 同步 | `gen_videos` (默认 model) | 6 (默认) / 10 | ✅ | ✅ 仅 6s | ❌ | 无 | ✅ |
+| B 异步 | `submit_video_generation` + Hailuo-2.3 | 6 (默认) / 10 | ✅ 6 或 10s | ✅ 仅 6s | ❌ | 无声 | ❌ 异步 |
+| **C 异步推荐** | `submit_video_generation` + **MiniMax-H3** | **4-15s 任意** | ✅ | ✅ 2K | ✅ 支持 | ✅ native | ❌ 异步 |
+
+**默认推荐**: 路径 C (H3) — 通用前缀要求"首末帧相同", H3 的 `last_frame_image` 字段直接支持双图模式, 完美匹配。
+
+### API 调用模板 (路径 C / H3)
+
 ```python
 {
-  "requests": [{
-    "input_image": {"url": v10_d_url, "mime_type": "image/png"},
-    "reference_type": "first_frame",
-    "prompt": full_prompt,  # 通用前缀 + 动作概述 + 按秒分割 + 状态
-    "duration": 10,  # 或 6 (10s 必须 768P)
-    "resolution": "1080P"  # 或 768P (1080P 必须 6s)
-    "output_file": "v2-action-XX.mp4"
-  }]
+  "model": "MiniMax-H3",
+  "prompt": full_prompt,  # 通用前缀 + 动作概述 + 按秒分割 + 状态
+  "input_image": {"url": v10_d_url, "mime_type": "image/png"},
+  "last_frame_image": {"url": v10_d_url, "mime_type": "image/png"},  # 同一图 (首末帧相同)
+  "reference_type": "first_frame",  # H3 第一帧
+  "duration": 10,
+  "resolution": "768P",  # 或 2K
+  "ratio": "16:9"
 }
+# → submit 返回 task_id, 用 query_video_generation 查状态
 ```
 
-**工具**:
-- `connector__matrix__gen_videos` (mavis 工具)
-- 上传 V2.1 标准图: `mcode-tools upload_temp_url`
+### 路径 B 调用 (便宜, 无声, 仅 first_frame)
 
-**当前状态**: 🚧 V0.5-3 验证已 PASS (96.65% 相似),真实 14 动作待跑。
+```python
+{
+  "model": "MiniMax-Hailuo-2.3",
+  "prompt": full_prompt,
+  "input_image": {"url": v10_d_url, "mime_type": "image/png"},
+  "reference_type": "first_frame",
+  "duration": 10,
+  "resolution": "768P"
+}
+# 异步, query 查状态
+```
 
-**时间预估**: 2-3 分钟/视频 × 14 = 30-45 分钟
+### 工具/模型关键事实 (2026-08-21 确认)
+
+- **MiniMax-Hailuo-2.3** 支持 6s/10s @ 768P, 6s @ 1080P, 无声, 便宜 (Token Plan 可用)
+- **MiniMax-H3** 支持 4-15s 任意时长, 768P/2K, 同步 audio, 贵 (account credits)
+- **`gen_videos` 工具** 默认 6s, 可选 10s @ 768P, **不支持 first+last 双图**
+- `submit_video_generation` 是异步工具, 用 `query_video_generation` 查状态, MiniMax-H3 视频保留 7 天
+
+**当前状态**: 🚧 V0.5-3 验证 (commit aa62fbc) 用 `gen_videos` + Hailuo-2.3 跑了 6s, 96.65% 相似 PASS。**真实 14 动作待用 H3 跑 10s**。
+
+**时间预估**: 2-3 分钟/视频 × 14 = 30-45 分钟 (H3 略长, 5-6 分钟/视频)
 
 **已知风险** ⚠️:
-- gen_videos 改风格 (3D Pixar → 2D 卡通) 可能在某些动作上风格漂移
-- 单个 6s/10s 视频上限有限, **复杂动作 (e.g. 变物+使用+消失 5 段) 可能溢出**
+- H3 风格可能跟 H2.3 不同 (H3 质量更高, 但 style 漂移待测)
+- 异步模式需要写 poll 脚本 (`query_video_generation`)
+- H3 video 保留 7 天, 需及时下载保存到本地 (art/ 目录)
 
 ---
 

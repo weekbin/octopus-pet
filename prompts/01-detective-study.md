@@ -132,12 +132,25 @@ Q版珊瑚粉章鱼原地 3/4 跪坐, 1 条触手从身体左后方伸出凭空�
 
 ### 验证方法 (后续执行阶段)
 
-**输入**:
-- `input_image`: V2.1 standard-char-1x1.png (作 first_frame)
-- `reference_image` (可选): 02-explore-detective.png (作 hat style reference)
+**输入** (推荐用 `submit_video_generation` + **MiniMax-H3**):
+- `model`: `MiniMax-H3`
+- `input_image`: V2.1 standard-char-1x1.png (作 first_frame, 用 V2.1 标准图)
+- `last_frame_image`: 同一图 (首末帧相同约束, H3 唯一支持的直接满足)
+- `reference_image` (可选): 02-explore-detective.png (作 hat style reference, H3 模式)
 - `prompt`: 上述完整 prompt (通用前缀 + 动作概述 + 按秒分割 + 动作结束后状态)
 - `duration`: 10
-- `resolution`: 1080P
+- `resolution`: 768P
+- `ratio`: 16:9
+
+**为什么用 H3 而不是 gen_videos**:
+- `gen_videos` 工具的默认 model 是 Hailuo-2.3, **不支持 last_frame_image** 双图, 只能 first_frame 间接方法
+- `MiniMax-H3` 通过 `submit_video_generation` 异步调用, **原生支持 last_frame_image**, 通用前缀的"首末帧相同"约束直接满足
+- H3 还支持 4-15s 任意时长 (10s 完美), 同步 audio, 768P/2K 双分辨率
+
+**Hailuo-2.3 备选** (路径 B, 便宜, 无声):
+- 仅支持 first_frame (不直接支持 last_frame), V0.5-3 验证用此方式跑过 6s
+- 6s 10s 768P 通用, 1080P 仅 6s
+- Token Plan 友好, 便宜
 
 **验证指标** (Step 6):
 - 0s vs 5s/9.5s 帧 diff: similarity ≥ 95%
