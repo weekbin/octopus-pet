@@ -1,64 +1,70 @@
-// OctopusPet.tsx — The single root component of the desktop pet.
-// Per plan §1.9.3: shows the current scene's spritesheet, animates the frame index,
-// renders a bubble above the head, and handles click/drag interactions.
-//
-// The 192x192 transparent window (== sprite size, zero margin) IS the pet — no chrome, no decorations, always-on-top.
-
-import { useEffect, useRef, useState } from "react";
+// OctopusPet.tsx — V2.1 渲染: hidden webm video + visible canvas + 实时 chroma key
+import { useEffect, useRef } from "react";
 import { useMachine } from "@xstate/react";
 import { octopusMachine } from "../state/octopus-fsm";
-import { FRAME_INTERVAL_MS } from "../state/types";
 import type { OctopusEvent } from "../state/types";
-import type { SpritesheetManifest, SceneMeta } from "../state/scenes";
-import { getSceneMeta, getSpritesheetUrl, frameToGrid } from "../state/scenes";
 import { Bubble } from "./Bubble";
 import { useTauriWindowDrag } from "../hooks/useTauriWindowDrag";
 import { useMcpBridge } from "../hooks/useMcpBridge";
 import { useStateSync } from "../hooks/useStateSync";
-import manifestJson from "../data/spritesheet-manifest.json";
-
-const manifest = manifestJson as unknown as SpritesheetManifest;
+import { V2_SPRITE_BY_SCENE } from "../data/v2-sprite-map";
+import { applyChromakeyV3 } from "../utils/chromakey";
 
 const SPRITE_SIZE = 116;
-const WINDOW_SIZE = 116; // == SPRITE_SIZE: 素材完全铺满窗口, 零边距
-const SPRITE_OFFSET = 0; // 无 4px 边距 (原 200 窗口留缝, 透出桌面色看起来像白边)
+const CANVAS_SIZE = 192;
+const WINDOW_SIZE = 116;
+const SPRITE_OFFSET = 0;
 
 export function OctopusPet() {
   const [state, send, actor] = useMachine(octopusMachine);
   const dragRef = useRef<HTMLDivElement>(null);
-  const [frame, setFrame] = useState(0);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const rafIdRef = useRef<number | null>(null);
 
-  // Subscribe to Tauri window drag (move window when user drags the pet).
-  useTauriWindowDrag(dragRef, (x, y) => {
-    send({ type: "DRAG", x, y } as OctopusEvent);
-  });
-
-  // Bridge MCP server events from Rust → FSM events.
+  useTauriWindowDrag(dragRef, (x, y) => send({ type: "DRAG", x, y } as OctopusEvent));
   useMcpBridge(send);
-
-  // Mirror FSM context (single source of truth) back to Rust SharedState,
-  // so pet_get_state / HTTP /state match what's on screen.
   useStateSync(actor);
 
-  // Frame counter: advance at FRAME_INTERVAL_MS; reset on scene change.
+  // V2.1 调度: 监听 video.onEnded 切 scene
   useEffect(() => {
-    setFrame(0);
-    const id = setInterval(() => {
-      setFrame((f) => (f + 1) % 141);
-    }, FRAME_INTERVAL_MS);
-    return () => clearInterval(id);
-  }, [state.context.scene]);
-
-  // FSM timer tick: ~30Hz for rotation/bubble checks.
-  useEffect(() => {
-    const id = setInterval(() => {
-      send({ type: "TIMER_TICK", now: Date.now() } as OctopusEvent);
-    }, 33);
-    return () => clearInterval(id);
+    const video = videoRef.current;
+    if (!video) return;
+    const handleEnded = () => send({ type: "SCENE_ENDED", now: Date.now() } as OctopusEvent);
+    video.addEventListener("ended", handleEnded);
+    return () => video.removeEventListener("ended", handleEnded);
   }, [send]);
 
-  const meta: SceneMeta = getSceneMeta(manifest, state.context.scene);
-  const { col, row } = frameToGrid(frame, meta);
+  // V2.1 渲染: requestAnimationFrame 循环抓 video 帧到 canvas + chroma key
+  useEffect(() => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return;
+    const tick = () => {
+      if (video.readyState >= video.HAVE_CURRENT_DATA && video.videoWidth > 0) {
+        ctx.drawImage(video, 0, 0, CANVAS_SIZE, CANVAS_SIZE);
+        const imageData = ctx.getImageData(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+        applyChromakeyV3(imageData);
+        ctx.putImageData(imageData, 0, 0);
+      }
+      rafIdRef.current = requestAnimationFrame(tick);
+    };
+    rafIdRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+    };
+  }, []);
+
+  // bubble hide 计时 (3s)
+  useEffect(() => {
+    const id = setInterval(() => send({ type: "TIMER_TICK", now: Date.now() } as OctopusEvent), 33);
+    return () => clearInterval(id);
+  }, [send]);
 
   return (
     <div
@@ -80,9 +86,30 @@ export function OctopusPet() {
         send({ type: "PET", now: Date.now() } as OctopusEvent);
       }}
     >
-      <img
-        src="/assets/octopus/breath-idle.png"
-        alt="breath-idle"
+      {/* V2.1: video offscreen 跑循环 + onEnded 切 scene. canvas 实时抓帧 + chroma key. */}
+      <video
+        key={state.context.scene}
+        ref={videoRef}
+        src={V2_SPRITE_BY_SCENE[state.context.scene]}
+        autoPlay
+        loop
+        muted
+        playsInline
+        style={{
+          position: "absolute",
+          top: -CANVAS_SIZE,
+          left: -CANVAS_SIZE,
+          width: CANVAS_SIZE,
+          height: CANVAS_SIZE,
+          pointerEvents: "none",
+          opacity: 0,
+        }}
+        data-scene={state.context.scene}
+      />
+      <canvas
+        ref={canvasRef}
+        width={CANVAS_SIZE}
+        height={CANVAS_SIZE}
         style={{
           position: "absolute",
           top: SPRITE_OFFSET,
@@ -90,14 +117,10 @@ export function OctopusPet() {
           width: SPRITE_SIZE,
           height: SPRITE_SIZE,
           pointerEvents: "none",
-          imageRendering: "auto",
         }}
-        data-scene="breath-idle"
-        data-frame={frame}
+        data-scene={state.context.scene}
       />
-      {state.context.bubble && (
-        <Bubble text={state.context.bubble} />
-      )}
+      {state.context.bubble && <Bubble text={state.context.bubble} />}
     </div>
   );
 }

@@ -1,6 +1,11 @@
 // Octopus Pet — XState v5 machine for the 14-scene FSM.
 // Per plan §1.9.2: simple timer rotation + click/pet events, MCP tool calls mapped to events.
 // V2 调度: rotateScene 改用 pickRandomScene (随机 + 去重最近 N 个) 替代 V1 顺序轮转.
+// V2.1 调度: **事件驱动** (SCENE_ENDED) 替代 V1 setInterval 8s 计时, 跟 sprite 视频时长同步.
+//
+// 用户 2026-08-17 17:22 根因反馈: 不应该用 setInterval 时间卡, 事件循环延迟会累积.
+// 应该监听 sprite 视频的 onEnded 事件, 视频自然播完再切下一个 scene. 跟视频时长严格
+// 同步, 跟 setInterval 8s 跟 6.6s 视频长度不一致 (切 scene 时可能切到一半) 完美解决.
 //
 // XState v5 uses setup({...}).createMachine({...}) pattern. We use a single machine
 // (no nested states) — the "scene" is just context. KISS for V1.
@@ -20,7 +25,7 @@ import {
 
 /**
  * V1 兼容: 顺序轮转 (currentIndex + 1) % 14. 保留导出, 用于测试 / 文档.
- * V2 调度 (rotateScene / ROTATE_NOW) 改用 pickRandomScene.
+ * V2 调度 (rotateScene / SCENE_ENDED / ROTATE_NOW) 改用 pickRandomScene.
  */
 function nextScene(scene: OctopusScene): OctopusScene {
   const i = SCENE_ORDER.indexOf(scene);
@@ -88,15 +93,15 @@ export const octopusMachine = setup({
   },
   actions: {
     /**
-     * V2: 随机选下一个场景 (排除最近 RECENT_WINDOW_SIZE 个 + 当前), 等概率.
-     * 维护 recentScenes 滚动窗口.
+     * V2.1: 切下一个 scene. 内部抽 pickRandomScene, 维护 recentScenes.
+     * 跟 bubble 状态无关 (V2.1 不再因 bubble 暂停切 scene; 想暂停时外部不发送
+     * SCENE_ENDED 即可, e.g. 用户点击时由组件不触发 onEnded).
      */
     rotateScene: assign(({ context }) => {
       const next = pickRandomScene(context.scene, context.recentScenes);
       return {
         scene: next,
         recentScenes: updateRecent(context.recentScenes, next),
-        autoNextAt: Date.now() + ROTATION_INTERVAL_MS,
         bubble: null as string | null,
         bubbleHideAt: null as number | null,
       };
@@ -120,7 +125,7 @@ export const octopusMachine = setup({
       return {
         bubble: text,
         bubbleHideAt: event.now + BUBBLE_DURATION_MS,
-        autoNextAt: event.now + BUBBLE_DURATION_MS + ROTATION_INTERVAL_MS,
+        // V2.1: 不再重置 autoNextAt, 切 scene 由 SCENE_ENDED 事件驱动
         affection: Math.min(MAX_AFFECTION, context.affection + 1),
       };
     }),
@@ -129,7 +134,6 @@ export const octopusMachine = setup({
       return {
         bubble: "啊~",
         bubbleHideAt: event.now + BUBBLE_DURATION_MS,
-        autoNextAt: event.now + BUBBLE_DURATION_MS + ROTATION_INTERVAL_MS,
         affection: Math.min(MAX_AFFECTION, context.affection + 5),
       };
     }),
@@ -152,10 +156,10 @@ export const octopusMachine = setup({
     }),
   },
   guards: {
-    shouldRotate: ({ context, event }) => {
-      if (event.type !== "TIMER_TICK") return false;
-      return event.now >= context.autoNextAt && context.bubbleHideAt === null;
-    },
+    /**
+     * V2.1: bubble hide 仍用 TIMER_TICK 触发 (bubble 显示 3s 后消失).
+     * 切 scene 不再用 TIMER_TICK (改 SCENE_ENDED 事件).
+     */
     shouldHideBubble: ({ context, event }) => {
       if (event.type !== "TIMER_TICK") return false;
       return context.bubbleHideAt !== null && event.now >= context.bubbleHideAt;
@@ -168,32 +172,24 @@ export const octopusMachine = setup({
   states: {
     active: {
       on: {
-        TIMER_TICK: [
-          {
-            guard: "shouldHideBubble",
-            actions: "dismissBubble",
-          },
-          {
-            guard: "shouldRotate",
-            actions: "rotateScene",
-          },
-        ],
         /**
-         * ROTATE_NOW: 用户或 MCP 主动跳过. V2 同样用 pickRandomScene (跟 8s 自然轮转
-         * 行为一致, 都从非 recent 集合里随机选). 维护 recentScenes.
+         * TIMER_TICK: V2.1 只用于 bubble hide 判定 (3s 计时); 不再触发 rotateScene.
+         * 切 scene 改由 SCENE_ENDED 事件 (video 元素 onEnded) 驱动.
          */
-        ROTATE_NOW: {
-          actions: assign(({ context }) => {
-            const next = pickRandomScene(context.scene, context.recentScenes);
-            return {
-              scene: next,
-              recentScenes: updateRecent(context.recentScenes, next),
-              autoNextAt: Date.now() + ROTATION_INTERVAL_MS,
-              bubble: null as string | null,
-              bubbleHideAt: null as number | null,
-            };
-          }),
+        TIMER_TICK: {
+          guard: "shouldHideBubble",
+          actions: "dismissBubble",
         },
+        /**
+         * V2.1 主调度入口: 桌宠 sprite 视频播完时触发 (video.onEnded).
+         * 切下一个 scene (随机 + 去重), 维护 recentScenes.
+         * 这取代 V1 的 8s setInterval 计时, 跟视频时长严格同步, 无累积延迟.
+         */
+        SCENE_ENDED: { actions: "rotateScene" },
+        /**
+         * ROTATE_NOW: 用户或 MCP 主动跳过. 同样用 pickRandomScene (跟 SCENE_ENDED 一致).
+         */
+        ROTATE_NOW: { actions: "rotateScene" },
         FORCE_SCENE: { actions: "forceScene" },
         CLICK: { actions: "onClick" },
         PET: { actions: "onPet" },

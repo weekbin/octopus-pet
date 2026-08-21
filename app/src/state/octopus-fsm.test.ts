@@ -2,19 +2,23 @@
 //
 // Uses Vitest. Run with: `npx vitest run src/state/octopus-fsm.test.ts`
 //
+// V2.1 调度: SCENE_ENDED 事件 (sprite 视频 onEnded) 驱动 scene 切换, 不再依赖
+// setInterval 8s 计时. TIMER_TICK 只用于 bubble hide 判定.
+//
 // We test:
 //   1. Initial state
 //   2. Single click → bubble + affection +1
 //   3. Pet → affection +5
 //   4. Force scene → jumps to specified scene (V2: 不更新 recentScenes)
-//   5. Timer tick past autoNextAt → rotates to a random scene not in recentScenes
+//   5. SCENE_ENDED event → rotates to a random scene not in recentScenes
 //   6. Timer tick past bubbleHideAt → dismisses bubble
 //   7. Ask (MCP pet_ask) → shows bubble (truncated to 12)
 //   8. Drag → updates position
 //   9. V1 nextScene helper still works (V1 顺序轮转保留)
 //  10. V2 pickRandomScene: 排除 recent + current, 等概率
 //  11. V2 updateRecent: 滚动窗口
-//  12. V2 多次轮转不重复 (recentScenes 维护正确)
+//  12. V2 SCENE_ENDED 多次轮转不重复 (recentScenes 维护正确)
+//  13. V2.1 TIMER_TICK 不再触发 rotateScene (V1 顺序轮转 V1.5 deprecated)
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { createActor } from "xstate";
@@ -140,12 +144,11 @@ describe("octopus-fsm", () => {
     });
   });
 
-  describe("V2 TIMER_TICK rotation (random + dedup)", () => {
+  describe("V2.1 SCENE_ENDED event (sprite 视频 onEnded 驱动)", () => {
     it("rotates to a scene NOT in {current, recentScenes}", () => {
       const actor = createActor(octopusMachine).start();
       const initial = actor.getSnapshot().context.scene;
-      const autoNextAt = actor.getSnapshot().context.autoNextAt;
-      actor.send({ type: "TIMER_TICK", now: autoNextAt + 100 });
+      actor.send({ type: "SCENE_ENDED", now: Date.now() });
       const next = actor.getSnapshot().context.scene;
       expect(next).not.toBe(initial);
       // V2 first rotation: recentScenes starts empty, exclude = {initial}, candidates = 13
@@ -153,29 +156,22 @@ describe("octopus-fsm", () => {
       expect(actor.getSnapshot().context.recentScenes).toEqual([next]);
     });
 
-    it("never picks recent scene across many rotations (deterministic rng)", () => {
-      // V2 核心: 每次 pick 时, exclude set = currentScene + recentScenes.
-      // 我们让 V2 跑 14 次, 验证:
+    it("never picks recent scene across many SCENE_ENDED (deterministic rng)", () => {
+      // V2.1 核心: 每次 SCENE_ENDED 触发时, exclude set = currentScene + recentScenes.
+      // 跑 14 次, 验证:
       //   1. recent buffer 总是恰好包含最近 (≤ 5) 个已播放 (含刚 pick 的)
       //   2. 同一 scene 不会在 N=5 步内重复出现
-      // 用 autoNextAt 驱动 (每次 tick 至少要超过当前 autoNextAt)
       const actor = createActor(octopusMachine).start();
       const history: OctopusScene[] = [actor.getSnapshot().context.scene];
       for (let i = 0; i < 14; i++) {
-        // 每次 tick 用比当前 autoNextAt 大的 now (确保 shouldRotate 触发)
-        const tickNow = actor.getSnapshot().context.autoNextAt + 100;
-        actor.send({ type: "TIMER_TICK", now: tickNow });
+        actor.send({ type: "SCENE_ENDED", now: Date.now() + i });
         const newScene = actor.getSnapshot().context.scene;
         const recent = actor.getSnapshot().context.recentScenes;
         history.push(newScene);
-        // (1) recent 末尾 = 刚 pick 的 (updateRecent 刚追加)
-        // (但 first tick 时 recent.length=1, recent[0] 应该 = newScene)
         if (recent.length > 0) {
           expect(recent[recent.length - 1]).toBe(newScene);
         }
-        // (2) recent 不超过窗口大小
         expect(recent.length).toBeLessThanOrEqual(RECENT_WINDOW_SIZE);
-        // (3) V2 核心: 同一 scene 不会在最近 5 步内重复
         if (history.length > RECENT_WINDOW_SIZE + 1) {
           const fiveBackIdx = history.length - 1 - RECENT_WINDOW_SIZE;
           const fiveBack = history[fiveBackIdx];
@@ -188,11 +184,9 @@ describe("octopus-fsm", () => {
       const actor = createActor(octopusMachine).start();
       const visited = new Set<OctopusScene>([actor.getSnapshot().context.scene]);
       for (let i = 0; i < 50; i++) {
-        const t = Date.now() + i * 10_000;
-        actor.send({ type: "TIMER_TICK", now: t });
+        actor.send({ type: "SCENE_ENDED", now: Date.now() + i });
         visited.add(actor.getSnapshot().context.scene);
       }
-      // 50 rotations from 14 scenes → should cover all 14 (probabilistically very high)
       expect(visited.size).toBeGreaterThanOrEqual(12);
     });
   });
@@ -247,43 +241,53 @@ describe("octopus-fsm", () => {
     });
   });
 
-  describe("TIMER_TICK event", () => {
-    it("rotates to a different scene when autoNextAt reached (V2 random)", () => {
+  describe("TIMER_TICK event (V2.1: 只判定 bubble hide, 不再切 scene)", () => {
+    it("V2.1: TIMER_TICK no longer rotates scene (deprecated V1.5 8s 计时)", () => {
       const actor = createActor(octopusMachine).start();
       const initialScene = actor.getSnapshot().context.scene;
-      // autoNextAt is set to Date.now() + ROTATION_INTERVAL_MS in initial context
-      // Wait that long, then send a tick
+      // V2.1: 即使发送过去 autoNextAt 的 tick, 也不切 scene
       const future = actor.getSnapshot().context.autoNextAt + 1000;
       actor.send({ type: "TIMER_TICK", now: future });
-      // V2: random + dedup, not nextScene. Just assert scene changed.
-      expect(actor.getSnapshot().context.scene).not.toBe(initialScene);
+      expect(actor.getSnapshot().context.scene).toBe(initialScene);
     });
 
     it("dismisses bubble when bubbleHideAt reached", () => {
       const actor = createActor(octopusMachine).start();
-      // First trigger a click to set bubbleHideAt
       const t0 = Date.now();
       actor.send({ type: "CLICK", now: t0 });
       expect(actor.getSnapshot().context.bubble).not.toBeNull();
       const hideAt = actor.getSnapshot().context.bubbleHideAt!;
-      // Send tick past hideAt
       actor.send({ type: "TIMER_TICK", now: hideAt + 100 });
       expect(actor.getSnapshot().context.bubble).toBeNull();
       expect(actor.getSnapshot().context.bubbleHideAt).toBeNull();
     });
+  });
 
-    it("does NOT rotate while bubble is showing", () => {
+  describe("SCENE_ENDED event (V2.1 主调度入口)", () => {
+    it("rotates scene (V2.1 唯一自然触发器)", () => {
       const actor = createActor(octopusMachine).start();
       const initialScene = actor.getSnapshot().context.scene;
-      // Trigger click (which sets autoNextAt to now + 3000 + 8000)
-      const t0 = Date.now();
-      actor.send({ type: "CLICK", now: t0 });
-      // Send tick past original autoNextAt but before bubbleHideAt
-      const t1 = actor.getSnapshot().context.autoNextAt + 100;
-      // autoNextAt is now ~now + 3000 + 8000, so t1 (now + 100) is BEFORE autoNextAt
-      // So no rotation
-      actor.send({ type: "TIMER_TICK", now: t1 });
-      expect(actor.getSnapshot().context.scene).toBe(initialScene);
+      actor.send({ type: "SCENE_ENDED", now: Date.now() });
+      expect(actor.getSnapshot().context.scene).not.toBe(initialScene);
+    });
+
+    it("clears bubble on scene change (跟 V1 一致)", () => {
+      const actor = createActor(octopusMachine).start();
+      actor.send({ type: "CLICK", now: Date.now() });
+      expect(actor.getSnapshot().context.bubble).not.toBeNull();
+      actor.send({ type: "SCENE_ENDED", now: Date.now() + 1 });
+      expect(actor.getSnapshot().context.bubble).toBeNull();
+    });
+  });
+
+  describe("ROTATE_NOW event (V2.1: 跟 SCENE_ENDED 行为一致)", () => {
+    it("rotates scene immediately (用户/MCP 主动跳过)", () => {
+      const actor = createActor(octopusMachine).start();
+      const initialScene = actor.getSnapshot().context.scene;
+      actor.send({ type: "ROTATE_NOW", now: Date.now() });
+      expect(actor.getSnapshot().context.scene).not.toBe(initialScene);
+      // V2.1: 也走 pickRandomScene + updateRecent
+      expect(actor.getSnapshot().context.recentScenes).toHaveLength(1);
     });
   });
 
