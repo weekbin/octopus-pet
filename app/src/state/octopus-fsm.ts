@@ -1,15 +1,15 @@
-// Octopus Pet — XState v5 machine for the 14-scene FSM.
+// Octopus Pet — XState v5 machine for the 2-scene FSM (V1.5, 2026-08-21).
+//
+// V1.5: 默认只跑 2 个 V2 视频成品 (detective-study + worker-construction).
+// 14 V1 spritesheet 表情包已废弃, 移到 _archive-v1-spritesheets/.
+//
 // Per plan §1.9.2: simple timer rotation + click/pet events, MCP tool calls mapped to events.
-//
 // V2 调度: rotateScene 改用 pickRandomScene (随机 + 去重最近 N 个) 替代 V1 顺序轮转.
-// 渲染层 2026-08-17 回退到 V1 风格 (14 spritesheet + frameToGrid 141 帧), canvas
-// chroma key 路线被否 (视觉差). 桌宠 33Hz TIMER_TICK → FSM shouldRotate → 切 scene.
-// (V1 用 8s setInterval 顺序切, V2 在 action 层用 pickRandomScene 替换, 跟 33Hz
-// tick 兼容, 间隔通过 autoNextAt 字段判定.)
+// 桌宠 33Hz TIMER_TICK → FSM shouldRotate → 切 scene (8s autoNextAt).
 //
-// 用户 2026-08-17 18:21 根因反馈: V2.1 事件驱动 (SCENE_ENDED) + canvas chroma key
-// 视觉比 V1 差, 边缘半透明瑕疵. "回退吧, 我想别的办法做动画切换的效果".
-// → 回退到 V1 渲染, 保留 V2 调度 (随机+去重). SCENE_ENDED 事件移除.
+// 用户 2026-08-21 19:14 反馈: "我们现在是默认的 2 个做好的成品啊, 之前那些
+// (14 V1 打工人 meme 表情包) 不要用, 我们做的事桌面宠物, 思路不要走错了".
+// → V1.5 治本: 14 spritesheet 替换为 2 V2 视频 APNG (浏览器原生循环).
 //
 // XState v5 uses setup({...}).createMachine({...}) pattern. We use a single machine
 // (no nested states) — the "scene" is just context. KISS for V1.
