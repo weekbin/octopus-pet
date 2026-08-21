@@ -60,3 +60,5 @@ art/
 # Local test artifacts (do not commit)
 *.webm
 !app/public/assets/**/*.webm
+
+docs/v2-*/preview.gif
