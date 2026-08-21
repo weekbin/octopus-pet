@@ -21,17 +21,21 @@
 ## V0.5 — 基础验证（必须先做）
 
 > 目标：把后续依赖的"工具链能力"全部确认，失败的话能立刻知道，不卡后续阶段。
-> 2026-08-21 验证结果: webm/HEVC alpha 路线在 macOS 8.1.2 ffmpeg 都不可用, **V2 主用 APNG** (Pillow, 100% 可靠).
+> 2026-08-21 验证结果: VP9 alpha 在 ffmpeg-full 9.0.1 走得通; HEVC alpha 完全不可行 (Apple API 限制).
 
-- [x] **V0.5-1** ~~验证 macOS ffmpeg VP9 alpha 编码~~ → ❌ **跳过**
-  - 结果: `ffmpeg -codecs` 不含 `vp9_alpha` 标识. homebrew ffmpeg 8.1.2 build 默认不带.
-  - 改用: APNG (Pillow 路线, V1 已验证 100% 可靠)
-  - 不重试 VP9 (Pillow APNG 已覆盖需求)
+- [x] **V0.5-1** ✅ 验证 macOS ffmpeg VP9 alpha 编码 → ⚠️ **可走,需要 ffmpeg-full**
+  - 路径: `brew install ffmpeg-full` (keg-only, 47 deps, 9.0.1)
+  - **重要陷阱**: Homebrew standard ffmpeg (`brew install ffmpeg`) 的 `ffmpeg -codecs` 不显示 `vp9_alpha` 标志,误导性失败. 真相在 encoder help (`-h encoder=libvpx-vp9` → `yuva420p yuva422p yuva444p gbrap` 都在)
+  - **验证 alpha 真的被编码进 webm**: `ffprobe -show_streams` 看 `TAG:alpha_mode=1` (这个 tag 默认 probe 不显示, 必须 -show_streams)
+  - 实测: testsrc2 + libvpx-vp9 4 秒 webm = 97KB (vs no-alpha 47KB, 合理)
+  - 实测: char-A-black.png (1.2MB 单帧 RGBA) → char-test.webm 56KB + alpha_mode=1 ✅
+  - 接入: 脚本里用 `/opt/homebrew/Cellar/ffmpeg-full/9.0.1/bin/ffmpeg` (keg-only 没 symlink),或 `export PATH="/opt/homebrew/opt/ffmpeg-full/bin:$PATH"` 到 .zshrc
+  - V2 路线: **APNG (V1 验证) + VP9 (V2 可选)** 两条路,APNG 主用,VP9 用于高帧数 (>50 帧) 减少体积
 
-- [x] **V0.5-2** ~~验证 macOS hevc_videotoolbox alpha 编码~~ → ❌ **跳过**
+- [x] **V0.5-2** ~~验证 macOS hevc_videotoolbox alpha 编码~~ → ❌ **完全不可行 (Apple 架构限制)**
   - 结果: 即使显式 `-vf format=yuva420p`, 输出仍 `pix_fmt yuv420p` (alpha 丢失).
-  - 改用: APNG (同上, 不重试 HEVC alpha)
-  - 后续: 如果未来 macOS ffmpeg 更新支持 HEVC alpha, 可重新评估.
+  - 根因: `VTCompressionSession` Apple 私有 API 只接受 NV12/YUV420P 作为 encoder input, 内部 strip alpha. 不是 ffmpeg 问题, 跟 macOS 版本/ffmpeg 版本/硬件都无关.
+  - 后续: 永远不可行. Apple 战略上把 alpha 只放在 ProRes 4444 / ProRes 4444 XQ, 不开给 HEVC consumer codec.
 
 - [ ] **V0.5-3** 验证 mavis `gen_videos` 接受"首尾帧 = first_frame"约束
   - 命令：用新基础素材 (待定) 作 first_frame + last_frame，prompt 强调 "首尾帧完全相同"

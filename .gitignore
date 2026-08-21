@@ -56,3 +56,7 @@ codebuddy-integration-gap-report.md
 art/
 
 # 注: src-tauri/Cargo.lock 必须提交 (应用项目可复现构建, CI cache key 依赖它)
+
+# Local test artifacts (do not commit)
+*.webm
+!app/public/assets/**/*.webm
