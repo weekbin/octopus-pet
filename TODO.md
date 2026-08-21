@@ -6,42 +6,53 @@
 
 ---
 
-## 当前状态（2026-08-21）
+## 当前状态（2026-08-21 10:47）
 
 - **V1.0**（W1 D3）✅ macOS 桌宠已跑通：透明背景 + alwaysOnTop + APNG 眨眼循环 + MCP 6 工具
-- **决策**（基于 dsh-pet 调研）：
+- **V0.5 基础验证**：✅ 闭环（V0.5-1 VP9 alpha 走通 + 脚本就位 / V0.5-2 HEVC alpha 永久不可行 / V0.5-3 等用户新基础素材）
+- **V2.0 路线就位**：
   - 保留 Tauri 2 + macOS 架构，**不学 dsh-pet 浏览器半侧**（双缓冲/朝向/落地对齐等）
   - V1.1 解锁跨平台（macOS 验证过，Windows/Linux 待测）
   - V2.0 升级素材生产（黑底→绿幕 HSV 抠像）+ 调度（顺序轮转→动作池概率链+去重）
   - 关键洞察：动画连贯的**真因 = 首尾帧完全相同**（标准图 single source of truth）
+  - V2 输出格式：**APNG 主用 (V1 验证) + WebM VP9 alpha 可选 (>50 帧压缩比优 14-28x)**
+- **工具链就位**：
+  - `scripts/encode-webm-alpha.sh` (commit ad31688) — 封装 ffmpeg-full Cellar locate + 双向 alpha 验证
+  - `scripts/spritesheet-builder.sh` (W1 D1) — 14 场景 spritesheet
+  - `docs/breath-pipeline.md` — 5 步 APNG + Step 5b WebM VP9 alpha 完整文档
 - **运行时**：macOS 桌宠进程在跑（PID 85515 octopus-pet）
 
 ---
 
-## V0.5 — 基础验证（必须先做）
+## ✅ V0.5 — 基础验证（已完成 2026-08-21）
 
-> 目标：把后续依赖的"工具链能力"全部确认，失败的话能立刻知道，不卡后续阶段。
-> 2026-08-21 验证结果: VP9 alpha 在 ffmpeg-full 9.0.1 走得通; HEVC alpha 完全不可行 (Apple API 限制).
+> 闭环：3 项任务, 2 项完成, 1 项 blocked.
 
 - [x] **V0.5-1** ✅ 验证 macOS ffmpeg VP9 alpha 编码 → ⚠️ **可走,需要 ffmpeg-full**
+  - commit: c63bff5 + ad31688
   - 路径: `brew install ffmpeg-full` (keg-only, 47 deps, 9.0.1)
   - **重要陷阱**: Homebrew standard ffmpeg (`brew install ffmpeg`) 的 `ffmpeg -codecs` 不显示 `vp9_alpha` 标志,误导性失败. 真相在 encoder help (`-h encoder=libvpx-vp9` → `yuva420p yuva422p yuva444p gbrap` 都在)
   - **验证 alpha 真的被编码进 webm**: `ffprobe -show_streams` 看 `TAG:alpha_mode=1` (这个 tag 默认 probe 不显示, 必须 -show_streams)
   - 实测: testsrc2 + libvpx-vp9 4 秒 webm = 97KB (vs no-alpha 47KB, 合理)
   - 实测: char-A-black.png (1.2MB 单帧 RGBA) → char-test.webm 56KB + alpha_mode=1 ✅
-  - 接入: 脚本里用 `/opt/homebrew/Cellar/ffmpeg-full/9.0.1/bin/ffmpeg` (keg-only 没 symlink),或 `export PATH="/opt/homebrew/opt/ffmpeg-full/bin:$PATH"` 到 .zshrc
-  - V2 路线: **APNG (V1 验证) + VP9 (V2 可选)** 两条路,APNG 主用,VP9 用于高帧数 (>50 帧) 减少体积
+  - 接入: `scripts/encode-webm-alpha.sh` 自动 locate Cellar, 不依赖 PATH
+  - V2 路线: **APNG (V1 验证) + VP9 (V2 可选)** 两条路, APNG 主用, VP9 用于高帧数 (>50 帧) 减少体积
 
 - [x] **V0.5-2** ~~验证 macOS hevc_videotoolbox alpha 编码~~ → ❌ **完全不可行 (Apple 架构限制)**
   - 结果: 即使显式 `-vf format=yuva420p`, 输出仍 `pix_fmt yuv420p` (alpha 丢失).
   - 根因: `VTCompressionSession` Apple 私有 API 只接受 NV12/YUV420P 作为 encoder input, 内部 strip alpha. 不是 ffmpeg 问题, 跟 macOS 版本/ffmpeg 版本/硬件都无关.
   - 后续: 永远不可行. Apple 战略上把 alpha 只放在 ProRes 4444 / ProRes 4444 XQ, 不开给 HEVC consumer codec.
 
-- [ ] **V0.5-3** 验证 mavis `gen_videos` 接受"首尾帧 = first_frame"约束
-  - 命令：用新基础素材 (待定) 作 first_frame + last_frame，prompt 强调 "首尾帧完全相同"
-  - 验收：6s 视频抽 0s 和 5.9s 帧，眼睛/姿态/位置完全相同
-  - 预计：5 分钟（含视频生成 2-3 分钟）
-  - 注意: 用户将换基础素材, 等用户确认新素材来源后再做此验证
+- [ ] **V0.5-3** 🚧 **BLOCKED: 等待用户提供新基础素材**
+  - 任务: 验证 mavis `gen_videos` 接受"首尾帧 = first_frame"约束
+  - 命令: 用新基础素材 (待定) 作 first_frame + last_frame, prompt 强调 "首尾帧完全相同"
+  - 验收: 6s 视频抽 0s 和 5.9s 帧, 眼睛/姿态/位置完全相同
+  - 预计: 5 分钟 (含视频生成 2-3 分钟)
+  - **前置条件**: 用户明确"我们会换一个素材当基础素材" (2026-08-21), 但未指定新素材来源. **需要用户先确认**:
+    - 新角色是什么? (换动物? 换皮肤? 换工具?)
+    - 哪个工具生成? (image_synthesize / 其他 AI 工具 / 真人素材?)
+    - 何时开始 V2.1 标准图制作?
+  - 解除 blocked: 用户回复新素材详情后即可启动.
 
 ---
 
@@ -106,11 +117,10 @@
   - 水平居中用**非透明像素 x 中位数**（dsh-pet 经验：手/扩展物不会带偏 bbox 中心）
   - 预计：30 分钟
 
-- [ ] **V2.2-3** 写 `scripts/encode_webm_alpha.py`（macOS 优化：hevc_videotoolbox）
-  - 依赖：V0.5-2 验证通过
-  - 函数：`encode_hevc_alpha(in.mov) -> out.webm`
-  - 关键：`-c:v libvpx-vp9` 必须在 `-i` 前（VP9 alpha 保留）
-  - 预计：20 分钟
+- [ ] **V2.2-3** ~~写 `scripts/encode_webm_alpha.py`~~ → ❌ **已由 `scripts/encode-webm-alpha.sh` 覆盖 (commit ad31688)**
+  - 该任务删除. 现有 shell 脚本封装了 ffmpeg-full locate + 双向 alpha 验证, V2.2 绿幕管线直接调用即可.
+  - 调用方式: `bash scripts/encode-webm-alpha.sh --input <frame_dir> --output <file.webm> --framerate 12 --bitrate 300k`
+  - 不需要 .py 包装 (shell 已足, ffmpeg 参数在 shell 里更直接可调).
 
 - [ ] **V2.2-4** 端到端跑通 1 个动作（"待机呼吸"）的完整管线
   - 依赖：V2.2-1 ~ V2.2-3
@@ -232,7 +242,8 @@
 | gen_videos 强制首尾帧失败 | V0.5-3 验证发现帧差异 >5% | prompt 拆成两段（0-2s 走 X 动作 / 8-10s 走回标准），manual 拼接 |
 | HSV 抠像误伤角色色 | 14 个动作中某动作有大量绿色衣服 | 该动作单独 prompt 改"白幕/蓝幕" + 对应 HSV 范围 |
 | Tauri 2 跨平台打包失败 | V1.1-1 / V1.1-2 编译报错 | 单独 Tauri 配置分支（windows / linux 子配置）|
-| webm/HEVC alpha 编码失败 | (已发生, 2026-08-21 验证) | ✅ **已切换到 APNG 路线** (Pillow, V1 验证可靠) |
+| VP9 alpha 编码失败 (V2 长动作) | ffmpeg-full 9.x 装不上 / libvpx alpha runtime missing | 回退到 APNG (Pillow, V1 验证, 100% 可靠). APNG 没体积优势但全 webview 通用 |
+| HEVC alpha 编码 | (已验证, 2026-08-21) | ❌ **永久不可行 (Apple VTCompressionSession 架构限制), 不再考虑** |
 
 ---
 
@@ -253,6 +264,11 @@
 
 ## 立即下一步
 
-**V0.5-1**：跑 `ffmpeg -codecs 2>&1 | grep vp9_alpha` 验证 VP9 alpha 编码（5 分钟）。这是后续所有 webm 透明编码的前置。
+**🚧 V0.5-3 BLOCKED — 等待用户提供新基础素材**
 
-完成 V0.5-1 后告诉我，我们继续 V0.5-2 / V0.5-3。
+V0.5 全部 2/3 任务已完成 (commit c63bff5 + ad31688). 唯一剩 V0.5-3 需要:
+1. 用户明确新基础素材的**角色 + 工具 + 时间**
+2. 然后跑 gen_videos first_frame=last_frame 验证 (5 分钟)
+3. 通过后跳 V2.1 标准图制作
+
+如果你想跳过 V0.5-3 直接开新工作 (V1.1 跨平台 / V2.3 动作池 FSM), 告诉我也行, V0.5-3 保持 blocked 不影响其他路径.
