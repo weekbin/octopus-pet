@@ -41,6 +41,9 @@ Antigravity / Gemini CLI).
 | 14 场景素材审计 | `docs/octopus-assets-audit.md` (W1 D1 产物) |
 | 变更历史 | `CHANGELOG.md` (Keep a Changelog 1.1.0) |
 | CI | `.github/workflows/ci.yml` (spec lint · asset audit · spritesheet regen · Rust build · Vitest) |
+| **V0.5-3 验证产物** | `docs/v053-validation/` (gen_videos 6s 视频 + 0s/5.5s 对比帧, 96.65% 相似) |
+| **V2.1 标准图** (V2 idle 起点) | `art/octopus-frames/standard-char-1x1.png` (3/4 视角, 1:1, 绿幕, 1920×1920; `art/` 在 .gitignore) |
+| **V2 绿幕清洗脚本** | `scripts/remove-hat-greenscreen.py` (V2.1 14 动作复用) |
 
 ## 协作规则 (根因型, 别打地鼠)
 
