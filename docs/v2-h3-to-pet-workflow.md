@@ -1,5 +1,10 @@
 # V2 H3 视频 → 桌宠透明 APNG 完整流程
 
+> **状态**: APNG 生产管线 4 步本身仍然有效 (PIL v3 chroma key 公式沉淀可用);
+> **2026-08-17 18:21 V2.1 桌宠渲染层 (webm + canvas chroma key) 已被用户否决回退**,
+> 桌宠当前仍跑 V1 spritesheet. V2 APNG 路线作为"治本方案" 储备, 等用户拍板
+> "想别的办法做动画切换" 后再讨论是否启用.
+>
 > **用途**: 把 H3 / gen_videos 生成的绿幕动作视频,加工成 V2 桌宠可直接循环播放的透明 APNG,替换 V1 桌宠 sprite。
 > **适用场景**: V2 14 个动作视频统一加工流程;`prompts/01-detective-study.md` 第一个完整跑通, 13/14 复用同样管线。
 > **首次完成时间**: 2026-08-21 (W1 D5, 01-detective-study 桌宠集成验证 PASS)。

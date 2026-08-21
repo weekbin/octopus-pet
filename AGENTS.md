@@ -59,16 +59,23 @@ Antigravity / Gemini CLI).
   `recentScenes` (滚动窗口 N=5) 后等概率选. **FORCE_SCENE 不更新 recentScenes**
   (MCP 显式控制不影响自然轮转序列). `nextScene` (V1 顺序) 函数保留导出,
   仅供文档/测试. 14 步模拟 sim 14 次: 12/14 唯一场景, 0 个 5 步内重复.
-- **V2.1 调度: 视频播完事件驱动 (替代 setInterval 8s 计时)**: 用户 2026-08-17 17:22
-  根因反馈 — setInterval 时间卡不准, 事件循环延迟累积. 改成 `<video>` 元素
+- **V1.5 渲染 + V2 调度 (回退 V2.1 路线)**: 用户 2026-08-17 18:21 反馈 V2.1
+  视频流 (webm + canvas chroma key) "配色好差, 不如之前舒服". 根因: canvas 实时
+  chroma key 边缘半透明瑕疵 + 配色偏暗 (HSV 70-170° 误判场景中"非纯色的暗色"
+  为绿背景). 切回 V1 渲染 (`<img>` + `frameToGrid` 选 141 帧, spritesheet 风格,
+  视觉舒服), 保留 V2 调度 (随机+去重). **SCENE_ENDED 事件已从 FSM 移除** (V2.1
+  路线副产物, 不再需要), 切 scene 走 V1 `TIMER_TICK` 33Hz → `shouldRotate` (8s
+  autoNextAt 判定). 用户后续" 别的办法做动画切换" 待 V2.1 治本 (例如 cross-fade
+  V1 sprite + V2 APNG, 或 H3 视频流 + 更好 chroma key) 再讨论.
+- **V2.1 调度 (已废弃, 2026-08-17)**: 视频播完事件驱动 (替代 setInterval 8s 计时).
+  用户曾反馈 setInterval 时间卡不准, 事件循环延迟累积. 改成 `<video>` 元素
   `onEnded` 事件 → 发 `SCENE_ENDED` → FSM 切 scene. 跟 sprite 视频时长 (6.6s) 严格
-  同步, **0 累积延迟**. `TIMER_TICK` 只用于 bubble hide 判定 (3s), 不再切 scene.
-- **V2.1 渲染: hidden webm + visible canvas + JS chroma key (绕开 WKWebView webm
-  alpha bug)**: webm VP9 alpha 编码成功 (`alpha_mode=1` 验证) 但 macOS WKWebView
-  不渲染 webm alpha 通道 (WebCodecs 跟 `<video>` 元素 code path 不同). 改成
-  hidden `<video>` 跑循环 + visible `<canvas>` 用 `requestAnimationFrame` 抓帧
-  + `applyChromakeyV3` (PIL v3 公式 JS 版) 实时透明化. 性能 192×192 60fps < 5ms/帧.
-  4 帧实测: 透明背景 + 视频元素事件驱动切 scene PASS.
+  同步, **0 累积延迟**. **V2.1 整体回退后不再使用, 事件类型已从 OctopusEvent 移除**,
+  不要再加回.
+- **V2.1 渲染 (已废弃, 2026-08-17)**: hidden webm + visible canvas + JS chroma key
+  (绕开 WKWebView webm alpha bug). 4 帧实测: 透明背景 + 视频元素事件驱动切 scene
+  PASS, 但视觉差. **V2.1 整体回退后不再使用, 不要再走这条**. 若将来需要 webm
+  alpha 在桌宠内播放, 重新评估 WKWebView 是否修了 webm alpha bug 再考虑.
 - **改场景清单 (14 场景)**: 三处同步 — `app/src/state/types.ts` (SCENE_ORDER) +
   `app/src/data/spritesheet-manifest.json` (scenes[].sceneId) + `src-tauri/src/mcp_stdio.rs`
   (SCENES). 改完跑 `bash scripts/check-scenes-sync.sh` (CI 也会跑).

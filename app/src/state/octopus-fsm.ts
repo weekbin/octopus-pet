@@ -1,11 +1,15 @@
 // Octopus Pet — XState v5 machine for the 14-scene FSM.
 // Per plan §1.9.2: simple timer rotation + click/pet events, MCP tool calls mapped to events.
-// V2 调度: rotateScene 改用 pickRandomScene (随机 + 去重最近 N 个) 替代 V1 顺序轮转.
-// V2.1 调度: **事件驱动** (SCENE_ENDED) 替代 V1 setInterval 8s 计时, 跟 sprite 视频时长同步.
 //
-// 用户 2026-08-17 17:22 根因反馈: 不应该用 setInterval 时间卡, 事件循环延迟会累积.
-// 应该监听 sprite 视频的 onEnded 事件, 视频自然播完再切下一个 scene. 跟视频时长严格
-// 同步, 跟 setInterval 8s 跟 6.6s 视频长度不一致 (切 scene 时可能切到一半) 完美解决.
+// V2 调度: rotateScene 改用 pickRandomScene (随机 + 去重最近 N 个) 替代 V1 顺序轮转.
+// 渲染层 2026-08-17 回退到 V1 风格 (14 spritesheet + frameToGrid 141 帧), canvas
+// chroma key 路线被否 (视觉差). 桌宠 33Hz TIMER_TICK → FSM shouldRotate → 切 scene.
+// (V1 用 8s setInterval 顺序切, V2 在 action 层用 pickRandomScene 替换, 跟 33Hz
+// tick 兼容, 间隔通过 autoNextAt 字段判定.)
+//
+// 用户 2026-08-17 18:21 根因反馈: V2.1 事件驱动 (SCENE_ENDED) + canvas chroma key
+// 视觉比 V1 差, 边缘半透明瑕疵. "回退吧, 我想别的办法做动画切换的效果".
+// → 回退到 V1 渲染, 保留 V2 调度 (随机+去重). SCENE_ENDED 事件移除.
 //
 // XState v5 uses setup({...}).createMachine({...}) pattern. We use a single machine
 // (no nested states) — the "scene" is just context. KISS for V1.
@@ -25,7 +29,7 @@ import {
 
 /**
  * V1 兼容: 顺序轮转 (currentIndex + 1) % 14. 保留导出, 用于测试 / 文档.
- * V2 调度 (rotateScene / SCENE_ENDED / ROTATE_NOW) 改用 pickRandomScene.
+ * V2 调度 (rotateScene) 改用 pickRandomScene.
  */
 function nextScene(scene: OctopusScene): OctopusScene {
   const i = SCENE_ORDER.indexOf(scene);
@@ -93,15 +97,18 @@ export const octopusMachine = setup({
   },
   actions: {
     /**
-     * V2.1: 切下一个 scene. 内部抽 pickRandomScene, 维护 recentScenes.
-     * 跟 bubble 状态无关 (V2.1 不再因 bubble 暂停切 scene; 想暂停时外部不发送
-     * SCENE_ENDED 即可, e.g. 用户点击时由组件不触发 onEnded).
+     * V2 调度: 切下一个 scene. 内部抽 pickRandomScene, 维护 recentScenes.
+     * 跟 bubble 状态无关 — 切 scene 时清掉当前 bubble, 跟 V1 一致.
+     * autoNextAt 用 event.now (触发 rotateScene 的事件时间戳) 重置, 不用
+     * Date.now() — 跟测试的"虚拟时钟"兼容, 也跟运行时真实时钟一致.
      */
-    rotateScene: assign(({ context }) => {
+    rotateScene: assign(({ context, event }) => {
+      const now = (event as { now?: number }).now ?? Date.now();
       const next = pickRandomScene(context.scene, context.recentScenes);
       return {
         scene: next,
         recentScenes: updateRecent(context.recentScenes, next),
+        autoNextAt: now + ROTATION_INTERVAL_MS,
         bubble: null as string | null,
         bubbleHideAt: null as number | null,
       };
@@ -125,7 +132,8 @@ export const octopusMachine = setup({
       return {
         bubble: text,
         bubbleHideAt: event.now + BUBBLE_DURATION_MS,
-        // V2.1: 不再重置 autoNextAt, 切 scene 由 SCENE_ENDED 事件驱动
+        // V1: 重置 autoNextAt 让 8s 计时从 click 时刻重新开始 (用户操作不立即被打断)
+        autoNextAt: event.now + ROTATION_INTERVAL_MS,
         affection: Math.min(MAX_AFFECTION, context.affection + 1),
       };
     }),
@@ -134,6 +142,7 @@ export const octopusMachine = setup({
       return {
         bubble: "啊~",
         bubbleHideAt: event.now + BUBBLE_DURATION_MS,
+        autoNextAt: event.now + ROTATION_INTERVAL_MS,
         affection: Math.min(MAX_AFFECTION, context.affection + 5),
       };
     }),
@@ -157,8 +166,15 @@ export const octopusMachine = setup({
   },
   guards: {
     /**
-     * V2.1: bubble hide 仍用 TIMER_TICK 触发 (bubble 显示 3s 后消失).
-     * 切 scene 不再用 TIMER_TICK (改 SCENE_ENDED 事件).
+     * V1 主调度: TIMER_TICK 触发时若 autoNextAt 已到 (≥ 8s), 切 scene.
+     * V2: 切 scene 时用 pickRandomScene (随机 + 去重) 而非 nextScene (顺序).
+     */
+    shouldRotate: ({ context, event }) => {
+      if (event.type !== "TIMER_TICK") return false;
+      return event.now >= context.autoNextAt;
+    },
+    /**
+     * V1: bubble hide 判定 (3s 计时). 跟 shouldRotate 独立, 同走 TIMER_TICK.
      */
     shouldHideBubble: ({ context, event }) => {
       if (event.type !== "TIMER_TICK") return false;
@@ -173,22 +189,17 @@ export const octopusMachine = setup({
     active: {
       on: {
         /**
-         * TIMER_TICK: V2.1 只用于 bubble hide 判定 (3s 计时); 不再触发 rotateScene.
-         * 切 scene 改由 SCENE_ENDED 事件 (video 元素 onEnded) 驱动.
+         * TIMER_TICK (33Hz): 两个 guard 互不冲突, 各管各的.
+         * - shouldRotate (autoNextAt 已到) → rotateScene (V2: pickRandomScene)
+         * - shouldHideBubble (bubbleHideAt 已到) → dismissBubble
+         * XState v5 guard 列表按顺序求值, 第一个 true 触发. 但两个 guard 在不同
+         * action 里互斥: autoNextAt 跟 bubbleHideAt 独立维护, 同时为 true 时两个
+         * action 都会执行 (XState v5 multiple transitions are independent).
          */
-        TIMER_TICK: {
-          guard: "shouldHideBubble",
-          actions: "dismissBubble",
-        },
-        /**
-         * V2.1 主调度入口: 桌宠 sprite 视频播完时触发 (video.onEnded).
-         * 切下一个 scene (随机 + 去重), 维护 recentScenes.
-         * 这取代 V1 的 8s setInterval 计时, 跟视频时长严格同步, 无累积延迟.
-         */
-        SCENE_ENDED: { actions: "rotateScene" },
-        /**
-         * ROTATE_NOW: 用户或 MCP 主动跳过. 同样用 pickRandomScene (跟 SCENE_ENDED 一致).
-         */
+        TIMER_TICK: [
+          { guard: "shouldRotate", actions: "rotateScene" },
+          { guard: "shouldHideBubble", actions: "dismissBubble" },
+        ],
         ROTATE_NOW: { actions: "rotateScene" },
         FORCE_SCENE: { actions: "forceScene" },
         CLICK: { actions: "onClick" },

@@ -50,10 +50,7 @@ export interface OctopusState {
   scene: OctopusScene;
   /** Bubble text shown above the pet, or null when no bubble. */
   bubble: string | null;
-  /**
-   * @deprecated V2 用 SCENE_ENDED 事件驱动, 不再依赖时间戳.
-   *             保留字段是给老代码/V1 FSM 参考, V2.1+ 可删.
-   */
+  /** Wall-clock ms timestamp at which to auto-rotate to the next scene. */
   autoNextAt: number;
   /** Wall-clock ms timestamp at which to hide the current bubble (or null = no bubble). */
   bubbleHideAt: number | null;
@@ -72,12 +69,11 @@ export interface OctopusState {
 
 /**
  * Events the FSM reacts to.
- * - TIMER_TICK: deprecated (V2 用 SCENE_ENDED 事件驱动); 保留给老测试.
- * - SCENE_ENDED: V2 桌宠 sprite 视频播完时触发 (video 元素 onEnded 事件). 这是 V2 调度的唯一
- *               自然触发器, 不用 setInterval 计时, 避免事件循环延迟累积.
- * - ROTATE_NOW: user or MCP asks to skip to the next scene immediately.
+ * - TIMER_TICK: 33Hz tick (V1 setInterval), FSM 用 shouldRotate 判定 8s 切 scene,
+ *               shouldHideBubble 判定 3s 后消 bubble. V2 切 scene 用 pickRandomScene.
+ * - ROTATE_NOW: user or MCP asks to skip to the next scene immediately (V2: pickRandomScene).
  * - FORCE_SCENE: jump to a specific scene (MCP pet_show / pet_set_state).
- * - CLICK: single click on the pet — show a random bubble, +1 affection.
+ * - CLICK: single click on the pet — show a random bubble, +1 affection, reset autoNextAt.
  * - PET: pet the head (MCP pet_pet or right-click context) — +5 affection, "啊" bubble.
  * - ASK: external agent says something (MCP pet_ask) — show bubble.
  * - DISMISS_BUBBLE: hide the bubble.
@@ -85,7 +81,6 @@ export interface OctopusState {
  */
 export type OctopusEvent =
   | { type: "TIMER_TICK"; now: number }
-  | { type: "SCENE_ENDED"; now: number }
   | { type: "ROTATE_NOW"; now: number }
   | { type: "FORCE_SCENE"; scene: OctopusScene; now: number }
   | { type: "CLICK"; now: number }
@@ -95,8 +90,9 @@ export type OctopusEvent =
   | { type: "DRAG"; x: number; y: number };
 
 /**
- * @deprecated V2 调度不再依赖 setInterval 计时 (事件循环延迟会累积, 跟视频时长不同步).
- *             保留导出给老测试, V2.1+ 可删. 切 scene 改用 SCENE_ENDED 事件 (video 元素 onEnded).
+ * V1 主调度: 8s 自动切 scene (跟 V1 8 切 scene 行为一致).
+ * V2 调度: rotateScene action 内部用 pickRandomScene 替代 nextScene, 时间间隔仍 8s.
+ * 用户操作 (CLICK / PET) 重置 autoNextAt 计时, 避免气泡还没看完就被切走.
  */
 export const ROTATION_INTERVAL_MS = 8_000;
 export const BUBBLE_DURATION_MS = 3_000;

@@ -13,7 +13,7 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
   `current` + `recentScenes` (滚动窗口 N=5) 后等概率选. **FORCE_SCENE 不更新**
   recentScenes (MCP 显式控制不影响自然序列). V1 顺序轮转 `nextScene` 函数保留
   导出, 仅供测试. `RECENT_WINDOW_SIZE=5` 调优: 14-1-5=8 候选, 体感"真随机".
-  14 步模拟: 12/14 唯一, 0 个 5 步内重复. 26 tests PASS.
+  14 步模拟: 12/14 唯一, 0 个 5 步内重复. 28 tests PASS (V1 shouldRotate + V2 调度).
 - **V2 视频 → 桌宠 APNG 完整流程**: `docs/v2-h3-to-pet-workflow.md` 沉淀 H3 双图 →
   ffmpeg 15fps 抽帧 → chroma key v3 → 192×192 APNG 4 步管线. 01-detective-study
   桌宠集成验证 PASS (50 帧 × 132ms = 6.6s 循环, 2.3MB).
@@ -57,6 +57,27 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 - spritesheet-manifest.json 单源化: 唯一副本 `app/src/data/` (生成脚本输出改这里),
   删 public 双生副本.
 - 14 场景清单三源一致性由 `scripts/check-scenes-sync.sh` 校验 (CI 挂载).
+
+### Reverted
+- **V2.1 视频流 (webm + canvas chroma key) 路线回退**: 用户 2026-08-17 18:21 反馈
+  "V2.1 配色好差, 不如之前舒服, 回退吧, 我想别的办法做动画切换的效果". 根因: V2.1
+  hidden `<video>` + visible `<canvas>` + `applyChromakey` 实时透明化, 跟 V1 APNG 比
+  边缘有半透明瑕疵 + 配色 (HSV 70-170° chroma key 把场景中非纯色的"暗色"误判为绿
+  背景, 中性色变暗). 回退范围:
+  - 渲染: `OctopusPet.tsx` 回 V1 `<img>` + `frameToGrid` 选 141 帧 (V1 spritesheet
+    风格, 视觉舒服).
+  - 调度: 保留 V2 `pickRandomScene` 随机+去重框架, 但触发方式从 `SCENE_ENDED` 事件
+    (video 元素 `onEnded`) 回到 V1 `TIMER_TICK` 33Hz → `shouldRotate` 8s 判定.
+    `SCENE_ENDED` 事件类型从 `OctopusEvent` union 移除.
+  - 删除: `app/src/utils/chromakey.ts`, `app/src/data/v2-sprite-map.ts`,
+    `app/public/assets/octopus/v2/` (webm + V2 APNG), `app/public/assets/octopus/breath-idle.png`,
+    stale `_trace.test.ts` (用 SCENE_ENDED).
+  - 测试: V1 风格 `shouldRotate` (8s autoNextAt 判定) + V2 随机+去重同时验证.
+    28 tests PASS.
+  - FSM 用 `event.now` (而非 `Date.now()`) 重置 `autoNextAt`, 跟测试虚拟时钟兼容.
+
+  **保留**: V2 调度 (随机+去重), H3 视频生产管线, chroma key v3 公式 (PIL APNG
+  路线仍然 13 动作复用).
 
 ### Added
 - `scripts/release-plugin.sh`: 发布二进制 (必须走 `cargo tauri build --no-bundle`,
