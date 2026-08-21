@@ -54,6 +54,11 @@ Antigravity / Gemini CLI).
 - **状态逻辑改 `actions.rs` 单点**: 场景校验 / ≤12 字截断 / bubble 3s / affection+5
   只在 `src-tauri/src/actions.rs`。MCP stdio / HTTP fallback 都委托它, 不要在新入口
   复制逻辑。状态权威是前端 XState, Rust `SharedState` 只是镜像 (sync_state 回写).
+- **V2 调度: 随机 + 去重 (替代 V1 顺序轮转)**: `octopus-fsm.ts::rotateScene` /
+  `ROTATE_NOW` 改用 `pickRandomScene(current, recent, rng)`, 排除 `current` +
+  `recentScenes` (滚动窗口 N=5) 后等概率选. **FORCE_SCENE 不更新 recentScenes**
+  (MCP 显式控制不影响自然轮转序列). `nextScene` (V1 顺序) 函数保留导出,
+  仅供文档/测试. 14 步模拟 sim 14 次: 12/14 唯一场景, 0 个 5 步内重复.
 - **改场景清单 (14 场景)**: 三处同步 — `app/src/state/types.ts` (SCENE_ORDER) +
   `app/src/data/spritesheet-manifest.json` (scenes[].sceneId) + `src-tauri/src/mcp_stdio.rs`
   (SCENES). 改完跑 `bash scripts/check-scenes-sync.sh` (CI 也会跑).

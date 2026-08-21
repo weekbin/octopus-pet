@@ -7,6 +7,13 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **V2 调度: 随机 + 去重最近 5 个场景**: `app/src/state/octopus-fsm.ts` 加
+  `pickRandomScene(current, recent, rng)` + `updateRecent` 辅助函数.
+  `rotateScene` (8s 自然轮转) 和 `ROTATE_NOW` 改用随机, 从 14 场景里排除
+  `current` + `recentScenes` (滚动窗口 N=5) 后等概率选. **FORCE_SCENE 不更新**
+  recentScenes (MCP 显式控制不影响自然序列). V1 顺序轮转 `nextScene` 函数保留
+  导出, 仅供测试. `RECENT_WINDOW_SIZE=5` 调优: 14-1-5=8 候选, 体感"真随机".
+  14 步模拟: 12/14 唯一, 0 个 5 步内重复. 26 tests PASS.
 - **V2 视频 → 桌宠 APNG 完整流程**: `docs/v2-h3-to-pet-workflow.md` 沉淀 H3 双图 →
   ffmpeg 15fps 抽帧 → chroma key v3 → 192×192 APNG 4 步管线. 01-detective-study
   桌宠集成验证 PASS (50 帧 × 132ms = 6.6s 循环, 2.3MB).

@@ -58,6 +58,13 @@ export interface OctopusState {
   affection: number;
   /** Pet position on screen, in physical pixels. */
   position: { x: number; y: number };
+  /**
+   * V2 调度: 最近 N 个已播放场景 (按时间顺序, 最旧在前).
+   * rotateScene 选下一个场景时排除此集合 (避免短时间重复).
+   * 不包含当前 scene (当前 scene 在 context.scene, 不在历史里).
+   * FORCE_SCENE 不更新此字段 (MCP 显式控制不影响自然轮转序列).
+   */
+  recentScenes: OctopusScene[];
 }
 
 /**
@@ -85,3 +92,13 @@ export const ROTATION_INTERVAL_MS = 8_000; // per plan §1.9.2: 8s auto-rotation
 export const BUBBLE_DURATION_MS = 3_000;
 export const FRAME_INTERVAL_MS = 83; // 12 fps for 141-frame loop ≈ 11.7s
 export const MAX_AFFECTION = 100;
+
+/**
+ * V2 调度: 随机播放去重窗口大小.
+ *
+ * 14 场景里排除最近 5 个, 等概率从剩下 9 个里选.
+ * - 太小 (N=1): 仍可能"假装很忙 → 假装很忙"连续 2 次, 用户感觉在循环
+ * - 太大 (N=10): 只剩 4 候选, 跟顺序轮转没区别
+ * - N=5: 14-1-5=8 候选, 概率 1/8 每次, 跟 6s×14/8 ≈ 1.5min 内不重复, 体感"真随机"
+ */
+export const RECENT_WINDOW_SIZE = 5;
