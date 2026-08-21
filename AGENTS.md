@@ -58,8 +58,17 @@ Antigravity / Gemini CLI).
   立绘 → gen_videos 慢眨眼 → ffmpeg 抽帧 → flood-fill 抠图 → 持续睁眼+加速眨眼
   拼接 → APNG 输出). 关键阈值: flood-fill `edge_thresh=50` (避免抠掉嘴内部深红),
   APNG `disposal=0` (避免 PIL 合并相同帧), tauri.conf.json `macOSPrivateApi: true`
-  (macOS 透明必需). 不用 GIF (透明兼容差), 不用 WebM with alpha (ffmpeg 实际输出
-  yuv420p 不带 alpha).
+  (macOS 透明必需). 不用 GIF (透明兼容差). V1 默认 APNG, V2 长动作可走 WebM VP9 alpha
+  (见下面"ffmpeg-full 接入"规则).
+- **ffmpeg-full 接入 (VP9 alpha 编码)**: 走 WebM with alpha 必须用
+  `brew install ffmpeg-full` (keg-only, 不在 PATH). **Homebrew standard ffmpeg 的
+  `ffmpeg -codecs` 不显示 `vp9_alpha` 标志,误导性失败** — ffmpeg-full 的
+  `ffmpeg -h encoder=libvpx-vp9` 列出 `yuva420p/yuva422p/yuva444p/gbrap` 等 7 种
+  alpha 像素格式才是真相. 调用统一走 `scripts/encode-webm-alpha.sh` (自动 locate
+  Cellar 路径 + 验证 `TAG:alpha_mode=1`),**不要**自己 hardcode ffmpeg 路径.
+  HEVC videotoolbox alpha 完全不可行 (Apple `VTCompressionSession` 架构限制),
+  永远别走这条. 验证 alpha 真的进了 webm 必须用 `ffprobe -show_streams`
+  看 `TAG:alpha_mode=1`, 默认 `ffprobe` 不展示这个 tag.
 - **发布产物 `bin/octopus-pet.bin` 提交进 git**: 跑 `release-plugin.sh` 后 `git add bin/octopus-pet.bin`
   随 commit 提交 (repo 本身即插件, clone 零构建可加载). 产物必须走
   `cargo tauri build --no-bundle` — 裸 `cargo build` 增量会跳过 asset 嵌入 (binary < 5MB = 缺 assets).
@@ -90,6 +99,12 @@ bash scripts/audit-octopus-assets.sh           # 14 场景素材盘点
 bash scripts/check-scenes-sync.sh              # 14 场景三源一致 (types.ts / manifest / mcp_stdio.rs)
 bash scripts/spritesheet-builder.sh --all      # 141 帧 PNG → 14 张 .webp
 bash scripts/generate-spritesheet-manifest.sh  # React 用的 JSON manifest (唯一副本 src/data/)
+
+# 视频编码 (V2 备用路线, PNG 序列 → WebM with alpha)
+# 依赖: brew install ffmpeg-full (keg-only, 脚本自动 locate)
+bash scripts/encode-webm-alpha.sh \
+  --input <frame_dir> --output <file.webm> \
+  --framerate 12 --bitrate 300k --pattern "f_%04d.png"
 
 # 发布 (产出 bin/octopus-pet.bin 提交物 + dist/octopus-pet-plugin/ 分发)
 bash scripts/release-plugin.sh                 # cargo tauri build --no-bundle + 冒烟

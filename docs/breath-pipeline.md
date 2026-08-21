@@ -137,7 +137,63 @@ shutil.copy(apng_path, "app/public/assets/octopus/breath-idle.png")
 > - `loop=0`: 无限循环
 > - `duration=1000/12`: 12fps 播放 (3.67s 循环)
 > - **不用 GIF**: GIF 透明索引兼容性差，mavis / QuickLook 显示成粉色背景
-> - 不用 WebM: ffmpeg 输出 WebM with alpha 实际是 yuv420p 不带 alpha
+> - V2 长动作 (>50 帧) 可用 WebM VP9 alpha 替代, 体积小 14-28x (见 Step 5b)
+
+### Step 5b: WebM VP9 alpha 输出 (V2 长动作备用)
+
+> **目的**: 帧数 >50 的长动作, 用 WebM VP9 alpha 替代 APNG, 体积小 14-28x.
+> V1 idle 循环 (75 帧 / 1.4MB) 主用 APNG; V2 复杂动作 (>50 帧) 走这条.
+
+**前置 (one-time)**:
+```bash
+brew install ffmpeg-full   # keg-only, 47 deps, 9.0.1
+# 不要 export PATH (脚本自动 locate Cellar 路径)
+```
+
+**调用**:
+```bash
+# 输入是 Step 3 抠图后裁剪到 192×192 的 RGBA PNG 序列
+# 假设: loop-rgba-v6/ 目录里 lp-001.png ... lp-156.png
+bash scripts/encode-webm-alpha.sh \
+  --input loop-rgba-v6/ \
+  --output app/public/assets/octopus/breath-idle.webm \
+  --framerate 12 \
+  --bitrate 300k \
+  --pattern "lp-%03d.png"
+```
+
+**输出**:
+- `<file>.webm` (VP9 in WebM, yuva420p, 50-100KB for 75 帧)
+- 脚本自动验证 `TAG:alpha_mode=1` 存在, 失败 exit 3
+- 提示下一步 React 端用 `<video>` 标签
+
+**React 端使用**:
+```tsx
+<video
+  src="/assets/octopus/breath-idle.webm"
+  autoPlay
+  loop
+  muted
+  playsInline
+  style={{
+    position: "absolute",
+    width: 192,
+    height: 192,
+    pointerEvents: "none",
+  }}
+/>
+```
+
+> **VP9 alpha 兼容性**: macOS WKWebView ✅, Windows WebView2 (Chromium >96) ✅,
+> Linux WebKitGTK 4.1+ ⚠️ (取决于 codec 编译选项). V2 跨平台落地时再验证.
+>
+> **重要陷阱**:
+> - Homebrew standard ffmpeg (`brew install ffmpeg`) 输出的 VP9 webm **不**带 alpha —
+>   必须用 ffmpeg-full
+> - `ffmpeg -codecs | grep vp9` 不显示 `vp9_alpha` 标志是误导性的, 真实能力看
+>   `ffmpeg -h encoder=libvpx-vp9 | grep yuva` (7 种 alpha 像素格式)
+> - `ffprobe` 默认不展示 `TAG:alpha_mode=1`, 验证 alpha 必须
+>   `ffprobe -show_streams <file>.webm | grep alpha_mode`
 
 ---
 
