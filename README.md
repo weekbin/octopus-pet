@@ -3,19 +3,23 @@
 > A coral-pink octopus desktop pet for **mcode** (MiniMax Code / Mavis) — built as an
 > [agent-plugins.org v1.0.0](https://agent-plugins.org/specification) plugin.
 
-mcode 启动时自动 spawn 章鱼 .app，14 个"打工人"场景 8s 自动轮转，单击弹气泡、右键摸头 (+亲密度)、拖动换位置，6 个 MCP tools 让 mcode Agent 远程控制。跨 8 客户端 portable (mcode / Cursor / Claude Code / VS Code / Codex / Kiro / Antigravity / Gemini CLI)。repo 本身即插件：`bin/octopus-pet.bin` 提交进 git，clone 零构建即可加载。
+mcode 启动时自动 spawn 章鱼 .app, **2 个 V2 视频成品** (detective-study 戴帽研究 + worker-construction 工人施工) 8s 自动轮转, 单击弹气泡、右键摸头 (+亲密度)、拖动换位置, 6 个 MCP tools 让 mcode Agent 远程控制. 跨 8 客户端 portable (mcode / Cursor / Claude Code / VS Code / Codex / Kiro / Antigravity / Gemini CLI). repo 本身即插件: `bin/octopus-pet.bin` 提交进 git, clone 零构建即可加载.
+
+**V1.5 (2026-08-21)**: 默认只跑 2 个 V2 视频成品, 不用 14 V1 spritesheet (打工人 meme 表情包). 14 V1 移到 `app/public/assets/octopus/_archive-v1-spritesheets/` 不再用. 加新场景: 跑 H3/gen_videos → `scripts/extract-chromakey-apng.py` → `app/public/assets/octopus/v2/<scene>.png` + 同步 `types.ts` + `mcp_stdio.rs`.
 
 ---
 
-## 状态 (2026-08-18, 架构重构后)
+## 状态 (V1.5, 2026-08-21)
 
 | 阶段 | 状态 | 备注 |
 |------|------|------|
 | **W1 D1** | ✅ 完成 | 14 spritesheet + 6 scripts + plugin 三件套 + GitHub repo |
 | **W1 D2** | ✅ 完成 | Tauri 2 scaffold + 透明 192×192 窗口 + React mount + MCP stdio stub |
-| **W1 D3** | ✅ 完成 | XState 14 状态 FSM + 8s 轮转 + 14 spritesheet 渲染 + 单击/右键摸头/拖动 |
+| **W1 D3** | ✅ 完成 | XState FSM + 8s 轮转 + spritesheet 渲染 + 单击/右键摸头/拖动 |
 | **W1 D4** | ✅ 完成 | 单实例插件 + 状态权威收敛 (XState 唯一权威, sync_state 镜像回写) + HTTP 断链修复 |
 | **W2** | ✅ 完成 | Rust MCP server 完整化 (6 tools, 8 roundtrip tests, headless 直写) |
+| **V0.5/V2** | ✅ 完成 | H3 + gen_videos 跑通 2 视频, PIL v3 chroma key 沉淀, 4 步管线 |
+| **V1.5** | ✅ 完成 (2026-08-21) | 默认切 2 个 V2 视频成品, 14 V1 spritesheet 移到 archive |
 | **W1.1+** | ⏳ | mcode 任务事件 → 场景 映射 (mcode 钩子) / 多 session 共享 (UDS 转发) |
 | **W3** | ⏳ | mcode 集成验证 (spawn → 通信) + 跨客户端 portable 验证 |
 | **W4/W5** | ⏳ | 交互打磨 + 性能 (启动 < 3s, 体积 < 30MB) + GitHub release |
@@ -52,32 +56,22 @@ mcode 启动时自动 spawn 章鱼 .app，14 个"打工人"场景 8s 自动轮�
 ```
 
 **栈**: Tauri 2 (Rust + React 19 + Vite 6 + XState 5)  
-**窗口**: 192×192 (= 素材尺寸, 零边距), transparent, no decorations, alwaysOnTop, skipTaskbar  
+**窗口**: 116×116 (= APNG 192×192 60% 缩放显示), transparent, no decorations, alwaysOnTop, skipTaskbar  
 **状态权威**: XState (前端 FSM) → `sync_state` 回写 Rust `SharedState` 镜像;协议入口 (MCP/HTTP) 只调 `actions.rs` 发事件  
-**场景**: 14 (pretend-busy, stay-late, breakdown, lying-flat, multi-tasking, payday, salary-rejected, treat-milk-tea, friday-5pm, toilet-slacking, touch-fish, waiting-m3pro, soul-leaving, multitask)
+**场景 (V1.5)**: 2 (detective-study, worker-construction)
 
 ---
 
-## 14 场景 (verified 2026-08-18)
+## V1.5 默认 2 场景 (verified 2026-08-21)
 
-| # | 场景 | OctopusScene | 文案示例 | 帧数 |
-|---|------|-------------|---------|------|
-| 1 | 假装很忙 | `pretend-busy` | "忙死了" "改完这版就休息" | 141 |
-| 2 | 再熬一会 | `stay-late` | "再熬一会" "夜宵时间" | 141 |
-| 3 | 我裂开了 | `breakdown` | "我裂开了" "求救信号" | 141 |
-| 4 | 摆烂躺平 | `lying-flat` | "摆烂中" "充电模式" | 141 |
-| 5 | 多任务 | `multi-tasking` | "一心多用" "5 个 tab" | 141 |
-| 6 | 发工资 | `payday` | "发工资!" "今天吃好" | 141 |
-| 7 | 工资被拒 | `salary-rejected` | "退款中" "系统抽风" | 141 |
-| 8 | 奶茶 | `treat-milk-tea` | "奶茶第一" "加珍珠" | 141 |
-| 9 | 周五 5 点 | `friday-5pm` | "TGIF" "周末快乐" | 141 |
-| 10 | 带薪蹲坑 | `toilet-slacking` | "蹲坑中" "带薪休息" | 141 |
-| 11 | 摸鱼 | `touch-fish` | "假装在工作" "甩锅中" | 141 |
-| 12 | 等 M3 Pro | `waiting-m3pro` | "等新电脑" "渲染中" | 141 |
-| 13 | 灵魂出窍 | `soul-leaving` | "灵魂出窍" "意识漂浮" | 141 |
-| 14 | 多任务 v2 | `multitask` | "三屏模式" "CPU 满载" | 141 |
+| # | 场景 | OctopusScene | 文案示例 | 帧数 | 素材 |
+|---|------|-------------|---------|------|------|
+| 1 | 戴帽研究 (H3 6s) | `detective-study` | "在研究" "放大看看" | 50 帧 × 132ms = 6.6s | H3 + `last_frame_image` 双图, 96.58% 首末一致 |
+| 2 | 工人施工 (gen_videos 6s) | `worker-construction` | "施工中" "砸一下" | 50 帧 × 132ms = 6.6s | gen_videos Hailuo-2.3, 99.85% 相似 |
 
-每个 spritesheet = 13632×384 px (71×2 cells × 192px, WebP lossy q80)。14 文件总 9.1MB。
+每个 APNG = 192×192 px, RGBA, 2.3MB. 走 `scripts/extract-chromakey-apng.py` v3 chroma key (中性色 alpha=255, 避免眼睛高光抠成半透明). 浏览器原生循环, 不需要 frame 计数器.
+
+**14 V1 spritesheet (V1 废弃, 不再用)**: 移到 `app/public/assets/octopus/_archive-v1-spritesheets/`. 是 octopus-meme skill 出的"打工人"表情包, 不是桌宠, 治本 V1.5 改用 V2 视频成品.
 
 ---
 

@@ -30,7 +30,7 @@ pub struct Position {
 impl Default for SharedState {
     fn default() -> Self {
         Self {
-            scene: "pretend-busy".to_string(),
+            scene: "detective-study".to_string(),
             bubble: None,
             bubble_hide_at: None,
             affection: 0,

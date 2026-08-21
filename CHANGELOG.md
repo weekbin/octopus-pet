@@ -6,6 +6,27 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **V1.5 (2026-08-21): 默认只跑 2 个 V2 视频成品, 不再用 14 V1 spritesheet**.
+  用户 2026-08-21 19:14 反馈 "我们现在是默认的 2 个做好的成品啊, 之前那些
+  (14 V1 打工人 meme 表情包) 不要用, 我们做的事桌面宠物, 思路不要走错了".
+  V1.5 重写:
+  - 渲染: 14 spritesheet → 2 V2 视频 APNG. 浏览器原生循环, 不需要 frame 计数器
+    / backgroundImage 步长 / cellSize 计算 (上轮鬼畜图 bug 也消除).
+  - 调度: 保留 V2 pickRandomScene (随机+去重), 触发方式 TIMER_TICK 33Hz →
+    shouldRotate 8s autoNextAt 判定.
+  - 场景: `SCENE_ORDER` = `["detective-study", "worker-construction"]`
+    (H3 戴帽研究 + gen_videos 工人施工).
+  - `RECENT_WINDOW_SIZE` 1 (14 场景时期 N=5, 2 场景时期 N=1 即可, 必不连续重复).
+  - 资产: 14 V1 spritesheet 移 `_archive-v1-spritesheets/` (不用), 2 V2 APNG
+    `app/public/assets/octopus/v2/<scene>.png` (50 帧 × 132ms = 6.6s 循环,
+    RGBA, 2.3MB 各). 走 `scripts/extract-chromakey-apng.py` v3 公式 (中性色
+    alpha=255, 避免眼睛高光被抠成半透明).
+  - 删 `spritesheet-manifest.json` (V1.5 不用: scene→APNG 1:1 命名, 无需第三个
+    JSON 副本). `check-scenes-sync.sh` 改两源 (types.ts + mcp_stdio.rs) + APNG
+    文件存在性检查.
+  - 23 tests PASS (从 28 缩到 23, 因为 2 场景测试覆盖度比 14 场景少).
+
 ### Added
 - **V2 调度: 随机 + 去重最近 5 个场景**: `app/src/state/octopus-fsm.ts` 加
   `pickRandomScene(current, recent, rng)` + `updateRecent` 辅助函数.

@@ -81,7 +81,7 @@ function pickBubble(scene: OctopusScene, rng: () => number = Math.random): strin
 }
 
 const initialContext: OctopusState = {
-  scene: "pretend-busy",
+  scene: "detective-study",
   bubble: null,
   autoNextAt: Date.now() + ROTATION_INTERVAL_MS,
   bubbleHideAt: null,

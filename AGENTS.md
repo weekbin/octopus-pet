@@ -13,12 +13,13 @@ Antigravity / Gemini CLI).
 
 | 项 | 值 |
 |---|---|
-| 状态 | W1 D2 (W1 D1 ✅, D2 🔄) |
+| 状态 | V1.5 (默认 2 个 V2 视频成品, 14 V1 spritesheet 表情包移到 archive) |
 | 栈 | Tauri 2 · React 19 · Vite 6 · XState 5 · Rust 1.77+ |
-| 窗口 | 192×192 (=素材尺寸, 零边距) · transparent · no-decoration · alwaysOnTop · skipTaskbar |
-| 14 场景 | pretend-busy → stay-late → breakdown → lying-flat → multi-tasking → payday → salary-rejected → treat-milk-tea → friday-5pm → toilet-slacking → touch-fish → waiting-m3pro → soul-leaving → multitask |
+| 窗口 | 116×116 透明, V2 APNG 192×192 默认 `objectFit=fill` 缩放适配 |
+| **2 V2 场景 (V1.5 默认)** | detective-study (H3 戴帽研究) · worker-construction (gen_videos 工人施工) |
 | 6 MCP tools | pet_show · pet_ask · pet_get_state · pet_set_state · pet_pet · pet_list_states |
-| 14 spritesheet | 141 帧/张, 2 行 × 71 列, 13632×384 px, WebP lossy q80, 总 9.1MB |
+| **2 V2 APNG** | 50 帧/张 × 132ms ≈ 6.6s 循环, RGBA, 192×192, 2.3MB 各, 走 PIL v3 chroma key |
+| 14 V1 spritesheet (废弃) | 移到 `app/public/assets/octopus/_archive-v1-spritesheets/` 不再用 |
 | Spec 依据 | [agent-plugins.org v1.0.0](https://agent-plugins.org/specification) + [MCP 2024-11-05](https://modelcontextprotocol.io/specification/2024-11-05) + [agentskills.io](https://agentskills.io/specification) |
 | HTTP fallback | `:9527` (V1 demo 用) |
 
@@ -36,8 +37,9 @@ Antigravity / Gemini CLI).
 | 状态镜像回写 | `src-tauri/src/state_bridge.rs::sync_state` (webview→Rust, 只写不 emit) |
 | React 前端 | `app/src/` (components · state · hooks · data · styles) |
 | Rust 后端 | `src-tauri/src/` (lib · main · actions · mcp_stdio · state_bridge · http_fallback) |
-| 14 spritesheet | `app/public/assets/octopus/spritesheet-{01..14}-*.webp` |
-| Spritesheet manifest | `app/src/data/spritesheet-manifest.json` (**唯一副本**, 生成脚本输出这里) |
+| 14 spritesheet (V1 废弃) | `app/public/assets/octopus/_archive-v1-spritesheets/spritesheet-*.webp` |
+| **2 V2 APNG (V1.5 默认)** | `app/public/assets/octopus/v2/{detective-study,worker-construction}.png` |
+| **V2 APNG 生产脚本** | `scripts/extract-chromakey-apng.py` (mp4 → 50 帧 RGBA APNG, v3 chroma key) |
 | 14 场景素材审计 | `docs/octopus-assets-audit.md` (W1 D1 产物) |
 | 变更历史 | `CHANGELOG.md` (Keep a Changelog 1.1.0) |
 | CI | `.github/workflows/ci.yml` (spec lint · asset audit · spritesheet regen · Rust build · Vitest) |
@@ -76,9 +78,11 @@ Antigravity / Gemini CLI).
   (绕开 WKWebView webm alpha bug). 4 帧实测: 透明背景 + 视频元素事件驱动切 scene
   PASS, 但视觉差. **V2.1 整体回退后不再使用, 不要再走这条**. 若将来需要 webm
   alpha 在桌宠内播放, 重新评估 WKWebView 是否修了 webm alpha bug 再考虑.
-- **改场景清单 (14 场景)**: 三处同步 — `app/src/state/types.ts` (SCENE_ORDER) +
-  `app/src/data/spritesheet-manifest.json` (scenes[].sceneId) + `src-tauri/src/mcp_stdio.rs`
-  (SCENES). 改完跑 `bash scripts/check-scenes-sync.sh` (CI 也会跑).
+- **改场景清单 (V1.5 2 场景)**: 两处同步 — `app/src/state/types.ts` (SCENE_ORDER) +
+  `src-tauri/src/mcp_stdio.rs` (SCENES) + 对应 APNG 文件存在
+  `app/public/assets/octopus/v2/<scene>.png`. V1.5 不再用 spritesheet-manifest.json
+  (scene→APNG 1:1 命名, 减一个 JSON 副本). 改完跑
+  `bash scripts/check-scenes-sync.sh` (CI 也会跑, 校验两源一致 + APNG 存在).
 - **改 spritesheet**: 141 帧是源头真理. 真要改, 从 `~/Works/octopus-worker-meme` 抽,
   跑 `extract-and-link-octopus-frames.sh` + `spritesheet-builder.sh` + `generate-spritesheet-manifest.sh`.
 - **换桌宠 idle 动画素材**: 走 `docs/breath-pipeline.md` 完整流程 (image_synthesize

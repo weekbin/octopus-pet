@@ -44,21 +44,11 @@ pub const TOOL_PET_SET_STATE: &str = "pet_set_state";
 pub const TOOL_PET_PET: &str = "pet_pet";
 pub const TOOL_PET_LIST_STATES: &str = "pet_list_states";
 
+// V1.5 (2026-08-21): 默认只跑 2 个 V2 视频成品. 14 V1 spritesheet 表情包不在默认.
+// 加新场景: SCENES 同步 + types.ts SCENE_ORDER + scenes.ts + check-scenes-sync.sh.
 pub const SCENES: &[&str] = &[
-    "pretend-busy",
-    "stay-late",
-    "breakdown",
-    "lying-flat",
-    "multi-tasking",
-    "payday",
-    "salary-rejected",
-    "treat-milk-tea",
-    "friday-5pm",
-    "toilet-slacking",
-    "touch-fish",
-    "waiting-m3pro",
-    "soul-leaving",
-    "multitask",
+    "detective-study",
+    "worker-construction",
 ];
 
 /// Start the MCP stdio server. `app` is optional: when None (headless mode),
@@ -136,7 +126,7 @@ async fn handle_request(
                         "required": ["state"]
                     })),
                     tool_schema(TOOL_PET_PET, "摸头, affection += 5", json!({"type": "object"})),
-                    tool_schema(TOOL_PET_LIST_STATES, "返回 14 场景列表", json!({"type": "object"})),
+                    tool_schema(TOOL_PET_LIST_STATES, "返回 2 V2 场景列表 (detective-study + worker-construction)", json!({"type": "object"})),
                 ]
             })),
             error: None,

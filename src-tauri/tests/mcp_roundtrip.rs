@@ -114,12 +114,12 @@ fn tools_list_returns_six_tools() {
 
 #[test]
 fn tools_call_returns_content() {
-    let responses = run_mcp(&[r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"pet_show","arguments":{"state":"payday"}}}"#]);
+    let responses = run_mcp(&[r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"pet_show","arguments":{"state":"worker-construction"}}}"#]);
     assert_eq!(responses.len(), 1);
     let content = &responses[0]["result"]["content"];
     assert!(content.is_array());
     let text = content[0]["text"].as_str().expect("text field");
-    assert!(text.contains("payday"), "stub should mention state, got: {}", text);
+    assert!(text.contains("worker-construction"), "stub should mention state, got: {}", text);
 }
 
 #[test]
@@ -146,9 +146,9 @@ fn multiple_sequential_requests() {
 
 #[test]
 fn state_persists_across_calls() {
-    // pet_show payday, then pet_get_state, then pet_pet; verify state changes persist.
+    // pet_show worker-construction, then pet_get_state, then pet_pet; verify state changes persist.
     let responses = run_mcp(&[
-        r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"pet_show","arguments":{"state":"payday"}}}"#,
+        r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"pet_show","arguments":{"state":"worker-construction"}}}"#,
         r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"pet_pet","arguments":{}}}"#,
         r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"pet_get_state","arguments":{}}}"#,
     ]);
@@ -157,7 +157,7 @@ fn state_persists_across_calls() {
         .as_str()
         .expect("get_state returns text");
     let state: serde_json::Value = serde_json::from_str(state_text).expect("state is JSON");
-    assert_eq!(state["scene"], "payday", "pet_show should persist");
+    assert_eq!(state["scene"], "worker-construction", "pet_show should persist");
     assert_eq!(state["affection"], 5, "pet_pet should bump affection to 5");
     assert_eq!(state["bubble"], "啊~", "pet_pet should set bubble");
 }
@@ -170,12 +170,16 @@ fn show_rejects_unknown_scene() {
 }
 
 #[test]
-fn list_states_returns_14() {
+fn list_states_returns_2_v2_scenes() {
+    // V1.5 (2026-08-21): 默认 2 个 V2 视频成品 (detective-study + worker-construction).
+    // 14 V1 spritesheet 表情包已废弃, 移到 _archive-v1-spritesheets/ 不用.
     let responses = run_mcp(&[r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"pet_list_states","arguments":{}}}"#]);
     let text = responses[0]["result"]["content"][0]["text"]
         .as_str()
         .expect("list returns text");
     let arr: serde_json::Value = serde_json::from_str(text).expect("list is JSON array");
     let arr = arr.as_array().expect("must be array");
-    assert_eq!(arr.len(), 14, "exactly 14 scenes per plan §1.9.2");
+    assert_eq!(arr.len(), 2, "V1.5: exactly 2 V2 scenes (default)");
+    assert!(arr.contains(&serde_json::Value::String("detective-study".into())));
+    assert!(arr.contains(&serde_json::Value::String("worker-construction".into())));
 }

@@ -1,48 +1,29 @@
 // Octopus Pet — Type definitions for state machine
-// Per plan §1.9.2: 14 scenes, simple FSM rotation, mcode events deferred to V1.1+.
+// V1.5 (2026-08-21): 默认只跑 2 个 V2 视频成品 (detective-study + worker-construction),
+// 不再用 14 个 V1 spritesheet (打工人 meme 是 octopus-meme skill 出的表情包, 不是桌宠).
+// 14 V1 spritesheet 移到 `app/public/assets/octopus/_archive-v1-spritesheets/`.
 
 /**
- * The 14 pet states. Order is the rotation order (timer auto-advance cycles through
- * these in sequence, wrapping back to `pretend-busy` after `multitask`).
+ * The 2 V2 pet scenes. 8s 轮转, V2 pickRandomScene (随机 + 去重).
+ * 加新场景: 1) 跑 H3 / gen_videos 生成绿幕视频
+ *         2) `scripts/extract-chromakey-apng.py` 转 APNG
+ *         3) 放 `app/public/assets/octopus/v2/<scene>.png`
+ *         4) SCENE_ORDER + BUBBLE_BY_SCENE + mcp_stdio.rs SCENES + 同步 manifest
+ *         5) `bash scripts/check-scenes-sync.sh` 校验
  */
 export const SCENE_ORDER = [
-  "pretend-busy",
-  "stay-late",
-  "breakdown",
-  "lying-flat",
-  "multi-tasking",
-  "payday",
-  "salary-rejected",
-  "treat-milk-tea",
-  "friday-5pm",
-  "toilet-slacking",
-  "touch-fish",
-  "waiting-m3pro",
-  "soul-leaving",
-  "multitask",
+  "detective-study",
+  "worker-construction",
 ] as const;
 
 export type OctopusScene = (typeof SCENE_ORDER)[number];
 
 /**
- * Bubble (speech) line. ≤ 12 characters to match "打工人" tone (per plan §1.9.2).
- * Cute / resigned / sardonic — never mean.
+ * Bubble (speech) line. ≤ 12 characters, cute / resigned / sardonic — never mean.
  */
 export const BUBBLE_BY_SCENE: Record<OctopusScene, readonly string[]> = {
-  "pretend-busy": ["忙死了", "改完这版就休息", "看起来很忙", "代码在飞", "在思考", "让我想想...", "用户又提需求了..."],
-  "stay-late": ["再熬一会", "夜宵时间", "就差一点了", "咖啡续命", "月亮真圆", "让我想想...", "用户不好糊弄"],
-  "breakdown": ["我裂开了", "求救信号", "想回家", "脑子空白", "为什么", "让我看看...", "用户又提需求了..."],
-  "lying-flat": ["摆烂中", "充电模式", "别叫我", "躺平第一", "我是土豆", "让我想想...", "我摸鱼应该不会被发现"],
-  "multi-tasking": ["一心多用", "5 个 tab", "分身乏术", "我能行", "稳住", "让我看看...", "用户又提需求了..."],
-  "payday": ["发工资!", "今天吃好", "奶茶自由", "终于到了", "我活了", "让我想想...", "用户不好糊弄"],
-  "salary-rejected": ["退款中", "系统抽风", "明天再试", "保住心态", "算了", "让我看看...", "用户又提需求了..."],
-  "treat-milk-tea": ["奶茶第一", "加珍珠", "半糖去冰", "今天你请", "快乐水", "让我想想...", "我摸鱼应该不会被发现"],
-  "friday-5pm": ["TGIF", "周末快乐", "倒计时", "下班万岁", "我自由了", "让我看看...", "用户不好糊弄"],
-  "toilet-slacking": ["蹲坑中", "带薪休息", "腿麻了", "思考人生", "摸鱼时间", "我摸鱼应该不会被发现", "让我想想..."],
-  "touch-fish": ["假装在工作", "刷新一下", "甩锅中", "策划未来", "看下手机", "我摸鱼应该不会被发现", "用户不好糊弄"],
-  "waiting-m3pro": ["等新电脑", "性能焦虑", "渲染中", "时间静止", "耐心等待", "让我想想...", "用户又提需求了..."],
-  "soul-leaving": ["灵魂出窍", "身体在工位", "意识漂浮", "我不在", "眼睛失焦", "让我看看...", "用户不好糊弄"],
-  "multitask": ["三屏模式", "并行处理", "CPU 满载", "我在哪", "快进快出", "让我想想...", "用户又提需求了..."],
+  "detective-study": ["在研究", "放大看看", "找到了", "等一下", "认真脸", "让我看看...", "用户不好糊弄"],
+  "worker-construction": ["施工中", "砸一下", "放桌子", "建好了", "戴好安全帽", "让我想想...", "我摸鱼应该不会被发现"],
 } as const;
 
 export interface OctopusState {
@@ -69,7 +50,7 @@ export interface OctopusState {
 
 /**
  * Events the FSM reacts to.
- * - TIMER_TICK: 33Hz tick (V1 setInterval), FSM 用 shouldRotate 判定 8s 切 scene,
+ * - TIMER_TICK: 33Hz tick, FSM 用 shouldRotate 判定 8s 切 scene,
  *               shouldHideBubble 判定 3s 后消 bubble. V2 切 scene 用 pickRandomScene.
  * - ROTATE_NOW: user or MCP asks to skip to the next scene immediately (V2: pickRandomScene).
  * - FORCE_SCENE: jump to a specific scene (MCP pet_show / pet_set_state).
@@ -90,21 +71,22 @@ export type OctopusEvent =
   | { type: "DRAG"; x: number; y: number };
 
 /**
- * V1 主调度: 8s 自动切 scene (跟 V1 8 切 scene 行为一致).
+ * V1 主调度: 8s 自动切 scene.
  * V2 调度: rotateScene action 内部用 pickRandomScene 替代 nextScene, 时间间隔仍 8s.
  * 用户操作 (CLICK / PET) 重置 autoNextAt 计时, 避免气泡还没看完就被切走.
  */
 export const ROTATION_INTERVAL_MS = 8_000;
 export const BUBBLE_DURATION_MS = 3_000;
-export const FRAME_INTERVAL_MS = 83; // 12 fps for 141-frame loop ≈ 11.7s
 export const MAX_AFFECTION = 100;
 
 /**
  * V2 调度: 随机播放去重窗口大小.
  *
- * 14 场景里排除最近 5 个, 等概率从剩下 9 个里选.
- * - 太小 (N=1): 仍可能"假装很忙 → 假装很忙"连续 2 次, 用户感觉在循环
- * - 太大 (N=10): 只剩 4 候选, 跟顺序轮转没区别
- * - N=5: 14-1-5=8 候选, 概率 1/8 每次, 跟 6s×14/8 ≈ 1.5min 内不重复, 体感"真随机"
+ * 2 场景里排除最近 1 个 (RECENT_WINDOW_SIZE 不能 ≥ 2, 否则候选为空).
+ * - N=1: 候选 1 个, 2 个场景随机不重复 (10/14 自动用这值, 2 场景同样工作)
+ * - N=0: 跟当前一起, 候选 0 个, 防御分支随机一个 (跟 N=1 等价)
+ * - N=2: 候选空, 退化为随机所有 (跟 N=0 等价)
+ *
+ * 注: 14 场景时期 N=5 调优 14-1-5=8 候选. 2 场景时期 N=1 即可.
  */
-export const RECENT_WINDOW_SIZE = 5;
+export const RECENT_WINDOW_SIZE = 1;
