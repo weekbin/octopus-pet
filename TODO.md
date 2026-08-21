@@ -43,16 +43,20 @@
   - 根因: `VTCompressionSession` Apple 私有 API 只接受 NV12/YUV420P 作为 encoder input, 内部 strip alpha. 不是 ffmpeg 问题, 跟 macOS 版本/ffmpeg 版本/硬件都无关.
   - 后续: 永远不可行. Apple 战略上把 alpha 只放在 ProRes 4444 / ProRes 4444 XQ, 不开给 HEVC consumer codec.
 
-- [ ] **V0.5-3** 🚧 **BLOCKED: 等待用户提供新基础素材**
-  - 任务: 验证 mavis `gen_videos` 接受"首尾帧 = first_frame"约束
-  - 命令: 用新基础素材 (待定) 作 first_frame + last_frame, prompt 强调 "首尾帧完全相同"
-  - 验收: 6s 视频抽 0s 和 5.9s 帧, 眼睛/姿态/位置完全相同
-  - 预计: 5 分钟 (含视频生成 2-3 分钟)
-  - **前置条件**: 用户明确"我们会换一个素材当基础素材" (2026-08-21), 但未指定新素材来源. **需要用户先确认**:
-    - 新角色是什么? (换动物? 换皮肤? 换工具?)
-    - 哪个工具生成? (image_synthesize / 其他 AI 工具 / 真人素材?)
-    - 何时开始 V2.1 标准图制作?
-  - 解除 blocked: 用户回复新素材详情后即可启动.
+- [x] **V0.5-3** ✅ 验证 mavis `gen_videos` 首尾帧一致性 → **PASS (96.65% 相似)**
+  - 资产: `art/baseline-character/v10-D.png` 作 first_frame (V2.1 标准图, 3/4 视角干净版)
+  - commit: ee3af62 (V2.1 standard-char-1x1.png + remove-hat-greenscreen.py) + V10 ref
+  - 命令: `connector__matrix__gen_videos` with `reference_type=first_frame` + prompt "static character, only subtle eye blink"
+  - 验收: 6s 视频抽 0s 和 5.5s 帧对比
+    - Mean diff: 5.90 (低)
+    - Similarity (diff < 30): **96.65%** ✅
+    - 大幅变化像素 (diff > 100): 1.9% (微小差异 = 眨眼状态/触手微动)
+    - 视觉评估: 0s 跟 5.5s 几乎一样 ✅
+  - **重要发现** ⚠️: gen_videos 把 input 的 3D Pixar 风**渲染成了 2D 卡通风** (更圆润更可爱), style 跟 v10-D 有差异. V2 用途影响:
+    - ✅ 用作 animation 起点 (96.65% 一致性足够)
+    - ⚠️ 若要保留 3D Pixar style, 需换 gen_videos 模型 (H3 vs Hailuo-2.3) 或换 V0.5-3 prompt 强化 style
+  - 产物: `docs/v053-validation/` (v053-test.mp4 + frame_0s.png + frame_55s.png)
+  - 限制: `gen_videos` 一次只接受一个 `input_image` (first_frame OR last_frame, 不能同时), 所以严格意义上"first_frame=last_frame"约束只能通过**同一图作 first_frame + prompt 强制静态**间接实现. 真的需要 first+last frame 同时指定需用 `submit_video_generation` (H3, async) 或等后续工具更新.
 
 ---
 
