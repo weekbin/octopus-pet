@@ -127,8 +127,7 @@ fn route(
         ("POST", "/show") => {
             let v: serde_json::Value = serde_json::from_str(&body_str).unwrap_or_default();
             let scene = v.get("state").and_then(|x| x.as_str()).unwrap_or("");
-            let now = now_ms();
-            match actions::apply_show(app, &state, scene, now) {
+            match actions::apply_show(app, &state, scene) {
                 Ok(msg) => (
                     200,
                     "application/json",

@@ -7,7 +7,10 @@
 // 生成的 SCENE_IDS / SCENE_ORDER / BUBBLE_BY_SCENE 来自
 // scene-registry.generated.ts, 跟 Rust SCENES 共享 scenes.json.
 
-export type OctopusScene = "detective-study" | "worker-construction";
+import { SCENE_IDS } from "./scene-registry.generated";
+
+// Scene id union 自动从 scenes.json 派生, 加新场景不需手改此类型.
+export type OctopusScene = (typeof SCENE_IDS)[number];
 
 export {
   SCENE_IDS,

@@ -24,7 +24,6 @@ pub fn apply_show(
     app: Option<&AppHandle>,
     state: &Arc<Mutex<SharedState>>,
     scene: &str,
-    now: u64,
 ) -> Result<String, String> {
     if !SCENES.contains(&scene) {
         return Err(format!("unknown scene: {}", scene));
@@ -38,7 +37,7 @@ pub fn apply_show(
     if let Some(app) = app {
         let _ = app.emit(
             "octopus://event",
-            serde_json::json!({"type": "FORCE_SCENE", "scene": scene, "now": now}),
+            serde_json::json!({"type": "FORCE_SCENE", "scene": scene}),
         );
     }
     Ok(format!("switched to {}", scene))

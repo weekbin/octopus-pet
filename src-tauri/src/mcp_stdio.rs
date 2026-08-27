@@ -149,7 +149,7 @@ async fn handle_tool_call(
     match name {
         TOOL_PET_SHOW => {
             let scene = args.get("state").and_then(|v| v.as_str()).unwrap_or("");
-            match actions::apply_show(app, state, scene, now) {
+            match actions::apply_show(app, state, scene) {
                 Ok(msg) => text_response(id, msg),
                 Err(e) => err_response(id, -32602, e),
             }
