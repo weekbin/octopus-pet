@@ -13,13 +13,14 @@ Antigravity / Gemini CLI).
 
 | 项 | 值 |
 |---|---|
-| 状态 | V1.5 (默认 2 个 V2 视频成品, 14 V1 spritesheet 表情包移到 archive) |
-| 栈 | Tauri 2 · React 19 · Vite 6 · XState 5 · Rust 1.77+ |
-| 窗口 | 116×116 透明, V2 APNG 192×192 默认 `objectFit=fill` 缩放适配 |
-| **2 V2 场景 (V1.5 默认)** | detective-study (H3 戴帽研究) · worker-construction (gen_videos 工人施工) |
+| 状态 | **V2.1 (2026-08-27) 事件驱动 scene 调度 (apng-js end → SCENE_LOOPED)**, 默认 2 个 V2 视频成品 |
+| 栈 | Tauri 2 · React 19 · Vite 6 · XState 5 · apng-js 1.1.5 · Rust 1.77+ |
+| 窗口 | 116×116 透明, V2 APNG 192×192 在 `<canvas>` 内部 (CSS 缩放到 116×116) |
+| **2 V2 场景 (V2.1 默认)** | detective-study (H3 戴帽研究) · worker-construction (gen_videos 工人施工) |
 | 6 MCP tools | pet_show · pet_ask · pet_get_state · pet_set_state · pet_pet · pet_list_states |
 | **2 V2 APNG** | 50 帧/张 × 132ms ≈ 6.6s 循环, RGBA, 192×192, 2.3MB 各, 走 PIL v3 chroma key |
 | 14 V1 spritesheet (废弃) | 移到 `app/public/assets/octopus/_archive-v1-spritesheets/` 不再用 |
+| **scene 调度** | **事件驱动** (apng-js `end` 事件 → `SCENE_LOOPED` → FSM `rotateScene`), 0 累积延迟, 严格对齐 frame 0 |
 | Spec 依据 | [agent-plugins.org v1.0.0](https://agent-plugins.org/specification) + [MCP 2024-11-05](https://modelcontextprotocol.io/specification/2024-11-05) + [agentskills.io](https://agentskills.io/specification) |
 | HTTP fallback | `:9527` (V1 demo 用) |
 
@@ -61,28 +62,49 @@ Antigravity / Gemini CLI).
   `recentScenes` (滚动窗口 N=5) 后等概率选. **FORCE_SCENE 不更新 recentScenes**
   (MCP 显式控制不影响自然轮转序列). `nextScene` (V1 顺序) 函数保留导出,
   仅供文档/测试. 14 步模拟 sim 14 次: 12/14 唯一场景, 0 个 5 步内重复.
-- **V1.5 渲染 + V2 调度 (回退 V2.1 路线)**: 用户 2026-08-17 18:21 反馈 V2.1
-  视频流 (webm + canvas chroma key) "配色好差, 不如之前舒服". 根因: canvas 实时
-  chroma key 边缘半透明瑕疵 + 配色偏暗 (HSV 70-170° 误判场景中"非纯色的暗色"
-  为绿背景). 切回 V1 渲染 (`<img>` + `frameToGrid` 选 141 帧, spritesheet 风格,
-  视觉舒服), 保留 V2 调度 (随机+去重). **SCENE_ENDED 事件已从 FSM 移除** (V2.1
-  路线副产物, 不再需要), 切 scene 走 V1 `TIMER_TICK` 33Hz → `shouldRotate` (8s
-  autoNextAt 判定). 用户后续" 别的办法做动画切换" 待 V2.1 治本 (例如 cross-fade
-  V1 sprite + V2 APNG, 或 H3 视频流 + 更好 chroma key) 再讨论.
-- **V2.1 调度 (已废弃, 2026-08-17)**: 视频播完事件驱动 (替代 setInterval 8s 计时).
-  用户曾反馈 setInterval 时间卡不准, 事件循环延迟累积. 改成 `<video>` 元素
-  `onEnded` 事件 → 发 `SCENE_ENDED` → FSM 切 scene. 跟 sprite 视频时长 (6.6s) 严格
-  同步, **0 累积延迟**. **V2.1 整体回退后不再使用, 事件类型已从 OctopusEvent 移除**,
-  不要再加回.
-- **V2.1 渲染 (已废弃, 2026-08-17)**: hidden webm + visible canvas + JS chroma key
-  (绕开 WKWebView webm alpha bug). 4 帧实测: 透明背景 + 视频元素事件驱动切 scene
-  PASS, 但视觉差. **V2.1 整体回退后不再使用, 不要再走这条**. 若将来需要 webm
-  alpha 在桌宠内播放, 重新评估 WKWebView 是否修了 webm alpha bug 再考虑.
-- **改场景清单 (V1.5 2 场景)**: 两处同步 — `app/src/state/types.ts` (SCENE_ORDER) +
+- **V2.1 (2026-08-27) 事件驱动 scene 调度, 替代 V1.5 setInterval 33Hz**:
+  用户 2026-08-24 反馈 "其实最理想的还是如果能用事件逻辑来控制动画会比较好,
+  定时器总是不太稳定的". V2.1 治本 4 个长期 bug:
+  - **P1 APNG 中段剪切**: 8s setInterval 跟 6.6s APNG 循环不整除, 每次切都在
+    循环中段. V2.1 改听 apng-js Player `end` 事件 (PIL loop=1, 50 帧播完
+    就发), scene 切严格对齐到 APNG 最后一帧渲染完, 0 累积延迟.
+  - **P2 wall-clock 漂移** (NTP/DST/手动校时): V1.5 依赖 `Date.now() + ROTATION_INTERVAL_MS`
+    比较, 时钟跳变就崩. V2.1 不再有 `autoNextAt` 字段, 也不需要 `now` 比较.
+  - **P3 高频 IPC 压力**: V1.5 33Hz 心跳 → 30 次/秒 sync_state. V2.1 状态变化
+    ~0.15Hz (每 6.6s 一次), race window 几乎不存在.
+  - **P4 镜像乱序**: 跟 P3 同根, race frequency 降到 ~0.
+  - **P5 `pickBubble` undefined**: 顺手治, 加空数组防御 (未来加新 scene 忘配
+    BUBBLE_BY_SCENE 不会运行时挂).
+  渲染: `<img>` → `<canvas>` + apng-js. 视觉跟 V1.5 一致 (APNG 解码出来
+  直接 drawImage, 无 chroma key 二次处理). bubble 计时: 单独 setTimeout
+  (BUBBLE_DURATION_MS), 不用全局 timer.
+- **V1.5 渲染 + V2 调度 (TIMER_TICK 33Hz, 已废弃, 2026-08-27)**: V2.1 之前的
+  状态. setInterval(33ms) → TIMER_TICK → shouldRotate (8s autoNextAt) → rotateScene.
+  用户 2026-08-21 切回 V1 渲染 (`<img>` 浏览器原生循环) 是因为 V2.1 webm + canvas
+  chroma key 视觉差. 但定时器本身的不稳定性一直埋着, V2.1 才治本.
+- **V2.1 渲染 (已废弃, 2026-08-17)**: 第一次 V2.1 尝试走 hidden webm + visible canvas
+  + JS chroma key (绕开 WKWebView webm alpha bug). 用户反馈 "配色好差, 不如之前舒服".
+  根因: canvas 实时 chroma key 边缘半透明瑕疵 + 配色偏暗. **不要再走 webm+chroma
+  key 这条路**. V2.1 (2026-08-27) 用 apng-js+canvas 替代, 走原生 RGBA, 无需 chroma key.
+- **V2.1 调度 (已废弃, 2026-08-17)**: 第一次 V2.1 尝试的事件驱动走 `<video>.onEnded`.
+  这条思路对了 (事件驱动, 0 累积延迟), 但因为 webm 视觉差被一起回退. 现在 V2.1
+  (2026-08-27) 重新接上事件驱动思路, 用 apng-js `end` 事件 (跟 onEnded 概念一致),
+  但走 RGBA APNG 不用 webm.
+- **改场景清单 (V2.1 2 场景, 扩到 N+1 个流程不变)**: 两处同步 —
+  `app/src/state/types.ts` (SCENE_ORDER + BUBBLE_BY_SCENE) +
   `src-tauri/src/mcp_stdio.rs` (SCENES) + 对应 APNG 文件存在
-  `app/public/assets/octopus/v2/<scene>.png`. V1.5 不再用 spritesheet-manifest.json
+  `app/public/assets/octopus/v2/<scene>.png`. V1.5 起不用 spritesheet-manifest.json
   (scene→APNG 1:1 命名, 减一个 JSON 副本). 改完跑
   `bash scripts/check-scenes-sync.sh` (CI 也会跑, 校验两源一致 + APNG 存在).
+  **V2.1 APNG numPlays 必须是 1** (PIL `loop=1`), 这样 apng-js Player 才会在
+  播完一轮后 emit `'end'` 事件. `numPlays=0` (无限循环) 不会触发 `'end'`,
+  scene 永远不切. `scripts/extract-chromakey-apng.py` 默认就是 loop=1.
+- **V2.1 scene 切流程 (事件链)**: `apng-js Player 'end' 事件` →
+  `OctopusPet.tsx` `p.on("end", () => send SCENE_LOOPED)` →
+  `XState FSM rotateScene action` → `context.scene` 变化 →
+  `OctopusPet` useEffect 触发 cleanup (旧 player.stop) → 加载新 APNG → 新的
+  Player 自动 start → 下一轮 6.6s 后再 emit 'end'. 整条链路 ms 级响应,
+  无 setInterval 累计延迟.
 - **改 spritesheet**: 141 帧是源头真理. 真要改, 从 `~/Works/octopus-worker-meme` 抽,
   跑 `extract-and-link-octopus-frames.sh` + `spritesheet-builder.sh` + `generate-spritesheet-manifest.sh`.
 - **换桌宠 idle 动画素材**: 走 `docs/breath-pipeline.md` 完整流程 (image_synthesize

@@ -7,6 +7,56 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
+- **V2.1 (2026-08-27): 事件驱动 scene 调度, 替代 V1.5 33Hz setInterval**.
+  用户 2026-08-24 23:19 反馈 "其实最理想的还是如果能用事件逻辑来控制动画
+  会比较好, 定时器总是不太稳定的". 治本 4 个长期 bug:
+  - **P1 APNG 中段剪切**: 8s setInterval 跟 6.6s APNG 循环不整除, 每次
+    切都在循环中段. V2.1 改听 apng-js Player `'end'` 事件 (PIL loop=1,
+    50 帧播完就 emit), scene 切严格对齐 APNG 最后一帧渲染完, **0 累积延迟**.
+  - **P2 wall-clock 漂移** (NTP/DST/手动校时): V1.5 依赖 `Date.now()` +
+    `ROTATION_INTERVAL_MS` 比较, 时钟跳变就崩. V2.1 拆掉 `autoNextAt` 字段,
+    不再有 `now` 比较.
+  - **P3 高频 IPC 压力**: V1.5 33Hz 心跳 → 30 次/秒 `sync_state`. V2.1
+    状态变化 ~0.15Hz (每 6.6s 一次).
+  - **P4 镜像乱序**: 跟 P3 同根, race frequency 降到 ~0.
+
+  渲染: `<img>` (浏览器原生循环, 黑盒) → `<canvas>` + apng-js (JS 解码 +
+  drawImage, 拿 frame/end 事件). 视觉跟 V1.5 一致 (APNG 解码出来直接
+  drawImage, 无 chroma key 二次处理, 不会重复 V2.1 webm 路线 "配色好差"
+  的坑).
+
+  调度: `setInterval(33ms)` `TIMER_TICK` → `shouldRotate` guard (8s
+  `autoNextAt`) → `rotateScene` 整套拆掉. 新事件 `SCENE_LOOPED` (来自
+  apng-js `'end'`) → `rotateScene` action. guard `shouldRotate` 删,
+  guard `shouldHideBubble` 删 (改用 setTimeout).
+
+  bubble 计时: 单独 `useEffect` 挂 `setTimeout(BUBBLE_DURATION_MS)` →
+  `DISMISS_BUBBLE` 事件, 不用全局 33Hz tick. 字段 `bubbleHideAt` 保留
+  (Rust `SharedState.bubble_hide_at` 镜像用, pet_get_state 读得到).
+
+  顺手治 P5: `pickBubble(scene)` 加空数组防御, 返回 `""` 而不是 `undefined`
+  (未来加新 scene 忘配 `BUBBLE_BY_SCENE` 不会运行时挂).
+
+  关键修复 (改造中发现的 2 个 bug):
+  - **apng-js numPlays=1 (PIL loop=1)**: 跟直觉相反, APNG 文件只播一轮就
+    停, 不会 wrap 回 frame 0. 原来想用 `frame` 事件 wrap-around 检测
+    (49→0) 永远等不到. 改用 `'end'` 事件才对.
+  - **Vite CJS interop 已 unwrap**: `import apngJsModule from 'apng-js'`
+    在 Vite ESM 下, 因为 `__esModule=true`, `apngJsModule` 已经是
+    `parseAPNG` 函数本身. 在函数上找 `.default` 全是 undefined →
+    `parseAPNG is not a function`. 修复: `typeof === 'function'` 短路,
+    再 fallback 到对象形态.
+
+  时序证据 (3 cycle console 时戳, 误差 < 90ms 来自 apng-js rAF 抖动):
+  ```
+  tEnd(cycle 2) - t0(cycle 2) = 6530.0ms (APNG playTime=6600ms)
+  tEnd(cycle 3) - t0(cycle 3) = 6513.5ms
+  ```
+
+  测试: 24/24 vitest + 8/8 cargo test 通过. tsc 0 错误.
+  改动文件: `app/src/{components/OctopusPet.tsx, state/{octopus-fsm.ts,
+  octopus-fsm.test.ts, types.ts}}` (212+ / 119-).
+
 - **V1.5 (2026-08-21): 默认只跑 2 个 V2 视频成品, 不再用 14 V1 spritesheet**.
   用户 2026-08-21 19:14 反馈 "我们现在是默认的 2 个做好的成品啊, 之前那些
   (14 V1 打工人 meme 表情包) 不要用, 我们做的事桌面宠物, 思路不要走错了".
