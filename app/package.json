@@ -19,6 +19,8 @@
     "@tauri-apps/plugin-dialog": "^2.2.0",
     "@tauri-apps/plugin-fs": "^2.2.0",
     "@xstate/react": "^5.0.0",
+    "apng-js": "^1.1.5",
+    "lottie-web": "^5.13.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "xstate": "^5.19.0"
@@ -28,6 +30,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",
+    "jsdom": "^30.0.1",
     "typescript": "^5.7.2",
     "vite": "^6.0.5",
     "vitest": "^2.1.9"
