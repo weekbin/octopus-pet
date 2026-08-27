@@ -7,6 +7,24 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
+- **M1-M4 refactor (2026-08-27): 架构清理 + scenes.json 单一源 + 自动生成 TS/Rust**.
+  用户反馈 "整理优化下当前的架构设计, 确保设计和代码上的逻辑都是最精简
+  的, 没有死代码, 历史代码的冗余逻辑, 为后续开发迭代做准备". 完成:
+  - **M1 死代码/历史冗余**: 删 `nextScene` (无引用), 删 `pet_set_state` MCP
+    别名 (5 tools 总), 5 个文件头注释瘦身 (V1/V1.5/V2.1 历史叙事挪
+    CHANGELOG), 删 test-*.html / spritesheet-*.png / `name=🐙` 残留文件
+  - **M2 模块重构**: 抽 `app/src/state/apng.ts` (loadApng 收敛 CJS interop),
+    抽 `useApngPlayer` hook (OctopusPet 52 行 → 1 行), 用官方 `APNG` 类型
+  - **M3 标准范式**: `useMcpBridge` → `useTauriEventBus` (改名字反映实际机制,
+    删 dead test-event listener), `OctopusEvent.now` 字段瘦身 (只在
+    CLICK/PET/ASK 保留, 其他 4 个事件完全不需要), Bubble 30 行 inline 样式
+    挪到 global.css, Rust `SharedState` + `recent_scenes` 字段
+  - **M4 单一源**: 新建 `scenes.json`, `build_scene_registry.py` 从
+    scenes.json 自动生成 `scene-registry.generated.ts` (SCENE_IDS /
+    SCENE_ORDER / BUBBLE_BY_SCENE) 和 `scene_registry_generated.rs`
+    (SCENES / BUBBLE_LINES), `OctopusScene` 类型从 `SCENE_IDS` 派生.
+    `check-scenes-sync.sh` 适配新数据流 + CI 加 `--check` 步骤.
+  - 加新场景: 改 scenes.json + 跑 build 脚本, 不再改 TS/Rust 多处
 - **V2.1 (2026-08-27): 事件驱动 scene 调度, 替代 V1.5 33Hz setInterval**.
   用户 2026-08-24 23:19 反馈 "其实最理想的还是如果能用事件逻辑来控制动画
   会比较好, 定时器总是不太稳定的". 治本 4 个长期 bug:
