@@ -90,12 +90,24 @@ Antigravity / Gemini CLI).
   这条思路对了 (事件驱动, 0 累积延迟), 但因为 webm 视觉差被一起回退. 现在 V2.1
   (2026-08-27) 重新接上事件驱动思路, 用 apng-js `end` 事件 (跟 onEnded 概念一致),
   但走 RGBA APNG 不用 webm.
-- **改场景清单 (V2.1 2 场景, 扩到 N+1 个流程不变)**: 两处同步 —
-  `app/src/state/types.ts` (SCENE_ORDER + BUBBLE_BY_SCENE) +
-  `src-tauri/src/mcp_stdio.rs` (SCENES) + 对应 APNG 文件存在
-  `app/public/assets/octopus/v2/<scene>.png`. V1.5 起不用 spritesheet-manifest.json
-  (scene→APNG 1:1 命名, 减一个 JSON 副本). 改完跑
-  `bash scripts/check-scenes-sync.sh` (CI 也会跑, 校验两源一致 + APNG 存在).
+- **改场景清单 (V2.1 2 场景, 扩到 N+1 个流程不变)**:
+  **M4 之后**: 单一源是 **`scenes.json`** (项目根). 改完跑
+  ```bash
+  bash scripts/build-scene-registry.sh           # 生成 TS + Rust
+  bash scripts/check-scenes-sync.sh             # 校验 (CI 必跑)
+  ```
+  生成文件:
+  - `app/src/state/scene-registry.generated.ts` → `SCENE_IDS` / `SCENE_ORDER` / `BUBBLE_BY_SCENE`
+  - `src-tauri/src/scene_registry_generated.rs` → `SCENES` / `BUBBLE_LINES`
+  业务代码从 `./types` / `crate::scene_registry_generated` re-export, 不直接 import generated.
+
+  **加新场景 5 步**:
+  1. 跑 `docs/v2-h3-to-pet-workflow.md` (H3 / gen_videos → 抽帧 → chroma key v3 → 192×192 APNG)
+  2. 放 `app/public/assets/octopus/v2/<new-scene>.png`
+  3. 改 `scenes.json` 加 entry (`id`, `source`, `bubbleLines`)
+  4. `bash scripts/build-scene-registry.sh`
+  5. `bash scripts/check-scenes-sync.sh` (也跑 `bash scripts/lint-octopus-plugin.sh` + 跑 test)
+
   **V2.1 APNG numPlays 必须是 1** (PIL `loop=1`), 这样 apng-js Player 才会在
   播完一轮后 emit `'end'` 事件. `numPlays=0` (无限循环) 不会触发 `'end'`,
   scene 永远不切. `scripts/extract-chromakey-apng.py` 默认就是 loop=1.

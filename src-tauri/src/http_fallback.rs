@@ -28,7 +28,7 @@ use std::time::Duration;
 use tauri::AppHandle;
 
 use crate::actions;
-use crate::mcp_stdio::SCENES;
+use crate::scene_registry_generated::SCENES;
 use crate::state_bridge::SharedState;
 
 pub fn start(

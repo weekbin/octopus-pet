@@ -12,7 +12,7 @@
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter};
 
-use crate::mcp_stdio::SCENES;
+use crate::scene_registry_generated::SCENES;
 use crate::state_bridge::SharedState;
 
 pub const BUBBLE_DURATION_MS: u64 = 3_000;

@@ -10,6 +10,7 @@ use tauri::Manager;
 mod actions;
 mod http_fallback;
 mod mcp_stdio;
+mod scene_registry_generated;
 mod state_bridge;
 
 use state_bridge::SharedState;

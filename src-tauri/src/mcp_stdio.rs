@@ -16,6 +16,7 @@ use tauri::AppHandle;
 use tokio::io::{AsyncBufReadExt, BufReader};
 
 use crate::actions;
+use crate::scene_registry_generated::SCENES;
 use crate::state_bridge::SharedState;
 
 #[derive(Debug, Deserialize)]
@@ -43,12 +44,8 @@ pub const TOOL_PET_GET_STATE: &str = "pet_get_state";
 pub const TOOL_PET_PET: &str = "pet_pet";
 pub const TOOL_PET_LIST_STATES: &str = "pet_list_states";
 
-// V1.5 (2026-08-21): 默认只跑 2 个 V2 视频成品. 14 V1 spritesheet 表情包不在默认.
-// 加新场景: SCENES 同步 + types.ts SCENE_ORDER + scenes.ts + check-scenes-sync.sh.
-pub const SCENES: &[&str] = &[
-    "detective-study",
-    "worker-construction",
-];
+// V2.1 (2026-08-27): SCENES 从 scenes.json 自动生成, 见 scene_registry.generated.rs.
+// 加新场景: 改 scenes.json → `bash scripts/build-scene-registry.sh` 重新生成.
 
 /// Start the MCP stdio server. `app` is optional: when None (headless mode),
 /// tauri events are not emitted; when Some, tool calls also push to the webview.

@@ -1,26 +1,19 @@
 // Octopus Pet — Type definitions for the 2-scene FSM.
 // V2.1 (2026-08-27): 事件驱动 (apng-js end → SCENE_LOOPED), 0 累积延迟.
 // 完整演进历史见 CHANGELOG.md; 协作规则见 AGENTS.md.
+//
+// 场景数据从 scenes.json (单一源) 自动生成:
+//   bash scripts/build-scene-registry.sh
+// 生成的 SCENE_IDS / SCENE_ORDER / BUBBLE_BY_SCENE 来自
+// scene-registry.generated.ts, 跟 Rust SCENES 共享 scenes.json.
 
-/**
- * 2 V2 视频场景 (detective-study + worker-construction).
- * V2.1 调度: 6.6s APNG 循环 → end 事件 → pickRandomScene (随机 + 去重).
- * 加新场景走 `docs/v2-h3-to-pet-workflow.md` + `scripts/check-scenes-sync.sh` 校验.
- */
-export const SCENE_ORDER = [
-  "detective-study",
-  "worker-construction",
-] as const;
+export type OctopusScene = "detective-study" | "worker-construction";
 
-export type OctopusScene = (typeof SCENE_ORDER)[number];
-
-/**
- * Bubble (speech) line. ≤ 12 characters, cute / resigned / sardonic — never mean.
- */
-export const BUBBLE_BY_SCENE: Record<OctopusScene, readonly string[]> = {
-  "detective-study": ["在研究", "放大看看", "找到了", "等一下", "认真脸", "让我看看...", "用户不好糊弄"],
-  "worker-construction": ["施工中", "砸一下", "放桌子", "建好了", "戴好安全帽", "让我想想...", "我摸鱼应该不会被发现"],
-} as const;
+export {
+  SCENE_IDS,
+  SCENE_ORDER,
+  BUBBLE_BY_SCENE,
+} from "./scene-registry.generated";
 
 export interface OctopusState {
   /** Current pet scene. */

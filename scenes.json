@@ -1,0 +1,16 @@
+{
+  "$schema": "./scenes.schema.json",
+  "_comment": "V2.1 scene 元数据单一源. 改完跑 `bash scripts/build-scene-registry.sh` 生成 TS + Rust, CI 强制. 加新场景: 1) 跑 H3 / gen_videos 2) extract-chromakey-apng.py 转 APNG 3) 放 app/public/assets/octopus/v2/<id>.png 4) 加这条 entry 5) 跑 build-scene-registry.sh 6) 跑 check-scenes-sync.sh. 详见 AGENTS.md V2.1 章节.",
+  "scenes": [
+    {
+      "id": "detective-study",
+      "source": "H3 戴帽研究 (h3-dual-image-video-gen skill)",
+      "bubbleLines": ["在研究", "放大看看", "找到了", "等一下", "认真脸", "让我看看...", "用户不好糊弄"]
+    },
+    {
+      "id": "worker-construction",
+      "source": "gen_videos 工人施工",
+      "bubbleLines": ["施工中", "砸一下", "放桌子", "建好了", "戴好安全帽", "让我想想...", "我摸鱼应该不会被发现"]
+    }
+  ]
+}
