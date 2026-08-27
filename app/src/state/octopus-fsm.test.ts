@@ -85,7 +85,7 @@ describe("octopus-fsm (V2.1: 2 V2 场景 + 事件驱动)", () => {
       const actor = createActor(octopusMachine).start();
       const initial = actor.getSnapshot().context.scene;
       // V2.1: apng-js Player 循环边界发的事件, 取代 33Hz 计时
-      actor.send({ type: "SCENE_LOOPED", now: 0 });
+      actor.send({ type: "SCENE_LOOPED" });
       const next = actor.getSnapshot().context.scene;
       // 2 场景 N=1 必切到另一个
       expect(next).not.toBe(initial);
@@ -99,7 +99,7 @@ describe("octopus-fsm (V2.1: 2 V2 场景 + 事件驱动)", () => {
       const actor = createActor(octopusMachine).start();
       const history: OctopusScene[] = [actor.getSnapshot().context.scene];
       for (let i = 0; i < 10; i++) {
-        actor.send({ type: "SCENE_LOOPED", now: i });
+        actor.send({ type: "SCENE_LOOPED" });
         const newScene = actor.getSnapshot().context.scene;
         history.push(newScene);
         // 必不连续重复
@@ -115,7 +115,7 @@ describe("octopus-fsm (V2.1: 2 V2 场景 + 事件驱动)", () => {
       const actor = createActor(octopusMachine).start();
       // 极端: now 倒退 1 小时 (NTP 校时), 事件仍正常切 scene
       const oneHourAgo = Date.now() - 3_600_000;
-      actor.send({ type: "SCENE_LOOPED", now: oneHourAgo });
+      actor.send({ type: "SCENE_LOOPED" });
       // 切了就行, 不像 V1.5 autoNextAt 会被 wall-clock 跳变影响
       expect(actor.getSnapshot().context.scene).not.toBe("detective-study");
     });
@@ -144,8 +144,8 @@ describe("octopus-fsm (V2.1: 2 V2 场景 + 事件驱动)", () => {
     it("picks bubble from current scene's text pool", () => {
       const actor = createActor(octopusMachine).start();
       // Force scene to "worker-construction" so we know which pool
-      actor.send({ type: "FORCE_SCENE", scene: "worker-construction", now: Date.now() });
-      actor.send({ type: "DISMISS_BUBBLE", now: Date.now() });
+      actor.send({ type: "FORCE_SCENE", scene: "worker-construction" });
+      actor.send({ type: "DISMISS_BUBBLE" });
       actor.send({ type: "CLICK", now: Date.now() });
       const bubble = actor.getSnapshot().context.bubble!;
       const pool = BUBBLE_BY_SCENE["worker-construction"];
@@ -174,14 +174,14 @@ describe("octopus-fsm (V2.1: 2 V2 场景 + 事件驱动)", () => {
   describe("FORCE_SCENE event", () => {
     it("jumps to specified scene", () => {
       const actor = createActor(octopusMachine).start();
-      actor.send({ type: "FORCE_SCENE", scene: "worker-construction", now: Date.now() });
+      actor.send({ type: "FORCE_SCENE", scene: "worker-construction" });
       expect(actor.getSnapshot().context.scene).toBe("worker-construction");
     });
 
     it("does not update recentScenes (MCP 控制不影响自然轮转)", () => {
       const actor = createActor(octopusMachine).start();
       const recentBefore = actor.getSnapshot().context.recentScenes;
-      actor.send({ type: "FORCE_SCENE", scene: "worker-construction", now: Date.now() });
+      actor.send({ type: "FORCE_SCENE", scene: "worker-construction" });
       expect(actor.getSnapshot().context.recentScenes).toEqual(recentBefore);
     });
   });
@@ -193,7 +193,7 @@ describe("octopus-fsm (V2.1: 2 V2 场景 + 事件驱动)", () => {
       actor.send({ type: "CLICK", now: t0 });
       expect(actor.getSnapshot().context.bubble).not.toBeNull();
       // V2.1: 组件 BUBBLE_DURATION_MS 后 setTimeout 触发, 而不是 33Hz 轮询
-      actor.send({ type: "DISMISS_BUBBLE", now: t0 + BUBBLE_DURATION_MS });
+      actor.send({ type: "DISMISS_BUBBLE" });
       expect(actor.getSnapshot().context.bubble).toBeNull();
       expect(actor.getSnapshot().context.bubbleHideAt).toBeNull();
     });
@@ -203,7 +203,7 @@ describe("octopus-fsm (V2.1: 2 V2 场景 + 事件驱动)", () => {
     it("rotates scene immediately", () => {
       const actor = createActor(octopusMachine).start();
       const initialScene = actor.getSnapshot().context.scene;
-      actor.send({ type: "ROTATE_NOW", now: Date.now() });
+      actor.send({ type: "ROTATE_NOW" });
       expect(actor.getSnapshot().context.scene).not.toBe(initialScene);
       expect(actor.getSnapshot().context.recentScenes).toHaveLength(1);
     });

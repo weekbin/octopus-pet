@@ -47,26 +47,25 @@ export interface OctopusState {
 }
 
 /**
- * Events the FSM reacts to.
- * - SCENE_LOOPED: apng-js Player 检测到 APNG 循环边界 (上一帧 = 最后一帧,
- *                 当前帧 = 0). 事件驱动, 0 累积延迟, 治 V1.5 33Hz 漂移
- *                 + 中段剪切 (P1/P2). 触发 rotateScene.
+ * Events the FSM reacts to. `now: number` only on events that need it for
+ * time-based context (currently: bubbleHideAt computation).
+ * - SCENE_LOOPED: apng-js Player 完成一轮循环 (numPlays=1). 触发 rotateScene.
  * - ROTATE_NOW: user or MCP asks to skip to the next scene immediately.
  * - FORCE_SCENE: jump to a specific scene (MCP pet_show).
- * - CLICK: single click on the pet — show a random bubble, +1 affection.
- * - PET: pet the head (MCP pet_pet or right-click context) — +5 affection, "啊" bubble.
+ * - CLICK: show a random bubble, +1 affection.
+ * - PET: show "啊~" bubble, +5 affection.
  * - ASK: external agent says something (MCP pet_ask) — show bubble.
  * - DISMISS_BUBBLE: hide the bubble (setTimeout in OctopusPet 自动触发).
- * - DRAG: user is dragging the window (handled outside FSM, just persists position).
+ * - DRAG: user is dragging the window.
  */
 export type OctopusEvent =
-  | { type: "SCENE_LOOPED"; now: number }
-  | { type: "ROTATE_NOW"; now: number }
-  | { type: "FORCE_SCENE"; scene: OctopusScene; now: number }
+  | { type: "SCENE_LOOPED" }
+  | { type: "ROTATE_NOW" }
+  | { type: "FORCE_SCENE"; scene: OctopusScene }
   | { type: "CLICK"; now: number }
   | { type: "PET"; now: number }
   | { type: "ASK"; text: string; now: number }
-  | { type: "DISMISS_BUBBLE"; now: number }
+  | { type: "DISMISS_BUBBLE" }
   | { type: "DRAG"; x: number; y: number };
 
 /**

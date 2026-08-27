@@ -47,6 +47,40 @@ body {
   }
 }
 
+.bubble {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.95);
+  color: #222;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 8px;
+  font-weight: 500;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", sans-serif;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+  animation: bubble-pop 0.18s ease-out;
+  z-index: 10;
+}
+
+.bubble::after {
+  /* Triangle tail pointing down at the pet */
+  content: "";
+  position: absolute;
+  bottom: -3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+  border-top: 3px solid rgba(255, 255, 255, 0.95);
+}
+
 /* Drag visual feedback */
 .octopus-pet:active {
   cursor: grabbing;

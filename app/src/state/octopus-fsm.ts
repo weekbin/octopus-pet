@@ -78,13 +78,10 @@ export const octopusMachine = setup({
   },
   actions: {
     /**
-     * V2 调度: 切下一个 scene. 内部抽 pickRandomScene, 维护 recentScenes.
-     * 跟 bubble 状态无关 — 切 scene 时清掉当前 bubble, 跟 V1 一致.
-     *
-     * V2.1 事件驱动: 触发源是 apng-js Player 的 SCENE_LOOPED (frame 0 边界),
-     * 不再需要 now 参数. 保留 event.now 给日志 / 测试断言用.
+     * 切下一个 scene (V2: pickRandomScene 随机+去重). 触发源: SCENE_LOOPED
+     * (apng-js end) / ROTATE_NOW (MCP/user). 切 scene 时清 bubble 跟 V1 一致.
      */
-    rotateScene: assign(({ context, event }) => {
+    rotateScene: assign(({ context }) => {
       const next = pickRandomScene(context.scene, context.recentScenes);
       return {
         scene: next,
@@ -97,7 +94,7 @@ export const octopusMachine = setup({
      * FORCE_SCENE: MCP 显式跳到指定场景, **不** 更新 recentScenes
      * (MCP 控制不影响自然轮转序列).
      */
-    forceScene: assign(({ context, event }) => {
+    forceScene: assign(({ event }) => {
       if (event.type !== "FORCE_SCENE") return {};
       return {
         scene: event.scene,

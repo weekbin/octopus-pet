@@ -1,7 +1,5 @@
 // Bubble.tsx — Speech bubble above the octopus head.
-// ≤ 12 Chinese characters per plan §1.9.2 — but CJK glyphs are 2x width, so we
-// limit to 6 CJK chars / 12 ASCII chars effectively. We don't enforce here; the FSM
-// truncates at 12.
+// ≤ 12 chars (FSM truncates). Styles in global.css under `.bubble` / `.bubble::after`.
 
 interface BubbleProps {
   text: string;
@@ -9,42 +7,9 @@ interface BubbleProps {
 
 export function Bubble({ text }: BubbleProps) {
   return (
-    <div
-      className="bubble"
-      style={{
-        position: "absolute",
-        top: 0,
-        left: "50%",
-        transform: "translateX(-50%)",
-        background: "rgba(255, 255, 255, 0.95)",
-        color: "#222",
-        padding: "2px 6px",
-        borderRadius: 6,
-        fontSize: 8,
-        fontWeight: 500,
-        fontFamily:
-          "-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif",
-        whiteSpace: "nowrap",
-        boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
-        pointerEvents: "none",
-        animation: "bubble-pop 0.18s ease-out",
-        zIndex: 10,
-      }}
-    >
+    <div className="bubble">
       {text}
-      <span
-        style={{
-          position: "absolute",
-          bottom: -3,
-          left: "50%",
-          transform: "translateX(-50%)",
-          width: 0,
-          height: 0,
-          borderLeft: "3px solid transparent",
-          borderRight: "3px solid transparent",
-          borderTop: "3px solid rgba(255, 255, 255, 0.95)",
-        }}
-      />
     </div>
   );
 }
+

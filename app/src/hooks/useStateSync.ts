@@ -1,15 +1,14 @@
 // useStateSync — 把 XState (唯一状态权威) 的 context 变化回写到 Rust
-// SharedState 镜像, 让 pet_get_state / HTTP /state 与屏幕显示一致。
+// SharedState 镜像, 让 pet_get_state / HTTP /state 与屏幕显示一致.
 //
-// 字段级节流: 只在 scene/bubble/bubbleHideAt/affection/position 变化时
-// invoke, 忽略 autoNextAt 这类高频内部调度字段, 避免 60fps 轰炸 IPC。
-// (渲染帧 frame 由组件 useState 持有, 不同步 — Rust 侧无消费方)
+// 字段级节流: scene/bubble/bubbleHideAt/affection/position/recentScenes
+// 任意一个变化才 invoke, 避免高频内部调度字段轰炸 IPC.
 
 import { useEffect, useRef } from "react";
 import type { ActorRefFrom } from "xstate";
 import { invoke } from "@tauri-apps/api/core";
 import { octopusMachine } from "../state/octopus-fsm";
-import type { OctopusState } from "../state/types";
+import type { OctopusScene, OctopusState } from "../state/types";
 
 type Actor = ActorRefFrom<typeof octopusMachine>;
 
@@ -20,6 +19,7 @@ interface SyncPayload {
   bubbleHideAt: number | null;
   affection: number;
   position: { x: number; y: number };
+  recentScenes: OctopusScene[];
 }
 
 function toPayload(ctx: OctopusState): SyncPayload {
@@ -29,18 +29,26 @@ function toPayload(ctx: OctopusState): SyncPayload {
     bubbleHideAt: ctx.bubbleHideAt,
     affection: ctx.affection,
     position: ctx.position,
+    recentScenes: ctx.recentScenes,
   };
 }
 
 function same(a: SyncPayload, b: SyncPayload): boolean {
-  return (
-    a.scene === b.scene &&
-    a.bubble === b.bubble &&
-    a.bubbleHideAt === b.bubbleHideAt &&
-    a.affection === b.affection &&
-    a.position.x === b.position.x &&
-    a.position.y === b.position.y
-  );
+  if (
+    a.scene !== b.scene ||
+    a.bubble !== b.bubble ||
+    a.bubbleHideAt !== b.bubbleHideAt ||
+    a.affection !== b.affection ||
+    a.position.x !== b.position.x ||
+    a.position.y !== b.position.y
+  ) {
+    return false;
+  }
+  if (a.recentScenes.length !== b.recentScenes.length) return false;
+  for (let i = 0; i < a.recentScenes.length; i++) {
+    if (a.recentScenes[i] !== b.recentScenes[i]) return false;
+  }
+  return true;
 }
 
 export function useStateSync(actor: Actor) {
@@ -50,7 +58,7 @@ export function useStateSync(actor: Actor) {
     const sub = actor.subscribe((snap) => {
       const next = toPayload(snap.context);
       if (lastRef.current && same(lastRef.current, next)) {
-        return; // 无实质变化, 不 invoke
+        return;
       }
       lastRef.current = next;
       (async () => {

@@ -19,6 +19,9 @@ pub struct SharedState {
     pub bubble_hide_at: Option<u64>,
     pub affection: u32,
     pub position: Position,
+    /// 最近 N 个已播放场景 (V2.1 调度, N=1). MCP 可读.
+    #[serde(rename = "recentScenes", default)]
+    pub recent_scenes: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -35,6 +38,7 @@ impl Default for SharedState {
             bubble_hide_at: None,
             affection: 0,
             position: Position { x: 100, y: 100 },
+            recent_scenes: Vec::new(),
         }
     }
 }
@@ -48,6 +52,8 @@ pub struct SyncPayload {
     pub bubble_hide_at: Option<u64>,
     pub affection: u32,
     pub position: Position,
+    #[serde(rename = "recentScenes", default)]
+    pub recent_scenes: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -78,6 +84,7 @@ pub fn sync_state(
     s.bubble_hide_at = payload.bubble_hide_at;
     s.affection = payload.affection.min(100);
     s.position = payload.position;
+    s.recent_scenes = payload.recent_scenes;
     StateResponse {
         ok: true,
         message: "synced".to_string(),
