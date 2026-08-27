@@ -1,15 +1,11 @@
-// Octopus Pet — Type definitions for state machine
-// V1.5 (2026-08-21): 默认只跑 2 个 V2 视频成品 (detective-study + worker-construction),
-// 不再用 14 个 V1 spritesheet (打工人 meme 是 octopus-meme skill 出的表情包, 不是桌宠).
-// 14 V1 spritesheet 移到 `app/public/assets/octopus/_archive-v1-spritesheets/`.
+// Octopus Pet — Type definitions for the 2-scene FSM.
+// V2.1 (2026-08-27): 事件驱动 (apng-js end → SCENE_LOOPED), 0 累积延迟.
+// 完整演进历史见 CHANGELOG.md; 协作规则见 AGENTS.md.
 
 /**
- * The 2 V2 pet scenes. 8s 轮转, V2 pickRandomScene (随机 + 去重).
- * 加新场景: 1) 跑 H3 / gen_videos 生成绿幕视频
- *         2) `scripts/extract-chromakey-apng.py` 转 APNG
- *         3) 放 `app/public/assets/octopus/v2/<scene>.png`
- *         4) SCENE_ORDER + BUBBLE_BY_SCENE + mcp_stdio.rs SCENES + 同步 manifest
- *         5) `bash scripts/check-scenes-sync.sh` 校验
+ * 2 V2 视频场景 (detective-study + worker-construction).
+ * V2.1 调度: 6.6s APNG 循环 → end 事件 → pickRandomScene (随机 + 去重).
+ * 加新场景走 `docs/v2-h3-to-pet-workflow.md` + `scripts/check-scenes-sync.sh` 校验.
  */
 export const SCENE_ORDER = [
   "detective-study",
@@ -56,7 +52,7 @@ export interface OctopusState {
  *                 当前帧 = 0). 事件驱动, 0 累积延迟, 治 V1.5 33Hz 漂移
  *                 + 中段剪切 (P1/P2). 触发 rotateScene.
  * - ROTATE_NOW: user or MCP asks to skip to the next scene immediately.
- * - FORCE_SCENE: jump to a specific scene (MCP pet_show / pet_set_state).
+ * - FORCE_SCENE: jump to a specific scene (MCP pet_show).
  * - CLICK: single click on the pet — show a random bubble, +1 affection.
  * - PET: pet the head (MCP pet_pet or right-click context) — +5 affection, "啊" bubble.
  * - ASK: external agent says something (MCP pet_ask) — show bubble.

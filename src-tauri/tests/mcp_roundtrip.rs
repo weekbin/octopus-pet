@@ -96,18 +96,18 @@ fn initialize_handshake() {
 }
 
 #[test]
-fn tools_list_returns_six_tools() {
+fn tools_list_returns_five_tools() {
     let responses = run_mcp(&[r#"{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}"#]);
     assert_eq!(responses.len(), 1);
 
     let tools = responses[0]["result"]["tools"].as_array().expect("tools must be array");
-    assert_eq!(tools.len(), 6, "expected 6 MCP tools per plan §1.9.4");
+    // 5 tools after M1.2: dropped pet_set_state (was alias of pet_show).
+    assert_eq!(tools.len(), 5);
 
     let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
     assert!(names.contains(&"pet_show"));
     assert!(names.contains(&"pet_ask"));
     assert!(names.contains(&"pet_get_state"));
-    assert!(names.contains(&"pet_set_state"));
     assert!(names.contains(&"pet_pet"));
     assert!(names.contains(&"pet_list_states"));
 }

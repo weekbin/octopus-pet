@@ -1,25 +1,6 @@
-// octopus-fsm.test.ts — unit tests for the 2-scene FSM (V2.1, 2026-08-24).
-//
-// V2.1 (事件驱动, 替代 V1.5 33Hz setInterval):
-//   - 调度: SCENE_LOOPED 事件 (来自 apng-js Player 循环边界) → rotateScene
-//   - bubble: 单独 setTimeout + DISMISS_BUBBLE 事件, 不用 TIMER_TICK
-//
-// V1.5 (2 场景): 默认 2 个 V2 视频成品 (detective-study + worker-construction).
-// V2 调度保留 (pickRandomScene 随机 + 去重). 切 scene 走 SCENE_LOOPED →
-// pickRandomScene → 2 场景 N=1 必切到另一个 (alternating).
-//
-// We test:
-//   1. Initial state
-//   2. Single click → bubble + affection +1
-//   3. Pet → affection +5
-//   4. Force scene → jumps to specified scene (V2: 不更新 recentScenes)
-//   5. SCENE_LOOPED → shouldRotate via pickRandomScene (替代 V1.5 TIMER_TICK 8s)
-//   6. DISMISS_BUBBLE → 显式 dismiss (V2.1 替代 shouldHideBubble 33Hz guard)
-//   7. Ask (MCP pet_ask) → shows bubble (truncated to 12)
-//   8. Drag → updates position
-//   9. V2 pickRandomScene: 排除 recent + current, 等概率 (2 场景 N=1 验证)
-//  10. V2 updateRecent: 滚动窗口
-//  11. V2 SCENE_LOOPED 多次轮转不重复 (2 场景 N=1, 必定不重复)
+// octopus-fsm.test.ts — V2.1 2-scene FSM unit tests.
+// V2.1 事件驱动: SCENE_LOOPED 替代 V1.5 TIMER_TICK, DISMISS_BUBBLE 替代 shouldHideBubble.
+// 详见 octopus-fsm.ts 头注释 + AGENTS.md V2.1 章节.
 
 import { describe, it, expect } from "vitest";
 import { createActor } from "xstate";

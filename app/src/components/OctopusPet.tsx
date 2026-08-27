@@ -1,19 +1,7 @@
-// OctopusPet.tsx — V2.1 事件驱动渲染: canvas + apng-js + SCENE_LOOPED.
-//
-// 2026-08-24 重写 (替代 V1.5 <img> + setInterval 33Hz):
-//   - 渲染: <canvas> + apng-js (在 JS 端解码 APNG, 拿到 frame 事件)
-//   - 调度: apng-js Player 'frame' 事件检测循环边界 → send SCENE_LOOPED
-//   - bubble 计时: 单独 useEffect setTimeout(BUBBLE_DURATION_MS)
-//   - 拆掉: setInterval(33Hz) TIMER_TICK 路径, autoNextAt 字段, shouldRotate guard
-//
-// 116×116 透明窗口, 192×192 APNG 画在 canvas 内部, CSS 缩放到 116×116
-// (跟 V1.5 <img> 视觉一致). apng-js 1.1.5 Player 用 rAF 驱动.
-//
-// 事件链路:
-//   1. Player.renderNextFrame → emit 'frame' (idx)
-//   2. 检测 idx 0 + 上一帧 = last → 循环边界 → send SCENE_LOOPED
-//   3. FSM rotateScene → context.scene 变化 → 当前 useEffect cleanup
-//   4. 新的 useEffect 加载新 APNG → 新的 Player 自动开始 rAF 循环
+// OctopusPet.tsx — 116×116 透明窗口, <canvas> + apng-js 渲染 V2 APNG.
+// 事件链路: apng-js 'end' 事件 → send SCENE_LOOPED → FSM rotateScene → 重挂载.
+// bubble 3s 计时: 单独 useEffect setTimeout, 不用全局 timer.
+// 详见 AGENTS.md V2.1 章节.
 
 import { useEffect, useRef } from "react";
 import { useMachine } from "@xstate/react";

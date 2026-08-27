@@ -1,32 +1,9 @@
-// Octopus Pet — XState v5 machine for the 2-scene FSM (V2.1, 2026-08-24).
+// Octopus Pet — XState v5 machine for the 2-scene FSM.
+// V2.1 (2026-08-27): 事件驱动, 0 累积延迟, 治 V1.5 33Hz 漂移 / 中段剪切 / 高频 IPC.
+// 完整演进历史见 CHANGELOG.md; 协作规则见 AGENTS.md.
 //
-// V2.1 (事件驱动, 替代 V1.5 33Hz setInterval):
-//   - 调度: apng-js Player 的 frame 事件检测 APNG 循环边界, 发 SCENE_LOOPED →
-//     rotateScene. 严格对齐 frame 0, 0 累积延迟, 不受 NTP/DST 影响.
-//   - 渲染: OctopusPet 用 <canvas> + apng-js 解码, 替代 <img> 黑盒.
-//   - bubble 计时: 组件 setTimeout(BUBBLE_DURATION_MS), 不用全局 33Hz tick.
-//
-// V1.5 → V2.1 变化清单:
-//   - 拆: TIMER_TICK 事件, shouldRotate guard, autoNextAt 字段, ROTATION_INTERVAL_MS
-//   - 加: SCENE_LOOPED 事件
-//   - 行为: rotateScene 不再需要 now, recentScenes 维护逻辑不变
-//
-// V1.5 (2026-08-21): 默认只跑 2 个 V2 视频成品 (detective-study + worker-construction).
-// 14 V1 spritesheet 表情包已废弃, 移到 _archive-v1-spritesheets/.
-//
-// Per plan §1.9.2: simple timer rotation + click/pet events, MCP tool calls mapped to events.
-// V2 调度: rotateScene 改用 pickRandomScene (随机 + 去重最近 N 个) 替代 V1 顺序轮转.
-//
-// 用户 2026-08-21 19:14 反馈: "我们现在是默认的 2 个做好的成品啊, 之前那些
-// (14 V1 打工人 meme 表情包) 不要用, 我们做的事桌面宠物, 思路不要走错了".
-// → V1.5 治本: 14 spritesheet 替换为 2 V2 视频 APNG (浏览器原生循环).
-//
-// 用户 2026-08-24 23:19 反馈: "其实最理想的还是如果能用事件逻辑来控制动画会比较好,
-// 定时器总是不太稳定的". → V2.1 治本: 事件驱动替代 setInterval, 用 apng-js
-// 拿播放完成事件, 渲染到 canvas 保持 V1.5 视觉 (不走 V2.1 webm + chroma key 老路).
-//
-// XState v5 uses setup({...}).createMachine({...}) pattern. We use a single machine
-// (no nested states) — the "scene" is just context. KISS for V2.1.
+// 设计原则: scene 是 context, 不是 state (单 state 'active' 处理所有事件).
+// KISS: 加新事件 → 加 action + handler, 不引入 nested state.
 
 import { setup, assign } from "xstate";
 import {
@@ -39,15 +16,6 @@ import {
   type OctopusScene,
   type OctopusState,
 } from "./types";
-
-/**
- * V1 兼容: 顺序轮转 (currentIndex + 1) % 14. 保留导出, 用于测试 / 文档.
- * V2 调度 (rotateScene) 改用 pickRandomScene.
- */
-function nextScene(scene: OctopusScene): OctopusScene {
-  const i = SCENE_ORDER.indexOf(scene);
-  return SCENE_ORDER[(i + 1) % SCENE_ORDER.length] as OctopusScene;
-}
 
 /**
  * V2 调度: 从 SCENE_ORDER 选一个不在 recent 集合里的场景, 等概率.
@@ -200,4 +168,4 @@ export const octopusMachine = setup({
   },
 });
 
-export { nextScene, pickBubble };
+export { pickBubble };

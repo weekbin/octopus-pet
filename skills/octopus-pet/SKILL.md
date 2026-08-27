@@ -47,18 +47,18 @@ Unix domain socket 转发到单实例, 解锁真正的多 session 共享.
 ## MCP tools (由章鱼 MCP server 暴露, 走 MCP 2024-11-05)
 | Tool | Purpose |
 |------|---------|
-| `pet_show` | 让章鱼显示指定状态 (14 场景) |
-| `pet_ask` | 让章鱼弹气泡说一句话 (≤ 12 字, 调性"打工人") |
-| `pet_get_state` | 查询章鱼当前状态 / 位置 / 亲密度 |
-| `pet_set_state` | 同 pet_show (别名) |
-| `pet_pet` | 摸头, 亲密度 +5, 触发气泡"啊" |
-| `pet_list_states` | 列出 14 场景 + 调性文案 |
+| `pet_show` | 让章鱼显示指定状态 (V2.1 2 V2 场景) |
+| `pet_ask` | 让章鱼弹气泡说一句话 (≤ 12 字) |
+| `pet_get_state` | 查询章鱼当前状态 / 位置 / 亲密度 / 最近播过 |
+| `pet_pet` | 摸头, 亲密度 +5, 触发气泡"啊~" |
+| `pet_list_states` | 列出当前可用的 V2 场景 |
 
-## 14 场景 (per `~/Works/octopus-worker-meme/`)
-- 假装很忙 / 再熬一会 / 我裂开了 / 摆烂躺平
-- 多任务 / 发工资 / 工资被拒 / 奶茶
-- 周五 5 点 / 带薪蹲坑 / 摸鱼
-- 等 M3 Pro / 灵魂出窍 / 多任务v2
+## 2 V2 场景 (per AGENTS.md V2.1 章节)
+- `detective-study` — H3 戴帽研究 (50 帧 × 132ms ≈ 6.6s APNG 循环)
+- `worker-construction` — gen_videos 工人施工
+
+加新场景走 `docs/v2-h3-to-pet-workflow.md` (H3 双图 → 抽帧 → chroma key v3 → APNG) +
+同步 `scenes.json` (M4 之后是唯一源) + `bash scripts/check-scenes-sync.sh` 校验.
 
 ## 角色 ground truth (硬约束, 不能改)
 粉色 + 8 触手 + 2 小角 + 白色大眼白 + 黑色水平上眼睑

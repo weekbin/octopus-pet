@@ -19,7 +19,7 @@ pub const BUBBLE_DURATION_MS: u64 = 3_000;
 pub const MAX_AFFECTION: u32 = 100;
 pub const MAX_BUBBLE_CHARS: usize = 12;
 
-/// pet_show / pet_set_state: 强制切场景。
+/// pet_show: 强制切场景。
 pub fn apply_show(
     app: Option<&AppHandle>,
     state: &Arc<Mutex<SharedState>>,

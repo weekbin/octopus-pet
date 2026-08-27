@@ -40,7 +40,6 @@ struct JsonRpcResponse {
 pub const TOOL_PET_SHOW: &str = "pet_show";
 pub const TOOL_PET_ASK: &str = "pet_ask";
 pub const TOOL_PET_GET_STATE: &str = "pet_get_state";
-pub const TOOL_PET_SET_STATE: &str = "pet_set_state";
 pub const TOOL_PET_PET: &str = "pet_pet";
 pub const TOOL_PET_LIST_STATES: &str = "pet_list_states";
 
@@ -119,12 +118,7 @@ async fn handle_request(
                         "properties": { "text": { "type": "string", "maxLength": 12 } },
                         "required": ["text"]
                     })),
-                    tool_schema(TOOL_PET_GET_STATE, "查当前 OctopusState (含 scene/bubble/affection/position)", json!({"type": "object"})),
-                    tool_schema(TOOL_PET_SET_STATE, "pet_show 别名", json!({
-                        "type": "object",
-                        "properties": { "state": { "type": "string", "enum": SCENES } },
-                        "required": ["state"]
-                    })),
+                    tool_schema(TOOL_PET_GET_STATE, "查当前 OctopusState (含 scene/bubble/affection/position/recentScenes)", json!({"type": "object"})),
                     tool_schema(TOOL_PET_PET, "摸头, affection += 5", json!({"type": "object"})),
                     tool_schema(TOOL_PET_LIST_STATES, "返回 2 V2 场景列表 (detective-study + worker-construction)", json!({"type": "object"})),
                 ]
@@ -156,7 +150,7 @@ async fn handle_tool_call(
     let now = now_ms();
 
     match name {
-        TOOL_PET_SHOW | TOOL_PET_SET_STATE => {
+        TOOL_PET_SHOW => {
             let scene = args.get("state").and_then(|v| v.as_str()).unwrap_or("");
             match actions::apply_show(app, state, scene, now) {
                 Ok(msg) => text_response(id, msg),
