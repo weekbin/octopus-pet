@@ -31,9 +31,11 @@ export interface OctopusState {
   scene: OctopusScene;
   /** Bubble text shown above the pet, or null when no bubble. */
   bubble: string | null;
-  /** Wall-clock ms timestamp at which to auto-rotate to the next scene. */
-  autoNextAt: number;
-  /** Wall-clock ms timestamp at which to hide the current bubble (or null = no bubble). */
+  /**
+   * Wall-clock ms timestamp at which the current bubble should be dismissed.
+   * FSM 只管存, 实际 setTimeout 由 OctopusPet 组件 useEffect 调度
+   * (不依赖全局 TIMER_TICK). Rust SharedState 镜像此字段供 pet_get_state 读.
+   */
   bubbleHideAt: number | null;
   /** Affection counter, 0..100 (no UI in V1, just stored). */
   affection: number;
@@ -50,18 +52,19 @@ export interface OctopusState {
 
 /**
  * Events the FSM reacts to.
- * - TIMER_TICK: 33Hz tick, FSM 用 shouldRotate 判定 8s 切 scene,
- *               shouldHideBubble 判定 3s 后消 bubble. V2 切 scene 用 pickRandomScene.
- * - ROTATE_NOW: user or MCP asks to skip to the next scene immediately (V2: pickRandomScene).
+ * - SCENE_LOOPED: apng-js Player 检测到 APNG 循环边界 (上一帧 = 最后一帧,
+ *                 当前帧 = 0). 事件驱动, 0 累积延迟, 治 V1.5 33Hz 漂移
+ *                 + 中段剪切 (P1/P2). 触发 rotateScene.
+ * - ROTATE_NOW: user or MCP asks to skip to the next scene immediately.
  * - FORCE_SCENE: jump to a specific scene (MCP pet_show / pet_set_state).
- * - CLICK: single click on the pet — show a random bubble, +1 affection, reset autoNextAt.
+ * - CLICK: single click on the pet — show a random bubble, +1 affection.
  * - PET: pet the head (MCP pet_pet or right-click context) — +5 affection, "啊" bubble.
  * - ASK: external agent says something (MCP pet_ask) — show bubble.
- * - DISMISS_BUBBLE: hide the bubble.
+ * - DISMISS_BUBBLE: hide the bubble (setTimeout in OctopusPet 自动触发).
  * - DRAG: user is dragging the window (handled outside FSM, just persists position).
  */
 export type OctopusEvent =
-  | { type: "TIMER_TICK"; now: number }
+  | { type: "SCENE_LOOPED"; now: number }
   | { type: "ROTATE_NOW"; now: number }
   | { type: "FORCE_SCENE"; scene: OctopusScene; now: number }
   | { type: "CLICK"; now: number }
@@ -71,11 +74,13 @@ export type OctopusEvent =
   | { type: "DRAG"; x: number; y: number };
 
 /**
- * V1 主调度: 8s 自动切 scene.
- * V2 调度: rotateScene action 内部用 pickRandomScene 替代 nextScene, 时间间隔仍 8s.
- * 用户操作 (CLICK / PET) 重置 autoNextAt 计时, 避免气泡还没看完就被切走.
+ * V2.1 调度 (2026-08-24 实装, 替代 V1.5 setInterval 33Hz): 用 apng-js Player
+ * 的 frame 事件检测 APNG 循环边界, 切 scene 严格对齐 frame 0. 0 累积延迟,
+ * 不受 NTP/DST/手动校时影响, 治中段剪切 (P1) + 高频 IPC 压力 (P3) + wall-clock
+ * 漂移 (P2) 一并解决. 8s setInterval 完全拆掉, scene 切只走 SCENE_LOOPED.
+ *
+ * bubble 计时单独用 setTimeout 3s, 不依赖全局 33Hz tick.
  */
-export const ROTATION_INTERVAL_MS = 8_000;
 export const BUBBLE_DURATION_MS = 3_000;
 export const MAX_AFFECTION = 100;
 
