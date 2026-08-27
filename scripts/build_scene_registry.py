@@ -29,6 +29,25 @@ HEADER = (
 )
 
 
+def _scene_animation(s: dict) -> dict:
+    """
+    Return the animation descriptor for a scene.
+
+    Backward compatible: if scenes.json has top-level `animationType` / `animationSource`
+    keys, build them into a nested `animation` object. New entries should use the nested form.
+    """
+    if "animation" in s:
+        return s["animation"]
+    # 兼容 V2.1 老 scenes.json: 平铺 animationType + animationSource
+    if "animationType" in s:
+        return {
+            "type": s["animationType"],
+            "source": s.get("animationSource", s["id"]),
+        }
+    # 默认: 假设 APNG, source 用 scene id 走 1:1 命名约定
+    return {"type": "apng", "source": s["id"]}
+
+
 def generate_ts(data: dict) -> str:
     ids = [s["id"] for s in data["scenes"]]
     lines = [
@@ -51,6 +70,32 @@ def generate_ts(data: dict) -> str:
             f"{json.dumps(s['bubbleLines'], ensure_ascii=False)},"
         )
     lines.append("} as const;")
+    lines.append("")
+
+    # 场景 → animation 描述 (给 useAnimation hook 用)
+    lines.append("/**")
+    lines.append(" * Scene → animation descriptor (给 useAnimation 查 provider 用).")
+    lines.append(" * `type` 对应 animationRegistry 里注册的 provider id;")
+    lines.append(" * `source` 格式特定 (URL / file path / JSON / 场景 id 走 1:1 命名).")
+    lines.append(" */")
+    lines.append("export interface SceneAnimation {")
+    lines.append("  readonly type: string;")
+    lines.append("  readonly source: string;")
+    lines.append("}")
+    lines.append("export interface Scene {")
+    lines.append("  readonly id: OctopusScene;")
+    lines.append("  readonly animation: SceneAnimation;")
+    lines.append("  readonly bubbleLines: readonly string[];")
+    lines.append("}")
+    lines.append("export const SCENES: readonly Scene[] = [")
+    for s in data["scenes"]:
+        anim = _scene_animation(s)
+        lines.append("  {")
+        lines.append(f"    id: {json.dumps(s['id'], ensure_ascii=False)},")
+        lines.append(f"    animation: {{ type: {json.dumps(anim['type'])}, source: {json.dumps(anim['source'])} }},")
+        lines.append(f"    bubbleLines: {json.dumps(s['bubbleLines'], ensure_ascii=False)},")
+        lines.append("  },")
+    lines.append("];")
     lines.append("")
     return "\n".join(lines)
 

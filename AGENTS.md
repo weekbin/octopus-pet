@@ -111,12 +111,28 @@ Antigravity / Gemini CLI).
   **V2.1 APNG numPlays 必须是 1** (PIL `loop=1`), 这样 apng-js Player 才会在
   播完一轮后 emit `'end'` 事件. `numPlays=0` (无限循环) 不会触发 `'end'`,
   scene 永远不切. `scripts/extract-chromakey-apng.py` 默认就是 loop=1.
-- **V2.1 scene 切流程 (事件链)**: `apng-js Player 'end' 事件` →
-  `OctopusPet.tsx` `p.on("end", () => send SCENE_LOOPED)` →
-  `XState FSM rotateScene action` → `context.scene` 变化 →
-  `OctopusPet` useEffect 触发 cleanup (旧 player.stop) → 加载新 APNG → 新的
-  Player 自动 start → 下一轮 6.6s 后再 emit 'end'. 整条链路 ms 级响应,
-  无 setInterval 累计延迟.
+- **V2.1 scene 切流程 (事件链)**: `Animation.onCycleEnd() 回调` →
+  `OctopusPet` `useAnimation(canvas, scene, onCycleEnd)` →
+  XState FSM `rotateScene` action → `context.scene` 变化 → `useAnimation`
+  触发 cleanup (旧 animation.stop) → 加载新 animation → 新 cycle 结束
+  再回调. 整条链路 ms 级响应, 无 setInterval 累计延迟.
+  Animation 实现细节对 FSM 透明 (APNG 走 'end' 事件, Lottie/Video 走各自的 onCycleEnd).
+- **动画扩展 (M5, 2026-08-27)**: scene 渲染不再绑死 APNG. 加新动画格式
+  (Lottie / WebM / GIF / SVG) 不需要改 FSM/OctopusPet/useAnimation.
+  **架构**:
+  - `app/src/animation/types.ts` — `Animation` 接口 (start/stop/onCycleEnd/nativeWidth/nativeHeight/cycleMs) + `AnimationProvider` 接口 (type + create(ctx, source))
+  - `app/src/animation/registry.ts` — `animationRegistry.register(type, provider)` / `.get(type)`
+  - `app/src/animation/providers/apng.ts` — 内置 APNG provider (包装 apng-js Player)
+  - `app/src/hooks/useAnimation.ts` — 通用 hook (查 registry → provider.create → 绑 onCycleEnd)
+  - `app/src/main.tsx` — 启动时 `animationRegistry.register(apngProvider.type, apngProvider)`
+  **加新动画类型 4 步** (例: lottie):
+  1. 在 `app/src/animation/providers/lottie.ts` 实现 `LottieAnimation implements Animation` + `lottieProvider: AnimationProvider`
+  2. 在 `app/src/main.tsx` 加 `animationRegistry.register("lottie", lottieProvider)`
+  3. 在 `scenes.json` 加 entry: `{"id": "x", "animation": {"type": "lottie", "source": "..."}, "bubbleLines": [...]}`
+  4. 跑 `bash scripts/build-scene-registry.sh` (CI 自动验证同步)
+  FSM/OctopusPet/useAnimation 零修改, 业务代码 (CLICK/PET/ASK/DRAG/ROTATE_NOW) 也不知道 scene 是 APNG 还是 Lottie.
+  **scenes.json schema 兼容**: 老 entry 没 `animation` 字段时, build 脚本默认 `{type: "apng", source: <scene-id>}` (走 1:1 命名约定). 平铺 `animationType`/`animationSource` 也兼容.
+  **scenes-sync 校验**: 按 animation.type 走不同路径 — apng 检查本地 .png, URL (http/https/data) 跳过本地检查, 其它类型按 source 路径检查.
 - **改 spritesheet**: 141 帧是源头真理. 真要改, 从 `~/Works/octopus-worker-meme` 抽,
   跑 `extract-and-link-octopus-frames.sh` + `spritesheet-builder.sh` + `generate-spritesheet-manifest.sh`.
 - **换桌宠 idle 动画素材**: 走 `docs/breath-pipeline.md` 完整流程 (image_synthesize

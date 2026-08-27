@@ -1,24 +1,24 @@
-// OctopusPet.tsx — 116×116 透明窗口, <canvas> + apng-js 渲染 V2 APNG.
-// 事件链路: apng-js 'end' 事件 → send SCENE_LOOPED → FSM rotateScene → 重挂载.
+// OctopusPet.tsx — 116×116 透明窗口, 通过 animation abstraction 渲染
+// 当前 scene 指定的动画 (默认 apng, 可换 lottie/video).
+// 事件链路: Animation onCycleEnd → send SCENE_LOOPED → FSM rotateScene → 重挂载.
 // bubble 3s 计时: 单独 useEffect setTimeout, 不用全局 timer.
-// 详见 AGENTS.md V2.1 章节.
+// 详见 AGENTS.md V2.1 + animation 章节.
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useMachine } from "@xstate/react";
 import { octopusMachine } from "../state/octopus-fsm";
 import {
   BUBBLE_DURATION_MS,
   type OctopusEvent,
 } from "../state/types";
+import { SCENES } from "../state/scene-registry.generated";
 import { Bubble } from "./Bubble";
-import { useApngPlayer } from "../hooks/useApngPlayer";
+import { useAnimation } from "../hooks/useAnimation";
 import { useTauriWindowDrag } from "../hooks/useTauriWindowDrag";
-// useTauriEventBus: M3.1 改名 (原 useMcpBridge), 删 dead test-event listener
 import { useTauriEventBus } from "../hooks/useTauriEventBus";
 import { useStateSync } from "../hooks/useStateSync";
 
 const WINDOW_SIZE = 116;
-const APNG_NATIVE_SIZE = 192; // APNG 原生 192×192, canvas 内部用这个
 
 export function OctopusPet() {
   const [state, send, actor] = useMachine(octopusMachine);
@@ -31,11 +31,18 @@ export function OctopusPet() {
   useTauriEventBus(send);
   useStateSync(actor);
 
-  // V2.1 事件驱动: APNG 播完一轮 → 回调 → send SCENE_LOOPED → FSM rotateScene.
-  const onSceneLoopEnd = useCallback(() => {
+  // 当前 scene 描述 (从生成 registry 查). useMemo 避免每次 render 重建
+  // 触发 useEffect 重启 animation player.
+  const currentScene = useMemo(
+    () => SCENES.find((s) => s.id === state.context.scene)!,
+    [state.context.scene],
+  );
+
+  // Animation onCycleEnd → send SCENE_LOOPED → FSM rotateScene.
+  const onCycleEnd = useCallback(() => {
     send({ type: "SCENE_LOOPED" } as OctopusEvent);
   }, [send]);
-  useApngPlayer(canvasRef.current, state.context.scene, onSceneLoopEnd);
+  useAnimation(canvasRef.current, currentScene, onCycleEnd);
 
   // Bubble 3s 计时: 单独 setTimeout, 不用全局 timer.
   useEffect(() => {
@@ -68,8 +75,8 @@ export function OctopusPet() {
     >
       <canvas
         ref={canvasRef}
-        width={APNG_NATIVE_SIZE}
-        height={APNG_NATIVE_SIZE}
+        width={currentScene.animation.type === "apng" ? 192 : 1280}
+        height={currentScene.animation.type === "apng" ? 192 : 720}
         style={{
           position: "absolute",
           top: 0,
