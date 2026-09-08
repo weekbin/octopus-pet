@@ -105,16 +105,24 @@ def process_frames(
     return images
 
 
-def save_apng(images: list[Image.Image], out: Path, duration: int, disposal: int) -> None:
-    """PIL APNG 输出"""
-    print(f"[3/4] APNG save: {out} ({len(images)} frames × {duration}ms)")
+def save_apng(images: list[Image.Image], out: Path, duration: int, disposal: int, loop: int = 1) -> None:
+    """PIL APNG 输出.
+
+    loop: APNG acTL num_plays 字段
+        0 = infinite (浏览器原生 <img> 会一直循环)
+        1 = play once (event-driven 切 scene 的正确选择 — apng-js 会在播完 1 次后 emit 'end')
+        N = N 次
+    V1.5 默认 loop=1, 配合桌宠 8s 切 scene 的事件驱动设计.
+    如果要"无限循环播放" (e.g. 闲置 idle 动画), 用 --loop 0.
+    """
+    print(f"[3/4] APNG save: {out} ({len(images)} frames × {duration}ms, loop={loop})")
     images[0].save(
         out,
         format="PNG",
         save_all=True,
         append_images=images[1:],
         duration=duration,
-        loop=0,
+        loop=loop,
         disposal=disposal,
         optimize=True,
     )
@@ -141,6 +149,7 @@ def main() -> int:
     ap.add_argument("--size", type=int, default=192, help="Output size (default 192)")
     ap.add_argument("--duration", type=int, default=132, help="APNG ms/frame (default 132)")
     ap.add_argument("--disposal", type=int, default=0, help="APNG disposal (default 0)")
+    ap.add_argument("--loop", type=int, default=1, help="APNG loop count (default 1 = play once; 0 = infinite)")
     ap.add_argument("--keep-temp", action="store_true", help="Keep temp frame dir")
     args = ap.parse_args()
 
@@ -159,7 +168,7 @@ def main() -> int:
         indices = sample_indices(n_total, args.frame_count)
         print(f"        → sample {len(indices)} from {n_total}: {indices[:3]}...{indices[-3:]}")
         images = process_frames(tmp_dir, indices, args.size)
-        save_apng(images, args.output, args.duration, args.disposal)
+        save_apng(images, args.output, args.duration, args.disposal, args.loop)
         if args.keep_temp:
             shutil.copytree(tmp_dir, args.output.with_suffix(".frames"))
             print(f"        → temp frames kept at {args.output.with_suffix('.frames')}")
