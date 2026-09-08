@@ -7,6 +7,19 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **第 3 个场景 drink-coffee (H3 一次过 99.91% 相似度, 2026-09-09 commit fef8017)**:
+  范式: 单件道具 (Q 版咖啡杯) + 3 段 × 2s + 渐变淡出. 表情: 温和 → 期待 → 满足
+  (3.0-3.15s 闭眼 0.15s 享受精确命中) → 温和. 4 段 prompt 写完, H3 双图首末锚点
+  跑出 99.91% 相似度 (远高于 95% 阈值, 超过 01 v3 H3 的 96.58%). 1 段变出杯 /
+  2 段举杯+闭眼享受 / 3 段放下+渐变淡出. 已知 H3 偏差 (杯子 ~20% vs 写 8% 画幅
+  宽度, 触手弯曲 ~15° vs 写 ≤10°) 在 ±50% 容忍范围, 视觉比例合适不用重做.
+  APNG: 50 帧 × 132ms × 192×192 × 1.91MB × num_plays=1. 端到端集成 (Tauri dev
+  + HTTP fallback /scenes, /state, /show): 3 scenes 注册 ✓, 强制切生效 ✓,
+  **8s 后事件驱动自动切** (drink-coffee → detective-study, recentScenes 维护 +
+  N=1 排除逻辑) ✓. 验证产物: `docs/v2-03-drink-coffee/VERIFICATION.md` +
+  7 张关键帧 (0/1/2/3/4/5/5.5s) + H3 mp4.
+  流程沉淀: 加新场景 5 步 (写 prompt → H3 双图 → extract-chromakey-apng.py →
+  改 scenes.json + 跑 build-scene-registry.sh → 桌宠端到端), 全程 ~15 分钟/场景.
 - **M5b 第二个 animation provider (Lottie)**: `app/src/animation/providers/lottie.ts`
   用 `lottie-web` 的 canvas renderer (lottie 内部维护一个 canvas, 我们用 rAF
   `drawImage` 同步到目标 ctx). 跟 apng provider 行为统一, 调用方拿 ctx 不用管

@@ -18,6 +18,7 @@ mcode 启动时自动 spawn 章鱼 .app, **2 个 V2 视频成品** (detective-st
 | **M5** | ✅ 完成 (2026-08-27) | animation abstraction layer (Animation / AnimationProvider / registry) |
 | **M5b** | ✅ 完成 (2026-08-27) | 第二个 animation provider (Lottie), 换格式业务代码零修改 |
 | **V2.1 regression fix** | ✅ 完成 (2026-09-09 f2e0bb7) | APNG num_plays 0 → 1, 删遗留 useMcpBridge.ts |
+| **第 3 场景 drink-coffee** | ✅ 完成 (2026-09-09 fef8017) | H3 一次过 99.91% 相似度, 单件道具 3 段范式, 端到端集成 PASS |
 | **V1.5 之前的 14 V1 表情包** | ⛔ 已废弃 | 移到 `app/public/assets/octopus/_archive-v1-spritesheets/`, 不用 |
 | **P0-1 / P0-2 / P0-3** | ⏳ | CI 校验 num_plays=1 / Tauri 桌宠实际跑 / 加真 Lottie 场景 (见 TODO.md) |
 | **V1.1 跨平台** | ⏳ | Windows / Linux 打包验证 (挂 2 周, 待 Windows/Linux 机器) |
@@ -58,17 +59,18 @@ mcode 启动时自动 spawn 章鱼 .app, **2 个 V2 视频成品** (detective-st
 **栈**: Tauri 2 (Rust + React 19 + Vite 6 + XState 5) + apng-js 1.1.5 (V2.1) + lottie-web 5.13 (M5b)  
 **窗口**: 116×116 (= APNG 192×192 60% 缩放显示), transparent, no decorations, alwaysOnTop, skipTaskbar  
 **状态权威**: XState (前端 FSM) → `sync_state` 回写 Rust `SharedState` 镜像;协议入口 (MCP/HTTP) 只调 `actions.rs` 发事件  
-**场景 (V2.1)**: 2 (detective-study, worker-construction) · 事件驱动 6.6s 切, 随机+去重 (最近 1 个不连续重复)  
+**场景 (V2.1)**: 3 (detective-study, worker-construction, drink-coffee) · 事件驱动 6.6s 切, 随机+去重 (最近 1 个不连续重复)
 **动画格式**: APNG (内置) / Lottie (M5b provider) — 加新格式走 `animation/providers/<type>.ts` + `main.tsx` register, 业务零修改
 
 ---
 
-## V2.1 默认 2 场景 (verified 2026-08-27, num_plays=1)
+## V2.1 默认 3 场景 (verified 2026-09-09, num_plays=1)
 
 | # | 场景 | OctopusScene | 文案示例 | 帧数 | 素材 |
 |---|------|-------------|---------|------|------|
 | 1 | 戴帽研究 (H3 6s) | `detective-study` | "在研究" "放大看看" | 50 帧 × 132ms = 6.6s | H3 + `last_frame_image` 双图, 96.58% 首末一致 |
 | 2 | 工人施工 (gen_videos 6s) | `worker-construction` | "施工中" "砸一下" | 50 帧 × 132ms = 6.6s | gen_videos Hailuo-2.3, 99.85% 相似 |
+| 3 | 喝咖啡 (H3 6s) | `drink-coffee` | "喝咖啡" "好香啊" | 50 帧 × 132ms = 6.6s | H3 双图, **99.91%** 首末一致 (本批最佳) |
 
 每个 APNG = 192×192 px, RGBA, 2.3MB, **`acTL.num_plays=1` (事件驱动关键)**, 走 `scripts/extract-chromakey-apng.py` v3 chroma key (中性色 alpha=255, 避免眼睛高光抠成半透明). 渲染: `<canvas>` + apng-js, 听 `'end'` 事件 → `SCENE_LOOPED` → FSM `rotateScene`, 严格对齐 APNG 最后一帧, 0 累积延迟.
 

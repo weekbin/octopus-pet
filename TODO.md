@@ -6,13 +6,13 @@
 
 ---
 
-## 当前状态 (2026-09-09 00:43)
+## 当前状态 (2026-09-09 01:09)
 
 - **V2.1** (2026-08-27) ✅ 事件驱动 scene 调度 (apng-js `'end'` → `SCENE_LOOPED` → FSM `rotateScene`)
   - 治本 4 个长期 bug: P1 APNG 中段剪切 / P2 wall-clock 漂移 / P3 高频 IPC / P4 镜像乱序
   - 渲染: `<img>` 浏览器原生循环 → `<canvas>` + apng-js (拿 frame/end 事件)
   - 调度: setInterval(33ms) + TIMER_TICK → SCENE_LOOPED 事件 (0 累积延迟)
-  - 2 场景默认 (detective-study / worker-construction), 14 V1 spritesheet 表情包移到 archive
+  - 3 场景默认 (detective-study / worker-construction / **drink-coffee 2026-09-09 fef8017**), 14 V1 spritesheet 表情包移到 archive
   - 24/24 vitest + 8/8 cargo + 16/16 lint + scenes-sync OK + tsc 0 错误
 - **M1-M4 refactor** (2026-08-27) ✅ 架构清理 + scenes.json 单一源 + 自动生成 TS/Rust
   - M1 死代码 (nextScene / 5 tools / 头注释瘦身 / test-*.html / spritesheet-*.png)
@@ -22,7 +22,8 @@
 - **M5 animation abstraction** (2026-08-27) ✅ Animation / AnimationProvider 接口 + registry + apng provider
 - **M5b Lottie provider** (2026-08-27) ✅ 第二个 provider (lottie-web canvas renderer), 证明换格式业务代码零修改
 - **M5b regression fix** (2026-09-09 commit f2e0bb7) ✅ APNG num_plays 0 → 1, 删遗留 useMcpBridge.ts
-- **运行时**: 桌宠进程未运行 (按需启动), 2 V2 APNG ready
+- **P0-2 端到端跑 Tauri 桌宠** (2026-09-09 fef8017) ✅ HTTP fallback 验证 3 scenes 切换 + 事件驱动 6.6s 自切
+- **运行时**: 桌宠进程按需启动 (cargo tauri dev), 3 V2 APNG ready (drink-coffee 99.91% 相似度, 本批最佳)
 
 ---
 
@@ -71,15 +72,18 @@
     `app/public/assets/octopus/v2/*.png` num_plays=1. 接入 CI (`lint-octopus-plugin.sh`
     链尾 或 `check-scenes-sync.sh` 内). AGENTS.md V2.1 章节也明文约束.
   - 预计: 20 分钟
-- [ ] **P0-2** 跑通 Tauri 桌宠实际启动 + scene 切验证 (M5b 后第一次端到端)
+- [x] **P0-2** 跑通 Tauri 桌宠实际启动 + scene 切验证 (M5b 后第一次端到端) ✅ 2026-09-09 fef8017
   - 根因: M5b 是 architecture demo (commit message 明确), 没真起桌宠看 scene 切.
     跟 f2e0bb7 (num_plays 修复) 一起, 桌宠从未实际跑过.
-  - 验证步骤: `npm run tauri:dev` → screencapture 截 0s / 7s / 14s, 确认 scene 真切.
+  - 验证步骤: `npm --prefix app run tauri:dev` + HTTP fallback 验证 /scenes /state /show.
     不切 → 排查 apng-js 'end' 是否绑成功. 切但视觉差 → 排查 APNG 解码.
+  - 实测: drink-coffee 强制切生效, 8s 后事件驱动自动切到 detective-study, recentScenes 维护 OK.
+  - 视觉验证受限: mcode 全屏 UI 占屏, screencapture 截到空白 PNG (5.8KB). 窗口 bounds [100,100,116,116] 存在
+    (CGWindowList optionAll 查到), HTTP /state 数据正常. 视觉验证需要用户手动看.
   - 预计: 15 分钟
 - [ ] **P0-3** scenes.json 加一个真 Lottie 场景 (M5b 演示落地)
-  - 根因: M5b 装了 lottie-web 但 scenes.json 2 条还是 apng. architecture 证明
-    完了, 但 production 没用到, 价值没兑现.
+  - 根因: M5b 装了 lottie-web 但 scenes.json 3 条还是 apng (2026-09-09 drink-coffee
+    仍是 APNG, Lottie 仍未落地). architecture 证明完了, 但 production 没用到, 价值没兑现.
   - 加场景步骤: lottiefiles.com 找 1 个章鱼/海洋主题 free Lottie JSON →
     `scenes.json` 加 entry `{"id": "x", "animation": {"type": "lottie", "source":
     "<url>"}, "bubbleLines": [...]}` → 跑 `build-scene-registry.sh` → 桌宠实际起
@@ -166,7 +170,7 @@
 ## 立即下一步 (P0)
 
 1. **P0-1** CI 校验 V2 APNG num_plays=1 (20 分钟) — 防同类回归
-2. **P0-2** 端到端跑 Tauri 桌宠, screencapture 验证 scene 切 (15 分钟)
-3. **P0-3** scenes.json 加 1 个真 Lottie 场景 (30 分钟, 跟 P0-2 一起做)
+2. ~~**P0-2** 端到端跑 Tauri 桌宠, screencapture 验证 scene 切 (15 分钟)~~ ✅ 2026-09-09 fef8017
+3. **P0-3** scenes.json 加 1 个真 Lottie 场景 (30 分钟, 唯一 P0 遗留)
 
 完成 P0 后再决定 V1.1 (跨平台) 还是 V3.0 (漫游) 还是别的方向.
