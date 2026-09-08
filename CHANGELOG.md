@@ -6,6 +6,47 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **M5b 第二个 animation provider (Lottie)**: `app/src/animation/providers/lottie.ts`
+  用 `lottie-web` 的 canvas renderer (lottie 内部维护一个 canvas, 我们用 rAF
+  `drawImage` 同步到目标 ctx). 跟 apng provider 行为统一, 调用方拿 ctx 不用管
+  下面是位图 (APNG) 还是矢量 (Lottie). 关键点:
+  - 动态 import lottie-web, 避免 100KB+ 进 initial bundle
+  - 屏幕外 wrapper div + remove cleanup, 避免 DOM 泄漏
+  - 加载超时 (5s) + `data_failed` 错误路径, 不会卡死 useAnimation
+  - 装 `lottie-web@^5.13.0` (新增依赖)
+  - 验证: tsc 0 错误, 24/24 vitest, 8/8 cargo, 16/16 lint, scenes-sync OK
+- **M5 animation abstraction layer**: 加新动画格式 (Lottie / WebM / GIF / ...)
+  不再需要改 FSM/OctopusPet. 之前是 APNG-only, scene 加载 / getApngUrl /
+  useApngPlayer / canvas size 全部硬编码 APNG. 新架构:
+  - `app/src/animation/types.ts` — `Animation` + `AnimationProvider` 接口
+    (start / stop / onCycleEnd / nativeWidth / nativeHeight / cycleMs)
+  - `app/src/animation/registry.ts` — 单例 `animationRegistry.register(type, provider)` / `.get(type)`
+  - `app/src/animation/providers/apng.ts` — 内置 APNG provider (包装 apng-js)
+  - `app/src/hooks/useAnimation.ts` — 通用 hook (查 registry → provider.create → 绑 onCycleEnd)
+  - `app/src/main.tsx` — 启动时 `animationRegistry.register(apngProvider.type, apngProvider)`
+  - 删 `app/src/state/scenes.ts` (getApngUrl 移到 apng provider 内)
+  - 删 `useApngPlayer` hook (OctopusPet 52 行 → 1 行)
+
+  scenes.json schema 升级: 每条 scene 加 `animation` 字段 `{ type, source }`.
+  老 entry (没 `animation` 字段) 走 `{type: "apng", source: <scene-id>}` 1:1 命名
+  兼容. `check-scenes-sync.sh` 按 `animation.type` 走不同路径 — apng 检查本地
+  .png, http/https/data URL 跳过本地检查, 其它类型按 source 路径检查.
+
+  FSM/OctopusPet/useAnimation 零修改. 业务代码 (CLICK/PET/ASK/DRAG/ROTATE_NOW)
+  也不知道 scene 是 APNG 还是 Lottie.
+
+### Fixed
+- **APNG num_plays 0 → 1 (修复 M5b 引入的事件驱动 regression, commit f2e0bb7)**:
+  M5b (e068559) 重生成 V2 APNG 时 `extract-chromakey-apng.py` 默认 `loop=0`,
+  导致 2 张 V2 APNG `acTL.num_plays=0` (无限循环). apng-js 只在 `numPlays=1`
+  时才 emit `'end'` 事件, 无限循环下 scene 永远不切, 整条 V2.1 事件驱动调度
+  (`apng-js 'end'` → `SCENE_LOOPED` → `rotateScene`) 静默失效. 修复:
+  - `scripts/extract-chromakey-apng.py`: 默认 `loop=0` → `loop=1`, 加 `--loop`
+    flag (未来 idle 无限循环场景用 `--loop 0`)
+  - 重生成 2 张 V2 APNG (50 帧 × 132ms × 192×192, 视觉一致)
+  - 删遗留 `useMcpBridge.ts` (M3 重命名 `useTauriEventBus` 后一直没删, 无引用)
+
 ### Changed
 - **M1-M4 refactor (2026-08-27): 架构清理 + scenes.json 单一源 + 自动生成 TS/Rust**.
   用户反馈 "整理优化下当前的架构设计, 确保设计和代码上的逻辑都是最精简

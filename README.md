@@ -3,30 +3,29 @@
 > A coral-pink octopus desktop pet for **mcode** (MiniMax Code / Mavis) — built as an
 > [agent-plugins.org v1.0.0](https://agent-plugins.org/specification) plugin.
 
-mcode 启动时自动 spawn 章鱼 .app, **2 个 V2 视频成品** (detective-study 戴帽研究 + worker-construction 工人施工) 8s 自动轮转, 单击弹气泡、右键摸头 (+亲密度)、拖动换位置, 6 个 MCP tools 让 mcode Agent 远程控制. 跨 8 客户端 portable (mcode / Cursor / Claude Code / VS Code / Codex / Kiro / Antigravity / Gemini CLI). repo 本身即插件: `bin/octopus-pet.bin` 提交进 git, clone 零构建即可加载.
+mcode 启动时自动 spawn 章鱼 .app, **2 个 V2 视频成品** (detective-study 戴帽研究 + worker-construction 工人施工) 事件驱动轮转 (apng-js `'end'` 事件 → FSM `rotateScene`, 0 累积延迟), 单击弹气泡、右键摸头 (+亲密度)、拖动换位置, 6 个 MCP tools 让 mcode Agent 远程控制. 跨 8 客户端 portable (mcode / Cursor / Claude Code / VS Code / Codex / Kiro / Antigravity / Gemini CLI). repo 本身即插件: `bin/octopus-pet.bin` 提交进 git, clone 零构建即可加载.
 
-**V1.5 (2026-08-21)**: 默认只跑 2 个 V2 视频成品, 不用 14 V1 spritesheet (打工人 meme 表情包). 14 V1 移到 `app/public/assets/octopus/_archive-v1-spritesheets/` 不再用. 加新场景: 跑 H3/gen_videos → `scripts/extract-chromakey-apng.py` → `app/public/assets/octopus/v2/<scene>.png` + 同步 `types.ts` + `mcp_stdio.rs`.
+**V2.1 (2026-08-27) + M5b (2026-08-27)**: 事件驱动 scene 调度治本 4 个 V1.5 timer bug (中段剪切 / wall-clock 漂移 / 高频 IPC 压力 / 镜像乱序). M5b 加 lottie-web 作为第二个 animation provider, 业务代码零修改可换动画格式. 加新场景: 跑 H3/gen_videos → `scripts/extract-chromakey-apng.py` → `app/public/assets/octopus/v2/<scene>.png` + 改 `scenes.json` + 跑 `build-scene-registry.sh`.
 
 ---
 
-## 状态 (V1.5, 2026-08-21)
+## 状态 (V2.1, 2026-08-27)
 
 | 阶段 | 状态 | 备注 |
 |------|------|------|
-| **W1 D1** | ✅ 完成 | 14 spritesheet + 6 scripts + plugin 三件套 + GitHub repo |
-| **W1 D2** | ✅ 完成 | Tauri 2 scaffold + 透明 192×192 窗口 + React mount + MCP stdio stub |
-| **W1 D3** | ✅ 完成 | XState FSM + 8s 轮转 + spritesheet 渲染 + 单击/右键摸头/拖动 |
-| **W1 D4** | ✅ 完成 | 单实例插件 + 状态权威收敛 (XState 唯一权威, sync_state 镜像回写) + HTTP 断链修复 |
-| **W2** | ✅ 完成 | Rust MCP server 完整化 (6 tools, 8 roundtrip tests, headless 直写) |
-| **V0.5/V2** | ✅ 完成 | H3 + gen_videos 跑通 2 视频, PIL v3 chroma key 沉淀, 4 步管线 |
-| **V1.5** | ✅ 完成 (2026-08-21) | 默认切 2 个 V2 视频成品, 14 V1 spritesheet 移到 archive |
-| **W1.1+** | ⏳ | mcode 任务事件 → 场景 映射 (mcode 钩子) / 多 session 共享 (UDS 转发) |
-| **W3** | ⏳ | mcode 集成验证 (spawn → 通信) + 跨客户端 portable 验证 |
-| **W4/W5** | ⏳ | 交互打磨 + 性能 (启动 < 3s, 体积 < 30MB) + GitHub release |
+| **V2.1** | ✅ 完成 (2026-08-27) | 事件驱动 scene 调度 (apng-js `'end'` → `SCENE_LOOPED` → FSM) |
+| **M1-M4** | ✅ 完成 (2026-08-27) | 架构清理 + scenes.json 单一源 + 自动生成 TS/Rust |
+| **M5** | ✅ 完成 (2026-08-27) | animation abstraction layer (Animation / AnimationProvider / registry) |
+| **M5b** | ✅ 完成 (2026-08-27) | 第二个 animation provider (Lottie), 换格式业务代码零修改 |
+| **V2.1 regression fix** | ✅ 完成 (2026-09-09 f2e0bb7) | APNG num_plays 0 → 1, 删遗留 useMcpBridge.ts |
+| **V1.5 之前的 14 V1 表情包** | ⛔ 已废弃 | 移到 `app/public/assets/octopus/_archive-v1-spritesheets/`, 不用 |
+| **P0-1 / P0-2 / P0-3** | ⏳ | CI 校验 num_plays=1 / Tauri 桌宠实际跑 / 加真 Lottie 场景 (见 TODO.md) |
+| **V1.1 跨平台** | ⏳ | Windows / Linux 打包验证 (挂 2 周, 待 Windows/Linux 机器) |
+| **V3.0 屏幕漫游** | ⏳ (可选) | 章鱼屏幕右下角固定 + 8s ±2px 浮动 |
 
 ---
 
-## 架构 (状态权威模型, 2026-08-18 重构)
+## 架构 (M1-M5b, 2026-08-27 refactor)
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
@@ -49,27 +48,29 @@ mcode 启动时自动 spawn 章鱼 .app, **2 个 V2 视频成品** (detective-st
 │  │                                                         │        │ │
 │  │  WebView (React 19)                                     │        │ │
 │  │  XState FSM (唯一状态权威) ─────────────────────────────┘        │ │
-│  │    14 场景 8s 轮转 · 气泡 · 亲密度 · 位置                         │ │
-│  │    单击/右键摸头/拖动 + 14 spritesheet 渲染                       │ │
+│  │    2 场景 · 事件驱动 6.6s 切 (apng-js 'end' → SCENE_LOOPED)        │ │
+│  │    气泡 · 亲密度 · 位置 · 单击/右键摸头/拖动                      │ │
+│  │    渲染: canvas + apng-js (V2.1) / lottie-web (M5b 第二 provider) │ │
 │  └──────────────────────────────────────────────────────────────────┘ │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-**栈**: Tauri 2 (Rust + React 19 + Vite 6 + XState 5)  
+**栈**: Tauri 2 (Rust + React 19 + Vite 6 + XState 5) + apng-js 1.1.5 (V2.1) + lottie-web 5.13 (M5b)  
 **窗口**: 116×116 (= APNG 192×192 60% 缩放显示), transparent, no decorations, alwaysOnTop, skipTaskbar  
 **状态权威**: XState (前端 FSM) → `sync_state` 回写 Rust `SharedState` 镜像;协议入口 (MCP/HTTP) 只调 `actions.rs` 发事件  
-**场景 (V1.5)**: 2 (detective-study, worker-construction)
+**场景 (V2.1)**: 2 (detective-study, worker-construction) · 事件驱动 6.6s 切, 随机+去重 (最近 1 个不连续重复)  
+**动画格式**: APNG (内置) / Lottie (M5b provider) — 加新格式走 `animation/providers/<type>.ts` + `main.tsx` register, 业务零修改
 
 ---
 
-## V1.5 默认 2 场景 (verified 2026-08-21)
+## V2.1 默认 2 场景 (verified 2026-08-27, num_plays=1)
 
 | # | 场景 | OctopusScene | 文案示例 | 帧数 | 素材 |
 |---|------|-------------|---------|------|------|
 | 1 | 戴帽研究 (H3 6s) | `detective-study` | "在研究" "放大看看" | 50 帧 × 132ms = 6.6s | H3 + `last_frame_image` 双图, 96.58% 首末一致 |
 | 2 | 工人施工 (gen_videos 6s) | `worker-construction` | "施工中" "砸一下" | 50 帧 × 132ms = 6.6s | gen_videos Hailuo-2.3, 99.85% 相似 |
 
-每个 APNG = 192×192 px, RGBA, 2.3MB. 走 `scripts/extract-chromakey-apng.py` v3 chroma key (中性色 alpha=255, 避免眼睛高光抠成半透明). 浏览器原生循环, 不需要 frame 计数器.
+每个 APNG = 192×192 px, RGBA, 2.3MB, **`acTL.num_plays=1` (事件驱动关键)**, 走 `scripts/extract-chromakey-apng.py` v3 chroma key (中性色 alpha=255, 避免眼睛高光抠成半透明). 渲染: `<canvas>` + apng-js, 听 `'end'` 事件 → `SCENE_LOOPED` → FSM `rotateScene`, 严格对齐 APNG 最后一帧, 0 累积延迟.
 
 **14 V1 spritesheet (V1 废弃, 不再用)**: 移到 `app/public/assets/octopus/_archive-v1-spritesheets/`. 是 octopus-meme skill 出的"打工人"表情包, 不是桌宠, 治本 V1.5 改用 V2 视频成品.
 
@@ -92,17 +93,17 @@ mcode 启动时自动 spawn 章鱼 .app, **2 个 V2 视频成品** (detective-st
 
 ---
 
-## 已知 V1 限制 (留 V2 增量)
+## 已知 V2.1 限制 (留 V3.0+ 增量)
 
-- **单实例 only (tauri-plugin-single-instance)**: 多 mcode session 场景下, 首个 session 启动的章鱼 .app 赢了, 后续 session 的 .app 立即被 kill, 后续 session 的 MCP tool call 失败 (没有 stdio 接). 真正的多 session 共享留 V1.1+ (走 Unix domain socket 转发).
-- **RGB 无 alpha**: 14/14 场景 PNG 是 720×720 RGB (背景是实色), 不是透明. Tauri 透明窗口里章鱼显示成 RGB 矩形, 不会跟桌面融合. V2 用图像分割 / chroma key 加 alpha.
-- **141 帧 (3× 计划值)**: 状态机 8s 轮转会半截切换场景 (单循环 ~11.75s). V1 接受, V2 调帧率.
-- **mcode 事件 → 章鱼 切状态 不做**: mcode 暂时没好钩子, V1 简单 timer 轮转. V1.1+ 接 mcode 钩子.
-- **macOS only**: V1 不支持 Windows / Linux. V2 增量.
-- **音频不做**: 摸头/切状态 音效 V1 不做, V2 增量.
-- **鼠标右键菜单 简化**: V1 只有"摸头", 没有"设置/退出/关于". V2 增量.
-- **开机自启 不做**: V1 不做, V2 增量.
-- **多屏幕 / 鼠标穿透 不做**: V1 不做, V2 增量.
+- **单实例 only (tauri-plugin-single-instance)**: 多 mcode session 场景下, 首个 session 启动的章鱼 .app 赢了, 后续 session 的 .app 立即被 kill, 后续 session 的 MCP tool call 失败 (没有 stdio 接). 真正的多 session 共享留 V3.0+ (走 Unix domain socket 转发).
+- **macOS only**: V2.1 不支持 Windows / Linux. V1.1 跨平台验证挂 2 周, 待 Windows/Linux 机器.
+- **mcode 任务事件 → 章鱼 切状态 不做**: mcode 暂时没好钩子, V2.1 简单事件驱动轮转. V3.0+ 接 mcode 钩子.
+- **音频不做**: 摸头/切状态 音效 V2.1 不做, V3.0 增量.
+- **鼠标右键菜单 简化**: V2.1 只有"摸头", 没有"设置/退出/关于". V3.0 增量.
+- **开机自启 不做**: V2.1 不做, V3.0 增量.
+- **多屏幕 / 鼠标穿透 不做**: V2.1 不做, V3.0 增量.
+
+> 已解决 (留作历史, 不再列限制): 14 V1 表情包移到 archive, 默认 2 V2 视频成品 (V1.5); 状态机 8s 中段切场景 (V2.1 改 6.6s 事件驱动); RGB 无 alpha (V2 chroma key v3 公式); 镜像乱序 + 高频 IPC (V2.1 拆 `autoNextAt` 字段).
 
 ---
 
@@ -133,28 +134,36 @@ octopus-pet/
 ├── bin/
 │   ├── octopus-pet                # entrypoint 桥 (spec §9.2): 本地构建优先, .bin 兜底
 │   └── octopus-pet.bin            # release 二进制 (提交, clone 即用)
+├── scenes.json                    # 场景元数据单一源 (改完跑 build-scene-registry.sh)
 ├── scripts/
-│   ├── audit-octopus-assets.sh    # 14 场景盘点
-│   ├── check-scenes-sync.sh       # 14 场景三源一致 (types.ts/manifest/mcp_stdio.rs)
-│   ├── extract-and-link-octopus-frames.sh  # ffmpeg 抽 01-04 + symlink archive
-│   ├── generate-spritesheet-manifest.sh    # 唯一 manifest → app/src/data/
+│   ├── audit-octopus-assets.sh    # 14 场景盘点 (历史, V2.1 不用)
+│   ├── build-scene-registry.sh    # scenes.json → TS + Rust 自动生成
+│   ├── check-scenes-sync.sh       # scenes.json ↔ generated TS/Rust 一致性
+│   ├── encode-webm-alpha.sh       # VP9 alpha 编码 (V2 长动作备用)
+│   ├── extract-chromakey-apng.py  # mp4 → 50 帧 RGBA APNG, v3 chroma key
 │   ├── lint-octopus-plugin.sh     # spec 合规校验 (16/16)
 │   ├── release-plugin.sh          # 发布: 二进制 + 插件目录 + 冒烟
-│   └── spritesheet-builder.sh     # 14 .webp 拼图
+│   └── remove-hat-greenscreen.py  # V2.1 14 动作绿幕清洗 (历史)
 ├── docs/
-│   └── octopus-assets-audit.md    # 14 场景盘点文档
+│   ├── octopus-assets-audit.md    # 14 场景盘点文档 (历史)
+│   └── v2-h3-to-pet-workflow.md   # H3 / gen_videos → APNG 4 步管线
 ├── app/                           # Tauri webview (React + Vite)
 │   ├── package.json / vite.config.ts / index.html
 │   ├── src/
 │   │   ├── main.tsx / App.tsx
-│   │   ├── components/            # OctopusPet.tsx (192×192 窗口 root, 素材铺满) / Bubble.tsx
-│   │   ├── state/                 # types.ts (14 场景) / octopus-fsm.ts (XState v5) / scenes.ts
-│   │   ├── hooks/                 # useMcpBridge / useTauriWindowDrag / useStateSync (镜像回写)
-│   │   ├── data/
-│   │   │   └── spritesheet-manifest.json   # 唯一 manifest (import 打包)
+│   │   ├── animation/             # M5: Animation / AnimationProvider / registry
+│   │   │   ├── types.ts
+│   │   │   ├── registry.ts
+│   │   │   └── providers/         # apng.ts (内置) / lottie.ts (M5b)
+│   │   ├── components/            # OctopusPet.tsx / Bubble.tsx
+│   │   ├── state/                 # types.ts / octopus-fsm.ts (XState v5) / octopus-fsm.test.ts
+│   │   │   └── scene-registry.generated.ts   # build-scene-registry.sh 产物
+│   │   ├── hooks/                 # useAnimation / useTauriEventBus / useTauriWindowDrag / useStateSync
 │   │   └── styles/global.css
 │   └── public/
-│       └── assets/octopus/        # 14 spritesheet-*.webp (9.1MB total)
+│       └── assets/octopus/
+│           ├── v2/                # 2 V2 APNG (RGBA 192×192, num_plays=1)
+│           └── _archive-v1-spritesheets/  # 14 V1 sprite (废弃)
 ├── src-tauri/                     # Tauri Rust backend
 │   ├── Cargo.toml / Cargo.lock / build.rs / tauri.conf.json
 │   ├── capabilities/default.json
@@ -230,17 +239,21 @@ bash scripts/release-plugin.sh
 
 ---
 
-## 重新生成素材 (W1 D1 已完成, 通常不需要重跑)
+## 重新生成素材 (V2.1+ 流程)
+
+> 加新场景: 改 `scenes.json` + 跑 `build-scene-registry.sh`. 详见 TODO.md P0-3 / AGENTS.md V2.1 章节.
 
 ```bash
-# 1. 抽 01-04 帧 + symlink archive 场景 (ffmpeg)
-OCTOPUS_SOURCE_ROOT=~/Works/octopus-worker-meme scripts/extract-and-link-octopus-frames.sh
+# 1. 拿 H3 / gen_videos 输出 mp4 (参考 docs/v2-h3-to-pet-workflow.md)
+#    H3 + last_frame_image 双图模式: ~/.minimax/agents/mavis/skills/h3-dual-image-video-gen/
+#    gen_videos: connector__matrix__gen_videos (Hailuo-2.3 默认 6s)
 
-# 2. 拼 14 张 spritesheet (ImageMagick)
-scripts/spritesheet-builder.sh --all
+# 2. mp4 → 50 帧 RGBA APNG (v3 chroma key, 默认 num_plays=1)
+python3 scripts/extract-chromakey-apng.py \
+  --input <scene>.mp4 --output app/public/assets/octopus/v2/<scene>.png
 
-# 3. 生成 React 用的 manifest
-scripts/generate-spritesheet-manifest.sh
+# 3. 改 scenes.json 加 entry
+# 4. 跑 build-scene-registry.sh + check-scenes-sync.sh (CI 必跑)
 ```
 
 ---
@@ -248,12 +261,12 @@ scripts/generate-spritesheet-manifest.sh
 ## 引用 (业界共识)
 
 - [Tauri 2](https://v2.tauri.app/) — Rust + WebView 透明窗口
-- [XState v5](https://stately.ai/docs/xstate) — 14 状态 FSM
+- [XState v5](https://stately.ai/docs/xstate) — 状态机 FSM (事件驱动 SCENE_LOOPED)
+- [apng-js 1.1.5](https://github.com/davidmz/apng-js) — APNG 解码 + `'end'` 事件
+- [lottie-web 5.13](https://github.com/airbnb/lottie-web) — M5b 第二个 animation provider
 - [modelcontextprotocol.io spec 2024-11-05](https://modelcontextprotocol.io/specification/2024-11-05) — MCP 协议
 - [agent-plugins.org v1.0.0](https://agent-plugins.org/specification) — Plugin 规范
 - [agentskills.io](https://agentskills.io/specification) — Skill frontmatter
-- [octopus-meme](https://github.com/weekbin/octopus-meme) — 14 场景原素材
-- 参考项目: [aemeath-claude-pet](https://github.com/77wliNd/aemeath_withclaude) / [Hermes 桌宠](https://github.com/Ash-Blanc/hermey-the-pet) / [Codex 拓麻歌子](https://github.com/openai/codex) / [clawd-on-desk](https://github.com) — Tauri 桌宠先例
 
 ---
 
