@@ -42,7 +42,7 @@ export function OctopusPet() {
   const onCycleEnd = useCallback(() => {
     send({ type: "SCENE_LOOPED" } as OctopusEvent);
   }, [send]);
-  useAnimation(canvasRef.current, currentScene, onCycleEnd);
+  useAnimation(canvasRef, currentScene, onCycleEnd);
 
   // Bubble 3s 计时: 单独 setTimeout, 不用全局 timer.
   useEffect(() => {
