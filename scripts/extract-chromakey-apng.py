@@ -8,18 +8,21 @@ Designed for octopus-pet V2 pipeline: 14 动作视频统一抽帧 + 绿幕抠像
 Pipeline (4 步):
   1. ffmpeg 抽帧 (mp4 → PNG 序列, 默认 15fps)
   2. PIL resize 到桌宠尺寸 (192×192)
-  3. PIL chroma key v3: G - max(R,B) 阈值法 (避开眼睛高光被抠成半透明)
+  3. PIL chroma key v4: 相对绿度 (G - max(R,B)) / G, 阈值化
   4. PIL APNG 输出 (disposal=0, 默认 132ms/帧 ≈ 7.5fps, 50 帧 = 6.6s)
 
-为什么是 v3 公式 (不要 v1):
-  v1 用 "G > 100, R < 150, B < 150, G - max(R,B) > 30" 判断绿,
-  软边界 `greenness = clip((G - max(R,B)) / 60 + 0.5, 0, 1)`,
-  对 G ≈ max(R,B) 的中性色 (白色高光, 章鱼眼反光) 给出 alpha=0.5
-  (半透明) → 眼睛高光变透明, 桌宠上看着" 眼睛抠过头了".
-
-  v3 改用 `greenness = clip((diff - 10) / 20, 0, 1)`,
-  阈值 10 (G 比 max(R,B) 大 10 才开始透明) + 阈值 30 (完全透明),
-  中性色 (diff ≤ 0) alpha=255 完全不透明, 眼睛高光安全.
+chroma key 演进 (v1 → v3 → v4):
+  v1: greenness = clip((G - max(R,B)) / 60 + 0.5, 0, 1)
+    → 中性色 (白底/高光) alpha=0.5 半透 → 眼睛抠过头
+  v3: greenness = clip((G - max(R,B) - 10) / 20, 0, 1)
+    → 阈值 10/30, 中性色 (diff≤0) alpha=255 不透
+    → 修复 v1, 但 "白底偏一点绿" (e.g. RGB 164,182,150, G-R=18) 仍 alpha=153
+    → 桌宠眼睛下边缘显"高亮透明" (2026-09-09 用户反馈)
+  v4: greenness = clip(((G - max(R,B)) / G - 0.2) / 0.3, 0, 1)
+    → 相对绿度, 跟 G 本身归一化. 暗绿 (17,44,15) 相对绿度 0.61 → 透明;
+      白底偏绿 (164,182,150) 相对绿度 0.10 → 不透; 纯白 0 → 不透.
+    → partial-alpha 像素减少 ~50% (从 167 → 89 在 drink-coffee 眼睛下边缘测试)
+    → 正确处理章鱼眼高光 + 边缘抗锯齿
 
 Usage:
   python3 scripts/extract-chromakey-apng.py \
@@ -32,13 +35,11 @@ Options:
   --size 192            输出 APNG 边长, 192 = 桌宠标准 (默认 192)
   --duration 132        APNG 每帧 ms (默认 132ms, 50 帧 ≈ 6.6s 一循环)
   --disposal 0          APNG disposal, 0=不合并 (推荐, 避免 PIL 合并相同帧)
-
-Known limitations (V2.1 待修):
-  - 绿幕反射进眼镜片 (H3 模型产物): 当前 v3 公式不处理
-    治本改 prompt: 加 "no green tint reflection in eyes"
-  - 长动作 (> 8s) 帧数会变多, 体积涨, 可降 --frame-count 到 30
+  --loop 1              APNG loop count (1 = play once for event-driven, 0 = infinite)
+  --chromakey {v3,v4}   chroma key 版本 (默认 v4)
 
 Verified: 2026-08-21 W1 D5, 01-detective-study (H3 96.58% 相似, 桌宠透明 OK)
+Updated: 2026-09-09, v3 → v4 修复"白底偏绿被抠成半透" 眼睛下边缘 regression
 """
 import argparse
 import os
@@ -87,18 +88,43 @@ def chromakey_v3(arr: np.ndarray) -> np.ndarray:
     return ((1.0 - greenness) * 255).astype(np.uint8)
 
 
+def chromakey_v4(arr: np.ndarray) -> np.ndarray:
+    """v4 chroma key: 相对绿度 (G - max(R,B)) / G, 阈值化.
+
+    v3 问题: 白色眼底的微小绿影 (e.g. RGB 164,182,150) G-R=18 → alpha=153 半透,
+    桌宠眼睛下边缘显"高亮透明" 效果 (2026-09-09 用户反馈).
+
+    v4 改进: 把 G 差归一化到 G 本身, 形成" 绿在 G 里的占比"指标.
+    暗绿 (17,44,15) 相对绿度 0.61 → 透明; 白底偏绿 (164,182,150) 相对绿度 0.10 → 不透;
+    纯白/纯黑/章鱼皮肤/黄/阴影 → 全部不透.
+
+    Args:
+        arr: HxWx3 uint8 RGB 数组
+    Returns:
+        HxW uint8 alpha 数组 (255=不透明, 0=透明)
+    """
+    r, g, b = arr[:, :, 0].astype(int), arr[:, :, 1].astype(int), arr[:, :, 2].astype(int)
+    g_max_rb = g - np.maximum(r, b)  # 绿度差
+    # 相对绿度: 绿度差 / G 本身, 归一化到 0-1 (G=0 时保护 0)
+    rel_green = np.where(g > 0, g_max_rb / np.maximum(g, 1), 0.0)
+    # 软边界: 0.2 以下完全不透明, 0.5 以上完全透明
+    greenness = np.clip((rel_green - 0.2) / 0.3, 0.0, 1.0)
+    return ((1.0 - greenness) * 255).astype(np.uint8)
+
+
 def process_frames(
-    src_dir: Path, indices: list[int], size: int
+    src_dir: Path, indices: list[int], size: int, chromakey: str = "v4"
 ) -> list[Image.Image]:
     """加载 + resize + chroma key → RGBA PIL Image 列表"""
-    print(f"[2/4] load {len(indices)} frames, resize to {size}x{size}, chroma key v3...")
+    print(f"[2/4] load {len(indices)} frames, resize to {size}x{size}, chroma key {chromakey}...")
+    chromakey_fn = chromakey_v3 if chromakey == "v3" else chromakey_v4
     images = []
     for i in indices:
         img = Image.open(src_dir / f"frame_{i:03d}.png").convert("RGB")
         if img.size != (size, size):
             img = img.resize((size, size), Image.LANCZOS)
         arr = np.array(img)
-        alpha = chromakey_v3(arr)
+        alpha = chromakey_fn(arr)
         rgba = np.dstack([arr, alpha])
         images.append(Image.fromarray(rgba, mode="RGBA"))
     print(f"        → {len(images)} RGBA frames ready")
@@ -150,6 +176,7 @@ def main() -> int:
     ap.add_argument("--duration", type=int, default=132, help="APNG ms/frame (default 132)")
     ap.add_argument("--disposal", type=int, default=0, help="APNG disposal (default 0)")
     ap.add_argument("--loop", type=int, default=1, help="APNG loop count (default 1 = play once; 0 = infinite)")
+    ap.add_argument("--chromakey", choices=["v3", "v4"], default="v4", help="Chroma key version (default v4)")
     ap.add_argument("--keep-temp", action="store_true", help="Keep temp frame dir")
     args = ap.parse_args()
 
@@ -167,7 +194,7 @@ def main() -> int:
             return 1
         indices = sample_indices(n_total, args.frame_count)
         print(f"        → sample {len(indices)} from {n_total}: {indices[:3]}...{indices[-3:]}")
-        images = process_frames(tmp_dir, indices, args.size)
+        images = process_frames(tmp_dir, indices, args.size, args.chromakey)
         save_apng(images, args.output, args.duration, args.disposal, args.loop)
         if args.keep_temp:
             shutil.copytree(tmp_dir, args.output.with_suffix(".frames"))
