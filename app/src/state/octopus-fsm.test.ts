@@ -18,7 +18,7 @@ import {
   type OctopusScene,
 } from "./types";
 
-describe("octopus-fsm (V2.1: 2 V2 场景 + 事件驱动)", () => {
+describe("octopus-fsm (V2.1: N V2 场景 + 事件驱动)", () => {
   describe("initial state", () => {
     it("starts on detective-study with empty recentScenes and no bubble", () => {
       const actor = createActor(octopusMachine).start();
@@ -32,28 +32,26 @@ describe("octopus-fsm (V2.1: 2 V2 场景 + 事件驱动)", () => {
     });
   });
 
-  describe("SCENE_ORDER (V2.1 2 场景)", () => {
-    it("contains exactly 2 V2 scenes", () => {
-      expect(SCENE_ORDER).toEqual(["detective-study", "worker-construction"]);
+  describe("SCENE_ORDER (V2.1 N 场景)", () => {
+    it("contains 3 V2 scenes", () => {
+      expect(SCENE_ORDER).toEqual(["detective-study", "worker-construction", "drink-coffee"]);
     });
   });
 
   describe("V2 pickRandomScene", () => {
-    it("2 场景: exclude current, picks the other one", () => {
-      // N=1, current=detective-study, recent=[]. exclude = {detective-study}, candidates = [worker-construction]
+    it("2 候选: exclude current, picks the other one", () => {
+      // N=1, current=detective-study, recent=[worker-construction]. exclude = {detective-study, worker-construction} → 空 → 防御退化
+      // 改测: 2 候选场景下, exclude current 必 picks the other one (recent 留空)
       const result = pickRandomScene("detective-study", [], () => 0);
-      expect(result).toBe("worker-construction");
-      const result2 = pickRandomScene("worker-construction", [], () => 0);
-      expect(result2).toBe("detective-study");
+      // candidates = {worker-construction, drink-coffee}, picks rng=0 → SCENE_ORDER[0] 排除 detective-study 后的第一个
+      expect(["worker-construction", "drink-coffee"]).toContain(result);
     });
 
     it("excludes current + recent from candidates", () => {
       const recent: OctopusScene[] = ["worker-construction"];
-      // exclude = {detective-study, worker-construction} → 空 → 防御分支退化为全候选
-      // candidates 全空时 pickRandomScene 仍返回某个 (防御)
+      // exclude = {detective-study, worker-construction} → candidates = {drink-coffee}
       const result = pickRandomScene("detective-study", recent, () => 0);
-      // 2 场景都被 exclude → 防御: 任意一个 (不保证是哪个, 但 2 候选都不在空集)
-      expect(SCENE_ORDER).toContain(result);
+      expect(result).toBe("drink-coffee");
     });
 
     it("never returns the current scene (N=1 working set)", () => {
@@ -95,7 +93,7 @@ describe("octopus-fsm (V2.1: 2 V2 场景 + 事件驱动)", () => {
       expect(actor.getSnapshot().context.bubble).toBeNull();
     });
 
-    it("2 场景 N=1 多次 SCENE_LOOPED 必不重复 (alternating)", () => {
+    it("3 场景 N=1 多次 SCENE_LOOPED 必不连续重复 (交替覆盖全 3 场景)", () => {
       const actor = createActor(octopusMachine).start();
       const history: OctopusScene[] = [actor.getSnapshot().context.scene];
       for (let i = 0; i < 10; i++) {
@@ -107,8 +105,8 @@ describe("octopus-fsm (V2.1: 2 V2 场景 + 事件驱动)", () => {
           expect(history[history.length - 1]).not.toBe(history[history.length - 2]);
         }
       }
-      // 10 步内 2 场景来回切, 2 个唯一
-      expect(new Set(history).size).toBe(2);
+      // 10 步内覆盖全 3 场景 (3 场景 N=1 必循环覆盖)
+      expect(new Set(history).size).toBe(3);
     });
 
     it("SCENE_LOOPED 不需要 now 参数计算 (治 V1.5 33Hz + Date.now 漂移)", () => {

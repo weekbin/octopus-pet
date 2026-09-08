@@ -5,7 +5,7 @@
 import type { OctopusScene } from "./types";
 
 /** Scene id union — derived from scenes.json */
-export const SCENE_IDS = ["detective-study", "worker-construction"] as const;
+export const SCENE_IDS = ["detective-study", "worker-construction", "drink-coffee"] as const;
 
 /** First-occurrence order — used by V2.1 pickRandomScene */
 export const SCENE_ORDER: readonly OctopusScene[] = SCENE_IDS;
@@ -14,6 +14,7 @@ export const SCENE_ORDER: readonly OctopusScene[] = SCENE_IDS;
 export const BUBBLE_BY_SCENE: Record<OctopusScene, readonly string[]> = {
   "detective-study": ["在研究", "放大看看", "找到了", "等一下", "认真脸", "让我看看...", "用户不好糊弄"],
   "worker-construction": ["施工中", "砸一下", "放桌子", "建好了", "戴好安全帽", "让我想想...", "我摸鱼应该不会被发现"],
+  "drink-coffee": ["喝咖啡", "好香啊", "续杯吗", "今日份咖啡", "早八续命", "摸鱼时间", "让我清醒一下"],
 } as const;
 
 /**
@@ -40,5 +41,10 @@ export const SCENES: readonly Scene[] = [
     id: "worker-construction",
     animation: { type: "apng", source: "worker-construction" },
     bubbleLines: ["施工中", "砸一下", "放桌子", "建好了", "戴好安全帽", "让我想想...", "我摸鱼应该不会被发现"],
+  },
+  {
+    id: "drink-coffee",
+    animation: { type: "apng", source: "drink-coffee" },
+    bubbleLines: ["喝咖啡", "好香啊", "续杯吗", "今日份咖啡", "早八续命", "摸鱼时间", "让我清醒一下"],
   },
 ];
