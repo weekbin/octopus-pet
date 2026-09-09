@@ -23,7 +23,7 @@
 - **M5b Lottie provider** (2026-08-27) ✅ 第二个 provider (lottie-web canvas renderer), 证明换格式业务代码零修改
 - **M5b regression fix** (2026-09-09 commit f2e0bb7) ✅ APNG num_plays 0 → 1, 删遗留 useMcpBridge.ts
 - **P0-2 端到端跑 Tauri 桌宠** (2026-09-09 fef8017) ✅ HTTP fallback 验证 3 scenes 切换 + 事件驱动 6.6s 自切
-- **chroma key v3 → v4.6 (7 步演进, 2026-09-09 commits 7b09fd3 / 2dc3428 / ab1ddcd / 8a2ca87 / 2e59875 / f18a3c7 / 27d9c74 / 06c70dc / current)** ✅ 沉淀到 `extract-chromakey-apng.py` 默认:
+- **chroma key v3 → v4.7 (8 步演进, 2026-09-09 commits 7b09fd3 / 2dc3428 / ab1ddcd / 8a2ca87 / 2e59875 / f18a3c7 / 27d9c74 / 06c70dc / current)** ✅ 沉淀到 `extract-chromakey-apng.py` 默认:
   - v3 → v4: 相对绿度公式修"白底偏绿被抠成半透" (眼白下边缘"高亮透明")
   - v4 → v4.1: + 深色阴影保护修 H3 在脸颊/触手上渲染的深绿反射被误扣 → 桌宠身体"白色斑块"
   - v4.1 → v4.2: 阈值收紧 + 中绿保护 + alpha 羽化, 修 H3"绿黄残留" (RGB 155,188,75) + 192→116 resize 边缘锯齿
@@ -32,7 +32,8 @@
   - v4.4 → v4.5: mask 6px 膨胀 (kernel 3x3, iterations=2) + radius=4 → 修"绿调反射高光" (H3 帽子/放大镜 RGB ~150,130,60 或 145,147,23, 视觉像绿调). 50 帧总和: detective-study -81px, worker-construction -690px, drink-coffee 持平
   - v4.5 → v4.5.1: mask 拆成 2 步独立 inpaint — partial+透明 (Telea r=5, 不膨胀) 保留眼睛清晰度 + green_opaque 单独 6px 膨胀 (Telea r=4) 修身体/帽子绿调反射. 眼睛 v4.4 锐利恢复, 帽子/放大镜绿调反射仍消除
   - v4.5.1 → v4.6: alpha 激进收紧 (alpha < 80 → 0, > 175 → 255) + partial mask 1px 膨胀 + inpaint radius 5→8 → 治本 v4.5.1 残余 4 类 (眼睛半透 / 身体边缘绿阴影 / 物品周围绿阴影 / 切换绿残影). partial 6000 → 4600 -24-28%, alpha 羽化后低 alpha < 30 重新归 0
-  - 3 场景 v4.6 APNG 重建 (current) + 桌宠视觉验证 PASS: 完全无绿色描边/阴影/反射, 侦探帽纯净棕色, 放大镜玻璃反射消除, 黄色施工帽边缘绿调消除, 眼睛清晰锐利, 切换时无绿残影
+  - v4.6 → v4.7: + green_tinted_white mask (`alpha=255 + R>200 + R+G+B>600 + G>B+5` 检测"白色像素 G 偏色") + 单独 inpaint r=3 → 治本"眼白发黄/发绿". drink-coffee 眼周 225 白色像素 70% G 偏色 (R=240 G=153 B=131) → 治本后 0 像素
+  - 3 场景 v4.7 APNG 重建 (current) + 桌宠视觉验证 PASS: 完全无绿色描边/阴影/反射, 侦探帽纯净棕色, 放大镜玻璃反射消除, 黄色施工帽边缘绿调消除, 眼睛清晰锐利 + 真正纯白, 切换时无绿残影
 - **cargo test 预期值同步** (current) ✅: 修 mcp_roundtrip.rs::list_states_returns_2_v2_scenes 期望 2→3 (drink-coffee 加项遗漏), 8/8 cargo tests 绿
 - **运行时**: 桌宠进程按需启动 (cargo tauri dev), 3 V2 APNG ready (drink-coffee 99.91% 相似度, 本批最佳)
 

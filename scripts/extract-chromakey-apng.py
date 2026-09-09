@@ -260,29 +260,33 @@ def soften_alpha(alpha: np.ndarray, radius: int = 1) -> np.ndarray:
 
 
 def inpaint_partial_rgb(rgb: np.ndarray, alpha: np.ndarray, radius: int = 8) -> np.ndarray:
-    """v4.6: cv2.inpaint 修 partial + 透明 + 绿偏不透明 + partial 边缘外圈
+    """v4.7: cv2.inpaint 修 partial + 透明 + 绿偏不透明 + 眼白 G 偏色 + partial 边缘外圈
     → partial+透明 mask 1px 膨胀 + radius 8 (从 5 升, 让远处身体色传播更彻底)
     → green_opaque mask 独立 6px 膨胀 (修身体/帽子的绿调反射, v4.5 沿用)
-    → 去"绿色描边" + "绿色阴影" + "物品边缘绿调" + "切换绿残影".
+    → **眼白 G 偏色 mask (v4.7 新增)**: alpha=255 + R+G+B > 600 + G > B+5 + R > 200
+        → inpaint r=3 (小半径, 保护眼周细节), 修 drink-coffee 70% 眼白 G 偏色
+    → 去"绿色描边" + "绿色阴影" + "物品边缘绿调" + "切换绿残影" + **"眼白发黄"**
 
     演进根因:
     v4.3 (2026-09-09): + cv2.inpaint 修 partial + 透明, 去"绿色描边".
     v4.4 (2026-09-09): mask 扩到 alpha=255 绿偏, 去"绿色阴影".
     v4.5 (2026-09-09): mask 6px 膨胀 + radius 4, 去"绿调反射高光" (帽子/放大镜).
     v4.5.1 (2026-09-09): mask 拆 2 步, partial 不膨胀 (避免眼睛模糊 regression).
-    v4.6 (2026-09-09, 当前): alpha 通道激进收紧 (harden_alpha_edges, alpha < 80 → 0,
-        > 175 → 255) + partial mask 1px 膨胀 + radius 5→8, 解决 v4.5.1 残余:
-        - partial 像素 6000 → 1500 (70% 减少, 边缘 hard-key)
-        - radius 5 → 8 (PDE 解算更彻底, 远处身体色覆盖到 partial 像素)
-        - partial mask 1px 膨胀 (外圈 alpha=255 边缘"半 partial"也算 mask)
-        - 切换时无绿残影 (partial hard-key 后, alpha 边缘只有 0/255, 没有中间值拖影)
+    v4.6 (2026-09-09): alpha 通道激进收紧 (harden_alpha_edges, alpha < 80 → 0, > 175 → 255)
+        + partial mask 1px 膨胀 + radius 5→8, partial 像素 6000 → 1500 (70% 减少).
+    v4.7 (2026-09-09, 当前): v4.6 治本 4 类边界问题后, 眼白 G 偏色是新发现:
+        - drink-coffee 眼周 225 个 alpha=255 白色像素, 70% G>B+10 (R=240 G=153 B=131),
+          H3 源视频眼底月牙 RGB 偏 G, 视觉"米黄/发绿"
+        - detective/worker 也残留 1-19 个白色 G 偏色像素 (少但有)
+        - 解决: 新增 green_tinted_white mask, inpaint r=3 把 G 偏色像素替换为
+          周围身体色 (粉红) 或纯白. r=3 小半径避免破坏眼睛细节 (星形高光/瞳孔边界)
 
     Args:
         rgb: HxWx3 uint8 RGB 数组 (H3 渲染原图)
         alpha: HxW uint8 alpha 数组 (v4.6 harden 后的, 80% 都是 0 或 255)
         radius: inpaint 算法传播半径 (8 = v4.6 升, 让远处身体色传播更彻底)
     Returns:
-        HxWx3 uint8 RGB 数组 (partial + 透明 + 绿偏不透明 + 绿调反射外圈 6px 都被修复)
+        HxWx3 uint8 RGB 数组 (partial + 透明 + 绿偏不透明 + 眼白 G 偏色 + 绿调反射外圈 6px 都被修复)
     """
     if not _HAS_CV2:
         return rgb  # fallback: 不修复, v4.2 行为 (有绿描边 + 绿阴影)
@@ -291,14 +295,18 @@ def inpaint_partial_rgb(rgb: np.ndarray, alpha: np.ndarray, radius: int = 8) -> 
     g = rgb[:,:,1].astype(int)
     b = rgb[:,:,2].astype(int)
     max_rgb = np.maximum(np.maximum(r, g), b)
+    sum_rgb = r + g + b
     green_opaque = (alpha == 255) & (g > r + 5) & (g > b + 5) & (max_rgb > 80)
+    # v4.7 新增: 眼白 G 偏色 (alpha=255 + 白色范围 + G>B+5)
+    #   白色范围: R > 200 (亮) 且 R+G+B > 600 (偏白)
+    #   G > B+5: 偏色 (G>B 表示绿调, B>G 表示冷调)
+    green_tinted_white = (alpha == 255) & (r > 200) & (sum_rgb > 600) & (g > b + 5)
     partial_mask = ((alpha > 0) & (alpha < 255)) | (alpha == 0)
     rgb_bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-    # v4.6: 分 2 步独立 inpaint (partial 不膨胀大, partial 1px 膨胀 + radius 8)
+    # v4.7: 分 3 步独立 inpaint
     # 1) partial+transparent 1px 膨胀 + radius 8 (修 partial + 边缘外圈"半 partial")
     if partial_mask.sum() > 0:
         kernel = np.ones((3, 3), np.uint8)
-        # 1px 膨胀: 扩到 partial 边缘外 1 像素 (alpha=255 的"半 partial"也算 mask)
         partial_dilated = cv2.dilate(partial_mask.astype(np.uint8), kernel, iterations=1)
         inpaint_mask_pt = (partial_dilated * 255)
         rgb_bgr = cv2.inpaint(rgb_bgr, inpaint_mask_pt, 8, cv2.INPAINT_TELEA)
@@ -308,6 +316,10 @@ def inpaint_partial_rgb(rgb: np.ndarray, alpha: np.ndarray, radius: int = 8) -> 
         green_dilated = cv2.dilate(green_opaque.astype(np.uint8), kernel, iterations=2)
         inpaint_mask_g = (green_dilated * 255)
         rgb_bgr = cv2.inpaint(rgb_bgr, inpaint_mask_g, 4, cv2.INPAINT_TELEA)
+    # 3) v4.7 新增: 眼白 G 偏色 r=3 (小半径, 保护眼周细节)
+    if green_tinted_white.sum() > 0:
+        inpaint_mask_gtw = (green_tinted_white.astype(np.uint8) * 255)
+        rgb_bgr = cv2.inpaint(rgb_bgr, inpaint_mask_gtw, 3, cv2.INPAINT_TELEA)
     return cv2.cvtColor(rgb_bgr, cv2.COLOR_BGR2RGB)
 
 

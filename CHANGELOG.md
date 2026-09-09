@@ -7,9 +7,9 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
-- **chroma key v4 → v4.2 → v4.3 → v4.4 → v4.5 → v4.5.1 → v4.6 (7 步演进, 2026-09-09 commits 7b09fd3, 2dc3428, ab1ddcd, 8a2ca87, 2e59875, f18a3c7, 27d9c74, 06c70dc, current)**:
-  治本 7 个不同维度的视觉 regression (白底偏绿半透 / 白色斑块 / 边缘锯齿 / 绿色描边 / 绿色阴影 / 绿调反射高光 / 眼睛模糊 / 边缘过渡带绿阴影 / 物品周围绿阴影 / 切换绿残影), 沉淀到 `scripts/extract-chromakey-apng.py` 默认.
-  v4.6 是当前唯一默认 (V2.1 production baseline), v3 作 `--chromakey` 选项兼容保留.
+- **chroma key v4 → v4.2 → v4.3 → v4.4 → v4.5 → v4.5.1 → v4.6 → v4.7 (8 步演进, 2026-09-09 commits 7b09fd3, 2dc3428, ab1ddcd, 8a2ca87, 2e59875, f18a3c7, 27d9c74, 06c70dc, current)**:
+  治本 8 个不同维度的视觉 regression (白底偏绿半透 / 白色斑块 / 边缘锯齿 / 绿色描边 / 绿色阴影 / 绿调反射高光 / 眼睛模糊 / 边缘过渡带绿阴影 / 物品周围绿阴影 / 切换绿残影 / 眼白发黄), 沉淀到 `scripts/extract-chromakey-apng.py` 默认.
+  v4.7 是当前唯一默认 (V2.1 production baseline), v3 作 `--chromakey` 选项兼容保留.
   - **v3 → v4 (相对绿度公式)**: 修复"白底偏绿被抠成半透明" (眼白下边缘显"高亮透明").
     旧 `clip((G - max(R,B) - 10) / 20)` 是绝对绿度阈值, RGB(164,182,150) G-R=18 触发
     partial-alpha 153. 新 `clip(((G - max(R,B)) / G - 0.2) / 0.3)` 归一化到 G 本身,
@@ -60,9 +60,16 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
         切换时前一场景的 alpha 中间值不会拖出"半透绿残影".
     视觉验证: 桌宠 116×116 透明窗口 detective-study / drink-coffee 干净, 黄色施工帽
     边缘绿调消除 (zoom 对比图).
-  - 配套: 3 个 v4.6 APNG 重建 (commits 8a2ca87, 2e59875, f18a3c7, 27d9c74, 06c70dc, current),
-    桌宠 116×116 透明窗口视觉 OK: 完全无绿色描边/阴影/反射, 眼白清晰锐利, 身体边缘干净,
-    物品周围无绿阴影, 切换时无绿残影.
+  - **v4.6 → v4.7 (眼白 G 偏色 mask, inpaint r=3)**: 治本"眼白发黄/发绿"用户反馈.
+    v4.6 治本 4 类边界问题后, drink-coffee 眼周 225 个 alpha=255 白色像素 70% G 偏色
+    (R=240 G=153 B=131), H3 源视频眼底月牙 RGB 偏 G, 视觉"米黄/发绿". detective/worker
+    也残留 1-19 个 G 偏色像素.
+    解决: 新增 green_tinted_white mask (alpha=255 + R>200 + R+G+B>600 + G>B+5), 单独
+    inpaint r=3 (小半径, 保护眼周细节). 治本数据: 3 场景眼周 G 偏色像素 → 0.
+    视觉: drink-coffee 杯子边缘绿反射消除, 眼白真正变纯白, 章鱼身体更纯粉红.
+  - 配套: 3 个 v4.7 APNG 重建 (commits 8a2ca87, 2e59875, f18a3c7, 27d9c74, 06c70dc, current),
+    桌宠 116×116 透明窗口视觉 OK: 完全无绿色描边/阴影/反射, 眼白清晰锐利 + 真正纯白
+    (G 偏色 0 像素), 身体边缘干净, 物品周围无绿阴影, 切换时无绿残影.
 - **cargo test 预期值同步 2 → 3 V2 场景 (drink-coffee 加项遗漏)**:
   修 `src-tauri/tests/mcp_roundtrip.rs::list_states_returns_2_v2_scenes` 期望值
   2→3 + 加 drink-coffee assertion, 8/8 cargo tests 重新绿.
