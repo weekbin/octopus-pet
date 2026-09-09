@@ -7,9 +7,9 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
-- **chroma key v4 → v4.2 (3 步演进, 2026-09-09 commits 7b09fd3, 2dc3428, ab1ddcd)**:
-  治本 3 个不同维度的视觉 regression, 沉淀到 `scripts/extract-chromakey-apng.py` 默认.
-  v4.2 是当前唯一默认 (V2.1 production baseline), v3 作 `--chromakey` 选项兼容保留.
+- **chroma key v4 → v4.2 → v4.3 → v4.4 → v4.5 (5 步演进, 2026-09-09 commits 7b09fd3, 2dc3428, ab1ddcd, 8a2ca87, 2e59875, f18a3c7, 27d9c74, 06c70dc, current)**:
+  治本 5 个不同维度的视觉 regression (白底偏绿半透 / 白色斑块 / 边缘锯齿 / 绿色描边 / 绿色阴影 / 绿调反射高光), 沉淀到 `scripts/extract-chromakey-apng.py` 默认.
+  v4.5 是当前唯一默认 (V2.1 production baseline), v3 作 `--chromakey` 选项兼容保留.
   - **v3 → v4 (相对绿度公式)**: 修复"白底偏绿被抠成半透明" (眼白下边缘显"高亮透明").
     旧 `clip((G - max(R,B) - 10) / 20)` 是绝对绿度阈值, RGB(164,182,150) G-R=18 触发
     partial-alpha 153. 新 `clip(((G - max(R,B)) / G - 0.2) / 0.3)` 归一化到 G 本身,
@@ -22,8 +22,30 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
     阈值 0.2 → 0.15 让绿黄反射也走 soft 透明 (-98%); 加中绿保护避免误扣;
     alpha 通道 1 像素 Gaussian blur 让 192→116 resize 边缘从硬切变软边
     (partial 比例 0.21% → 1.18%).
-  - 配套: 3 个 v4.2 APNG 重建 (commits 8a2ca87, 2e59875, f18a3c7), 桌宠 116×116
-    透明窗口视觉 OK: 眼白清晰, 脸颊/触手上无白色斑块, 绿黄残留去除, 边缘羽化平滑.
+  - **v4.2 → v4.3 (cv2.inpaint 修 partial RGB)**: 修"绿色描边" regression.
+    H3 模型在章鱼身体边缘渲染"绿+粉"混合色 (partial 像素 RGB 均值 R=25, G=198, B=11),
+    alpha 羽化后 partial 像素 RGB 仍偏绿 → 桌宠身体外圈显"绿色描边".
+    cv2.inpaint (Telea, r=5) 用 PDE 解算把 partial + 透明区域 RGB 从远处 alpha=255 像素
+    传播身体色过来. drink-coffee f25 partial 绿偏: v4.2 70% → v4.3 23% (-47pp).
+  - **v4.3 → v4.4 (v4.1 保护加严 + mask 扩展)**: 修"绿色阴影" regression.
+    v4.1 旧保护 `max<80` 把 H3 深绿反射 (RGB ~20,55,8) 也保留 → 触手上绿色阴影;
+    v4.3 inpaint 只修 partial + 透明, 不修 alpha=255 但 RGB 偏绿的像素.
+    v4.4 加严保护 `(max_rgb<80) AND (G-max(R,B)<20)` 区分真阴影 vs 绿反射
+    (深绿反射 28214 个被 v4.4 排除保护), mask 扩展到 alpha=255 绿偏像素
+    (G>R+5 AND G>B+5). drink-coffee f25 partial 绿偏: v4.3 23% → v4.4 0.5% (-22.5pp).
+  - **v4.4 → v4.5 (mask 6px 膨胀 + radius=4)**: 修"绿调反射高光" 残余.
+    v4.4 残余"绿色阴影"主要在 H3 帽子的绿调反射高光 (RGB ~150,130,60 或 145,147,23,
+    R>G 但 B 极低, 视觉上像绿调). v4.4 mask 只覆盖绿偏像素本身, 没扩到外圈;
+    v4.5 mask 6px 膨胀 (kernel 3x3, iterations=2) 把外圈 6 像素都算 mask, radius 从 5
+    降到 4 (膨胀已经覆盖更广, 不需要大 r).
+    50 帧总和: detective-study partial 65→0 + opaque 16→0 (-81px),
+    worker-construction partial 690→0 + opaque 0→0 (-690px), drink-coffee 0→0 (持平).
+  - 配套: 3 个 v4.5 APNG 重建 (commits 8a2ca87, 2e59875, f18a3c7, 27d9c74, 06c70dc, current),
+    桌宠 116×116 透明窗口视觉 OK: 完全无绿色描边/阴影, 侦探帽变纯净棕色, 放大镜玻璃
+    绿色反射消失, 黄色施工帽保留, 白色眼睛/腮红/阴影细节保留.
+- **cargo test 预期值同步 2 → 3 V2 场景 (drink-coffee 加项遗漏)**:
+  修 `src-tauri/tests/mcp_roundtrip.rs::list_states_returns_2_v2_scenes` 期望值
+  2→3 + 加 drink-coffee assertion, 8/8 cargo tests 重新绿.
 
 ### Added
 - **第 3 个场景 drink-coffee (H3 一次过 99.91% 相似度, 2026-09-09 commit fef8017)**:

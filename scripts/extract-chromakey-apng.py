@@ -9,11 +9,12 @@ Pipeline (6 步):
   1. ffmpeg 抽帧 (mp4 → PNG 序列, 默认 15fps)
   2. PIL resize 到桌宠尺寸 (192×192)
   3. PIL chroma key v4.4: 相对绿度 + 严保护 (深色阴影 + 绿度差判断) → 算 alpha
-  4. cv2.inpaint 修 partial + 透明 + 绿偏不透明 RGB (去"绿+粉"混合色 + 深绿反射)
+  4. cv2.inpaint 修 partial + 透明 + 绿偏不透明 RGB + 6px mask 膨胀 (radius=4)
+     → 去"绿+粉"混合色 + 深绿反射 + H3 帽子的绿调反射
   5. PIL alpha 通道 1 像素 Gaussian blur (边缘抗锯齿)
   6. PIL APNG 输出 (disposal=0, 默认 132ms/帧 ≈ 7.5fps, 50 帧 = 6.6s)
 
-chroma key 演进 (v1 → v3 → v4 → v4.1 → v4.2 → v4.3 → v4.4, v4.4 是当前默认):
+chroma key 演进 (v1 → v3 → v4 → v4.1 → v4.2 → v4.3 → v4.4 → v4.5, v4.5 是当前默认):
   v1: greenness = clip((G - max(R,B)) / 60 + 0.5, 0, 1)
     → 中性色 (白底/高光) alpha=0.5 半透 → 眼睛抠过头
   v3: greenness = clip((G - max(R,B) - 10) / 20, 0, 1)
@@ -41,7 +42,7 @@ chroma key 演进 (v1 → v3 → v4 → v4.1 → v4.2 → v4.3 → v4.4, v4.4 �
       从远处 alpha=255 像素传播身体色过来
     → drink-coffee frame_25 partial 绿偏: v4.2 70% → v4.3 23% (-47 个百分点)
     → 视觉: 桌宠 192×192 干净, 没绿色描边, 眼白清晰, 触手上深绿阴影保留
-  v4.4 (2026-09-09, 当前默认): v4.1 保护加严 + inpaint mask 扩展到绿偏不透明像素
+  v4.4 (2026-09-09): v4.1 保护加严 + inpaint mask 扩展到绿偏不透明像素
     → 修 v4.3 残留问题:
       (1) v4.1 旧保护 `max<80` 把 H3 模型深绿反射 (RGB ~20,55,8) 也保留
           → 加绿度判断 `(G - max(R,B)) < 20` 区分真阴影 vs 绿反射
@@ -51,6 +52,24 @@ chroma key 演进 (v1 → v3 → v4 → v4.1 → v4.2 → v4.3 → v4.4, v4.4 �
     → drink-coffee frame_25 partial 绿偏: v4.3 23% → v4.4 0.5% (-22.5 个百分点)
     → 不透明像素绿偏: v4.3 1.7% → v4.4 0.3% (-1.4 个百分点)
     → 视觉: 桌宠 192×192 完全干净, 触手上深绿阴影也被 inpaint 替换为粉色
+    → 残余: detective-study 帽子的绿调反射高光, 放大镜玻璃的绿色反射
+  v4.5 (2026-09-09, 当前默认): inpaint mask 6px 膨胀 + radius=4
+    → 修 v4.4 残余: H3 模型在侦探帽/放大镜/身体渲染"绿调反射光" (RGB ~150,130,60
+      或 145,147,23, R > G 但 B 极低, 视觉上像绿调阴影), v4.4 mask 没扩到这些
+      区域(inpaint 只在绿偏像素本身)
+    → v4.5 mask 6px 膨胀 (kernel 3x3, iterations=2) 把绿偏像素外圈 6 像素都算 mask
+      → inpaint 半径从 5 降到 4 (膨胀 6px 已经覆盖更广, 不需要大 r)
+    → detective-study 50 帧: partial 绿偏 65px → 0px (-65), 不透明 16px → 0px (-16)
+      worker-construction 50 帧: partial 绿偏 690px → 0px (-690)
+      drink-coffee 50 帧: 0 → 0 (持平)
+    → 视觉: detective-study 帽子变纯净棕色, 放大镜玻璃绿色反射消失
+            worker-construction 黄色施工帽保留 (黄色 R>G>B, 不在 G 优势 mask)
+            worker f35 绿色信号旗保留 (道具, 离章鱼较远膨胀没扩散到)
+            白色眼睛 / 腮红 / 阴影细节保留
+
+Verified: 2026-09-09, 3 场景 (detective-study / worker-construction / drink-coffee)
+桌宠 116×116 透明窗口视觉 OK: 完全无绿色描边/阴影, 眼白清晰, 脸颊/触手上无白色斑块, 绿黄残留去除.
+依赖: opencv-python-headless (cv2.inpaint + cv2.dilate, fallback 到 v4.2 行为如果 import 失败).
 
 Usage:
   python3 scripts/extract-chromakey-apng.py \
@@ -64,11 +83,11 @@ Options:
   --duration 132        APNG 每帧 ms (默认 132ms, 50 帧 ≈ 6.6s 一循环)
   --disposal 0          APNG disposal, 0=不合并 (推荐, 避免 PIL 合并相同帧)
   --loop 1              APNG loop count (1 = play once for event-driven, 0 = infinite)
-  --chromakey {v3,v4}   chroma key 版本 (默认 v4.4)
+  --chromakey {v3,v4}   chroma key 版本 (默认 v4.5)
 
 Verified: 2026-09-09, 3 场景 (detective-study / worker-construction / drink-coffee)
 桌宠 116×116 透明窗口视觉 OK: 完全无绿色描边/阴影, 眼白清晰, 脸颊/触手上无白色斑块, 绿黄残留去除.
-依赖: opencv-python-headless (cv2.inpaint, fallback 到 v4.2 行为如果 import 失败).
+依赖: opencv-python-headless (cv2.inpaint + cv2.dilate, fallback 到 v4.2 行为如果 import 失败).
 """
 import argparse
 import os
@@ -183,8 +202,9 @@ def soften_alpha(alpha: np.ndarray, radius: int = 1) -> np.ndarray:
     return np.array(blurred).astype(np.uint8)
 
 
-def inpaint_partial_rgb(rgb: np.ndarray, alpha: np.ndarray, radius: int = 5) -> np.ndarray:
-    """v4.4: cv2.inpaint 修 partial + 透明 + 绿偏不透明 RGB → 去"绿色描边" + "绿色阴影".
+def inpaint_partial_rgb(rgb: np.ndarray, alpha: np.ndarray, radius: int = 4) -> np.ndarray:
+    """v4.5: cv2.inpaint 修 partial + 透明 + 绿偏不透明 RGB + 6px mask 膨胀
+    → 去"绿色描边" + "绿色阴影" + H3 帽子的绿调反射.
 
     v4.2 根因: H3 模型在章鱼身体边缘渲染"绿+粉" 混合色 (partial 像素 RGB 均值
     R=25, G=198, B=11, 100% 绿偏), alpha 羽化后 partial 像素 RGB 仍偏绿 →
@@ -193,12 +213,17 @@ def inpaint_partial_rgb(rgb: np.ndarray, alpha: np.ndarray, radius: int = 5) -> 
     → 桌宠触手上仍有"绿色阴影". v4.4 mask 扩展: alpha=255 且 G>R+5 且 G>B+5
     也算, inpaint 修成身体色.
 
+    v4.5 改进: v4.4 残留"绿调阴影"主要在 H3 帽子的绿调反射高光 (RGB ~150,130,60
+    或 145,147,23, R > G 但 B 极低, 视觉上像绿调), v4.4 mask 没扩到这些区域.
+    v4.5 mask 6px 膨胀 (kernel 3x3, iterations=2) 把绿偏像素外圈 6 像素都算 mask,
+    radius 从 5 降到 4 (膨胀已经覆盖更广, 不需要大 r).
+
     Args:
         rgb: HxWx3 uint8 RGB 数组 (H3 渲染原图)
         alpha: HxW uint8 alpha 数组 (v4.4 chroma key 算的, 含严保护)
-        radius: inpaint 算法传播半径 (5 = 速度效果甜点)
+        radius: inpaint 算法传播半径 (4 = 配合 6px 膨胀甜点)
     Returns:
-        HxWx3 uint8 RGB 数组 (partial + 透明 + 绿偏不透明区域都被 inpaint 修复)
+        HxWx3 uint8 RGB 数组 (partial + 透明 + 绿偏不透明 + 外圈 6px 都被修复)
     """
     if not _HAS_CV2:
         return rgb  # fallback: 不修复, v4.2 行为 (有绿描边 + 绿阴影)
@@ -206,11 +231,16 @@ def inpaint_partial_rgb(rgb: np.ndarray, alpha: np.ndarray, radius: int = 5) -> 
     r = rgb[:,:,0].astype(int)
     g = rgb[:,:,1].astype(int)
     b = rgb[:,:,2].astype(int)
-    green_opaque = (alpha == 255) & (g > r + 5) & (g > b + 5)
+    max_rgb = np.maximum(np.maximum(r, g), b)
+    green_opaque = (alpha == 255) & (g > r + 5) & (g > b + 5) & (max_rgb > 80)
     mask = ((alpha > 0) & (alpha < 255)) | (alpha == 0) | green_opaque
     if mask.sum() == 0:
         return rgb
-    inpaint_mask = mask.astype(np.uint8) * 255
+    # v4.5: 6px 膨胀 (kernel 3x3, iterations=2) 把 mask 外圈 6 像素都覆盖
+    # → 绿偏像素周围的"绿调反射"也被 inpaint 修成身体色
+    kernel = np.ones((3, 3), np.uint8)
+    mask_dilated = cv2.dilate(mask.astype(np.uint8), kernel, iterations=2)
+    inpaint_mask = mask_dilated * 255
     rgb_bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
     rgb_inpainted_bgr = cv2.inpaint(rgb_bgr, inpaint_mask, radius, cv2.INPAINT_TELEA)
     return cv2.cvtColor(rgb_inpainted_bgr, cv2.COLOR_BGR2RGB)
@@ -228,10 +258,10 @@ def process_frames(
         if img.size != (size, size):
             img = img.resize((size, size), Image.LANCZOS)
         arr = np.array(img)
-        # v4.3 流程: chroma key → inpaint 修 RGB → alpha 羽化
+        # v4.5 流程: chroma key → inpaint 修 RGB (含 6px mask 膨胀 + r=4) → alpha 羽化
         alpha = chromakey_fn(arr)
-        # v4.3: 关键步骤 — 替换 partial + 透明区域 RGB, 修"绿+粉"混合色 → 视觉无绿描边
-        rgb_fixed = inpaint_partial_rgb(arr, alpha, radius=5)
+        # v4.5: 关键步骤 — 替换 partial + 透明 + 绿偏不透明 + 6px 外圈, 修"绿调反射"
+        rgb_fixed = inpaint_partial_rgb(arr, alpha, radius=4)
         # v4.2: alpha 羽化 (1 像素 Gaussian blur) 抗锯齿
         alpha = soften_alpha(alpha, radius=1)
         rgba = np.dstack([rgb_fixed, alpha])
