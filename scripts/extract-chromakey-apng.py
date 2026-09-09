@@ -486,8 +486,8 @@ def inpaint_partial_rgb(rgb: np.ndarray, alpha: np.ndarray, radius: int = 8, eye
     #         → 最大连通分量 (>= 30 px) 强制 eye_white 治本
     #         → 解决 v4.16 漏掉 sclera 边缘 + 黑瞳周围问题
     #    操作: HSL L*=1.18 + S=0 → 纯白 (跟 v4.14.2 一致, 命中像素)
-    color_mask = (alpha == 255) & (r3 > 150) & ((r3 - g3) < 70) & ((g3 - b3) >= 0) & ((g3 - b3) < 80) & ((r3 - b3) < 120) & (sum3 < 720) & ~((r3 == g3) & (g3 == b3))
-    # 空间约束: 黑瞳 → sclera zone (瞳中心 ± 25 px, v4.18 放大覆盖整片 sclera)
+    color_mask = (alpha == 255) & (r3 > 150) & ((r3 - g3) < 70) & ((r3 - g3) >= 5) & ((g3 - b3) >= 0) & ((g3 - b3) < 80) & ((r3 - b3) < 120) & (sum3 < 720) & ~((r3 == g3) & (g3 == b3))
+    # 空间约束: 黑瞳 → sclera zone (瞳中心 ± 15 px, v4.23 缩小避免额头误治)
     pupil = (alpha == 255) & (r3 < 50) & (g3 < 50) & (b3 < 50)
     pupil[:70, :] = False  # 限制脸区
     pupil[115:, :] = False
@@ -505,8 +505,8 @@ def inpaint_partial_rgb(rgb: np.ndarray, alpha: np.ndarray, radius: int = 8, eye
                 if sizes[cid-1] > 20:  # 瞳至少 20 px
                     ys, xs = np.where(labeled == cid)
                     cy, cx = int(ys.mean()), int(xs.mean())
-                    y0, y1 = max(0, cy-25), min(pupil.shape[0], cy+25)  # v4.18: ±18 → ±25 覆盖整片 sclera
-                    x0, x1 = max(0, cx-25), min(pupil.shape[1], cx+25)
+                    y0, y1 = max(0, cy-15), min(pupil.shape[0], cy+15)  # v4.23: ±25 → ±15 排除额头
+                    x0, x1 = max(0, cx-15), min(pupil.shape[1], cx+15)
                     sclera_zone[y0:y1, x0:x1] = True
         except ImportError:
             sclera_zone = np.ones_like(pupil)  # fallback: 无空间约束
@@ -518,22 +518,19 @@ def inpaint_partial_rgb(rgb: np.ndarray, alpha: np.ndarray, radius: int = 8, eye
     #      之前 biggest_mask 整个脸 (因为 sclera_zone 是瞳 ± 25 px 方块, 整片脸都是 alpha=255 连通)
     #      → 整片脸都治本, 视觉"白方块"覆盖眼睛上半部分
     #    修复: biggest_mask & color_mask → 只在色域符合的像素治本, fill 不越界
-    if eye_white.sum() > 0 and sclera_zone.sum() > 0:
-        try:
-            from scipy import ndimage as _nd
-            # 在 sclera_zone 内找 alpha=255 像素的连通分量
-            sclera_alpha = (alpha == 255) & sclera_zone
-            sclera_lab, sn = _nd.label(sclera_alpha)
-            if sn > 0:
-                ssizes = _nd.sum(sclera_alpha, sclera_lab, range(1, sn+1))
-                # 找最大连通分量
-                biggest_id = int(np.argmax(ssizes)) + 1
-                if ssizes[biggest_id-1] >= 30:
-                    biggest_mask = (sclera_lab == biggest_id)
-                    # v4.18.1 关键修复: 跟 color_mask 取交集, 避免 fill 越界
-                    eye_white = eye_white | (biggest_mask & color_mask)
-        except ImportError:
-            pass
+    #    v4.21 二次修复: biggest_mask 跟 (color_mask & sclera_zone) 取交集
+    #      诊断 (2026-09-09 detective-study f080 额头): 源 0 真纯白像素 → v4.20 66 真纯白像素
+    #      根因: 额头位置 y=63-78 x=70-80 在左瞳 sclera_zone (瞳 ± 25) y=55-105 x=46-96 内
+    #      额头 H3 渲染 RGB (200, 200, 200) 命中 color_mask, biggest_mask & sclera_zone 还包括额头
+    #      fill 把额头染白, 视觉"白色斑块"在额头位置
+    #    v4.22 撤回 biggest_mask fill 步骤 (3 次 fix 仍误治)
+    #      诊断: 额头 RGB (200, 200, 200) 跟 sclera RGB (220, 207, 195) 几乎一样
+    #      仅靠 color_mask + sclera_zone 区分不了, fill 步骤本质上有问题
+    #      撤回后 v4.18 color_mask (R>150 R-G<70 G-B∈[0,80] R-B<120) 直接治本
+    #      命中数 50-1500 px/帧, 跟 v4.18 fill 治本覆盖接近
+    #      风险: sclera 边缘非 color_mask 命中的"暗白"像素 (R<150 或 R-B>120) 不治本, 保留源偏暖白
+    #      视觉验证: 保留 v4.17 眼底月牙偏暖白 (R=220 G=207 B=195), 接近源
+    pass  # v4.22 撤回 fill
     if eye_white.sum() > 0:
         # 转 HLS (cv2 RGB->HLS_FULL, H in 0-255, L in 0-255, S in 0-255)
         rgb_bgr_eye = cv2.cvtColor(rgb_fixed, cv2.COLOR_RGB2HLS_FULL)
@@ -543,11 +540,13 @@ def inpaint_partial_rgb(rgb: np.ndarray, alpha: np.ndarray, radius: int = 8, eye
         l_new = np.minimum(l * 1.18, 255.0)
         l_boosted = l.copy()
         l_boosted[eye_white] = l_new[eye_white]
-        # v4.14: S 拉低到 0 (眼白完全去色, 灰白 (240, 240, 240))
-        #    L 已提 18% → 228, S=0 → 眼白 = (228, 228, 228) 纯灰白
-        #    风险: 视觉"塑料感" (无色相 = 假白), 但用户说"还能更白" → 接受
-        #    演进: v4.13 S*0.10 仍剩 10% 色相, 视觉变化小, v4.14 S=0 完全去色
-        s_new = np.zeros_like(s)
+        # v4.23 改 S=0 → S*=0.5 (保留色相, 治本后不突兀)
+        #    根因 (2026-09-09 detective f080 额头): 源 (216, 200, 196) 偏暖白, v4.18 S=0 + L*1.18 clip 255 → (255, 255, 255) 真纯白
+        #      → 视觉"白色斑块"在额头位置 (用户反馈"眼睛上方额头位置白色空白")
+        #    修复: S*=0.5 保留色相, 治本后 RGB 偏暖 (250, 240, 240), 跟周围粉色身体色一致
+        #    sclera RGB (220, 207, 195) 治本后 → (250, 240, 230) 偏暖白, 跟 v4.18 (255, 255, 255) 视觉接近但不再突兀
+        #    风险: 比 v4.18 真纯白稍偏暖, 但用户说"再白点" → 接受 250-255 范围
+        s_new = s * 0.5
         s_lowered = s.copy()
         s_lowered[eye_white] = s_new[eye_white]
         rgb_bgr_eye[:,:,1] = l_boosted.astype(np.uint8)
@@ -601,7 +600,37 @@ def process_frames(
             except ImportError:
                 pass
         # v4.6 关键步骤, v4.18 眼区 bypass — 替换 partial + 透明 + 1px 外圈 (r=8), + 绿偏不透明 (r=4)
-        rgb_fixed = inpaint_partial_rgb(arr, alpha, radius=8, eye_protect_mask=eye_protect_mask)
+        rgb_fixed = inpaint_partial_rgb(arr, alpha, radius=8, eye_protect_mask=eye_protect_mask).astype(np.uint8)
+        # v4.24: 两道 mask 治本 "额头白方块" + "绿幕残留"
+        #    根因 1: H3 源视频某些帧 (detective f075-f081, drink f015-f022) 帽沿/绿幕反射进章鱼身体,
+        #            chroma key 残留绿色 RGB, v4.6 inpaint 治不到 (源 RGB 本来就绿)
+        #    根因 2: H3 源视频某些帧 (detective f075-f081 抬头) 帽顶在额头位置渲染白色高光,
+        #            chroma key 完美保留 (R=G=B=255), 桌宠 116x116 看就是"白色空白"
+        #    治本: alpha=255 但 RGB 偏绿 → 拉低 G 到 min(G, R) 跟周围身体色一致
+        #         alpha=255 + RGB==255 + 额头 ROI (y=50-80, x=70-110) → 强制降为暖白 (240,220,210)
+        #    验证数据 (drink f015): green_residual 1594 px, forehead_white 84 px
+        #    验证数据 (detective f077): green_residual 1526 px, forehead_white 280 px
+        r_f = rgb_fixed[:,:,0].astype(int)
+        g_f = rgb_fixed[:,:,1].astype(int)
+        b_f = rgb_fixed[:,:,2].astype(int)
+        # Mask 1: 绿幕残留 (alpha=255 但 RGB 偏绿)
+        green_residual = (alpha == 255) & (g_f - r_f > 10) & (g_f - b_f > 10) & (g_f > 150)
+        if green_residual.sum() > 0:
+            # 拉低 G 到 min(G, R, B+5), 保持跟周围身体色 (R 高 B 中 G 低) 一致
+            new_g = np.minimum(g_f, np.maximum(r_f, b_f + 5))
+            rgb_fixed[green_residual, 1] = new_g[green_residual].astype(np.uint8)
+        # Mask 2: 额头纯白 (alpha=255 + RGB==255 + forehead ROI y=50-80 x=70-110)
+        h_img, w_img = rgb_fixed.shape[:2]
+        forehead_y0, forehead_y1 = max(0, int(h_img * 50/192)), min(h_img, int(h_img * 80/192))
+        forehead_x0, forehead_x1 = max(0, int(w_img * 70/192)), min(w_img, int(w_img * 110/192))
+        forehead_white = np.zeros_like(alpha, dtype=bool)
+        forehead_white[forehead_y0:forehead_y1, forehead_x0:forehead_x1] = True
+        forehead_white &= (alpha == 255) & (r_f >= 250) & (g_f >= 250) & (b_f >= 250)
+        if forehead_white.sum() > 0:
+            # 降为暖白 (240,220,210), 跟周围粉色身体色平滑过渡
+            rgb_fixed[forehead_white, 0] = 240
+            rgb_fixed[forehead_white, 1] = 220
+            rgb_fixed[forehead_white, 2] = 210
         # v4.17: 移除 alpha 羽化 (softer_alpha radius=1) — 它引入 52 个 partial alpha 像素让眼边"灰蒙蒙"
         #    源视频 H3 模型输出 768x768 高分辨率, 眼边缘已经锐利, 不需要额外 Gaussian blur 抗锯齿
         #    1px blur 把 alpha 255 → 200 范围, partial 像素 RGB 跟桌面背景混合 = "灰蒙蒙"
