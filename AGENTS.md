@@ -182,8 +182,20 @@ Antigravity / Gemini CLI).
   但本项目统一 `app/src/state/octopus-fsm.test.ts` 这种贴近源文件风格.
 - **Tauri icon 强制 RGBA**: Tauri 2 `generate_context!` 编译时读 icon, 必须 RGBA.
   PIL 走一遍 `.convert('RGBA')`.
-- **Tauri beforeBuildCommand 以项目根为 CWD**: `tauri.conf.json` 里的命令用
-  `npm --prefix app run build` (项目根视角), 不要写 `../app` (会解析到项目外).
+- **Tauri 2 beforeDevCommand / beforeBuildCommand CWD 不一致** (实测):
+  - `beforeDevCommand` 实际 CWD = `frontendDist` 父目录 (= `cute/app/`),
+    不是项目根 (cute/).
+  - `beforeBuildCommand` 实际 CWD = `src-tauri/` (cargo 默认) 或
+    项目根 (cute/, 用户直接 `cargo tauri build` 时).
+  - 老 `npm --prefix app` / `cd app &&` / `--prefix ../app` 三套配置都
+    假设单一 CWD, 在新 Tauri 2 下互相冲突 (`npm --prefix app` 解析到
+    `cute/app/app/` 找不到 package.json).
+  - **统一入口** (commit 4656377): `bash scripts/run-vite.sh dev|build`.
+    wrapper script 用 `BASH_SOURCE` 自己定位 → `cd $SCRIPT_DIR/../app` → `npm run "$@"`,
+    1 套配置跨所有 CWD 假设工作, 0 冲突. chmod +x, 自带可执行权限.
+  - **不要**再写 `--prefix app` / `cd app &&` / `--prefix ../app`,
+    一律走 `bash scripts/run-vite.sh` (项目根视角, 可移植, 跟 tauri 2
+    任何 CWD 假设解耦).
 
 ## 脚本
 
