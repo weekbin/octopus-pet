@@ -7,9 +7,9 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
-- **chroma key v4 → v4.2 → v4.3 → v4.4 → v4.5 → v4.5.1 (6 步演进, 2026-09-09 commits 7b09fd3, 2dc3428, ab1ddcd, 8a2ca87, 2e59875, f18a3c7, 27d9c74, 06c70dc, current)**:
-  治本 6 个不同维度的视觉 regression (白底偏绿半透 / 白色斑块 / 边缘锯齿 / 绿色描边 / 绿色阴影 / 绿调反射高光 / 眼睛模糊), 沉淀到 `scripts/extract-chromakey-apng.py` 默认.
-  v4.5.1 是当前唯一默认 (V2.1 production baseline), v3 作 `--chromakey` 选项兼容保留.
+- **chroma key v4 → v4.2 → v4.3 → v4.4 → v4.5 → v4.5.1 → v4.6 (7 步演进, 2026-09-09 commits 7b09fd3, 2dc3428, ab1ddcd, 8a2ca87, 2e59875, f18a3c7, 27d9c74, 06c70dc, current)**:
+  治本 7 个不同维度的视觉 regression (白底偏绿半透 / 白色斑块 / 边缘锯齿 / 绿色描边 / 绿色阴影 / 绿调反射高光 / 眼睛模糊 / 边缘过渡带绿阴影 / 物品周围绿阴影 / 切换绿残影), 沉淀到 `scripts/extract-chromakey-apng.py` 默认.
+  v4.6 是当前唯一默认 (V2.1 production baseline), v3 作 `--chromakey` 选项兼容保留.
   - **v3 → v4 (相对绿度公式)**: 修复"白底偏绿被抠成半透明" (眼白下边缘显"高亮透明").
     旧 `clip((G - max(R,B) - 10) / 20)` 是绝对绿度阈值, RGB(164,182,150) G-R=18 触发
     partial-alpha 153. 新 `clip(((G - max(R,B)) / G - 0.2) / 0.3)` 归一化到 G 本身,
@@ -46,9 +46,23 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
     v4.5.1 把 mask 拆成 2 步: (1) partial+transparent 单独 inpaint (r=5, 不膨胀,
     保留 v4.4 行为); (2) green_opaque 单独 mask 6px 膨胀 inpaint (r=4, 修身体/帽子的
     绿调反射). 眼睛恢复 v4.4 清晰度, 帽子/放大镜绿调反射仍消除.
-  - 配套: 3 个 v4.5.1 APNG 重建 (commits 8a2ca87, 2e59875, f18a3c7, 27d9c74, 06c70dc, current),
-    桌宠 116×116 透明窗口视觉 OK: 完全无绿色描边/阴影, 侦探帽变纯净棕色, 放大镜玻璃
-    绿色反射消失, 黄色施工帽保留, 白色眼睛/腮红/阴影细节保留 (v4.4 清晰度恢复).
+  - **v4.5.1 → v4.6 (alpha 激进收紧 + partial mask 1px 膨胀 + radius 5→8)**: 治本
+    v4.5.1 残余 4 类问题 (眼睛半透 / 身体边缘绿阴影 / 物品周围绿阴影 / 切换绿残影).
+    (1) 眼睛半透: 眼周 partial 像素 (60-139 个) RGB 暗 R=63-83, alpha 半透 → alpha 激进
+        收紧 alpha<80 → 0, 眼周低 alpha 直接归 0, 黑色瞳孔边缘变硬清晰.
+    (2) 身体边缘绿阴影: 轮廓 partial 像素 (544-2479 个) RGB mean R=130-163 G=91-109
+        B=55-64 (R>G>B 棕色阴影, G 中 B 低 → 视觉"绿调阴影") → partial 6000 → 4600
+        (-24-28%) + partial mask 1px 膨胀 + radius 5→8, 远处身体色 PDE 解算覆盖到
+        partial 像素, 绿调消失.
+    (3) 物品周围绿阴影: 物品边缘 alpha=255 深色像素 (70-100) 500-1000 个 → partial mask
+        1px 膨胀覆盖到 alpha=255 边缘外 1 像素, 物品周围过渡带一起 inpaint 修.
+    (4) 切换绿残影: partial 像素 hard-key 后 alpha 边缘只有 0/255, 中间值拖影消失 → 场景
+        切换时前一场景的 alpha 中间值不会拖出"半透绿残影".
+    视觉验证: 桌宠 116×116 透明窗口 detective-study / drink-coffee 干净, 黄色施工帽
+    边缘绿调消除 (zoom 对比图).
+  - 配套: 3 个 v4.6 APNG 重建 (commits 8a2ca87, 2e59875, f18a3c7, 27d9c74, 06c70dc, current),
+    桌宠 116×116 透明窗口视觉 OK: 完全无绿色描边/阴影/反射, 眼白清晰锐利, 身体边缘干净,
+    物品周围无绿阴影, 切换时无绿残影.
 - **cargo test 预期值同步 2 → 3 V2 场景 (drink-coffee 加项遗漏)**:
   修 `src-tauri/tests/mcp_roundtrip.rs::list_states_returns_2_v2_scenes` 期望值
   2→3 + 加 drink-coffee assertion, 8/8 cargo tests 重新绿.

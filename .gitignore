@@ -63,3 +63,8 @@ art/
 
 docs/v2-*/preview.gif
 .omo/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
