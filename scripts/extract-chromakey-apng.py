@@ -241,9 +241,17 @@ def chromakey_v4(arr: np.ndarray) -> np.ndarray:
     return alpha
 
 
-def harden_alpha_edges(alpha: np.ndarray, low_thresh: int = 80, high_thresh: int = 175) -> np.ndarray:
-    """v4.6: alpha 通道激进收紧, 把低/高置信度像素直接 hard-key,
-    只保留 80-175 软过渡带交给 inpaint 修 (partial 6000 → ~1500).
+def harden_alpha_edges(alpha: np.ndarray, low_thresh: int = 80, high_thresh: int = 240) -> np.ndarray:
+    """v4.9: alpha 通道激进收紧阈值 175 → 240, 把高置信度像素 (alpha >= 240) 直接 hard-key 255,
+    消除"白内障/雾蒙蒙" partial 残留. 只保留 80-240 软过渡带交给 inpaint 修.
+
+    演进:
+    v4.6 (2026-09-09, high_thresh=175): partial 6000 → 1500 (-75%), 治本 4 类边界问题
+      (眼睛半透/身体边缘绿阴影/物品周围绿阴影/切换绿残影).
+    v4.9 (2026-09-09, high_thresh=240): 用户反馈"眼白雾蒙蒙", 根因 175-255 区间还有
+      949 个 partial 像素 (alpha 240+ 占大部) 视觉上 94%+ 不透明但还是 partial → 雾感.
+      阈值上调到 240: alpha 240+ 直接 255, partial 降到 ~1500 → 949 → 几十个.
+      边缘安全: border_1px alpha >= 240 partial 几乎为 0 (实测 0-6 个), 不破坏抗锯齿.
 
     v4.5.1 根因: partial 像素 11-16% (5000-6000 个), RGB mean R=166 G=103 B=62
     是"暗棕带绿调" (B 低 → 暖色, G 中 → 没冷色抵消 → 视觉"绿阴影").
@@ -263,7 +271,7 @@ def harden_alpha_edges(alpha: np.ndarray, low_thresh: int = 80, high_thresh: int
         HxW uint8 alpha 数组 (边缘 hard-key, 中间保留 partial 供 inpaint)
     """
     alpha = np.where(alpha < low_thresh, 0, alpha)
-    alpha = np.where(alpha > high_thresh, 255, alpha)
+    alpha = np.where(alpha >= high_thresh, 255, alpha)
     return alpha.astype(np.uint8)
 
 
@@ -285,6 +293,9 @@ def soften_alpha(alpha: np.ndarray, radius: int = 1) -> np.ndarray:
     blurred = alpha_img.filter(ImageFilter.GaussianBlur(radius=radius))
     blurred = np.array(blurred)  # PIL → numpy
     blurred = np.where(blurred < 30, 0, blurred)  # v4.6: blur 后低 alpha 重新归 0
+    # v4.9: blur 后再 hard-key alpha 240+ → 255, 防止高置信度边缘像素被邻域 0/partial 拉成 220-254
+    # (Gaussian blur radius=1 会让 255 邻域 0 的像素降到 ~127, 邻域 partial 200 降到 ~228)
+    blurred = np.where(blurred >= 240, 255, blurred)
     return blurred.astype(np.uint8)
 
 
@@ -344,20 +355,63 @@ def inpaint_partial_rgb(rgb: np.ndarray, alpha: np.ndarray, radius: int = 8) -> 
         inpaint_mask_g = (green_dilated * 255)
         rgb_bgr = cv2.inpaint(rgb_bgr, inpaint_mask_g, 4, cv2.INPAINT_TELEA)
     rgb_fixed = cv2.cvtColor(rgb_bgr, cv2.COLOR_BGR2RGB)
-    # 3) v4.8 新增: 米黄眼白色度 clamp (no inpaint, 保护眼细节)
-    #    条件: alpha=255 + R>200 (亮) + B < G-15 (B 显著低于 G) + R > B+50 (R 远大于 B)
+    # 3) v4.11: 米黄眼白色度 clamp (no inpaint, 保护眼细节)
+    #    条件: alpha >= 150 (扩到 partial) + R>200 (亮) + G > B+5 (黄绿指标, 放宽 1 单位) + R-B < 60 (温和米黄限定)
     #    排除: R+G+B > 720 (纯白/星形高光, R=G=B 接近, 不需要 clamp)
+    #    排除: R-B >= 60 (强黄/橙 — 帽/杯正确颜色, 不能 clamp 成橙红)
+    #    演进根因:
+    #      v4.8 R-B > 50 漏掉 R-B=30-49 温和米黄 (眼底月牙), 仍"雾蒙蒙"
+    #      v4.10 G-B>8 不限 R-B 误治强黄/橙 (帽 4059 个, 杯 4259 个) → 帽变橙红
+    #      v4.10.1 加 R-B < 60 限定温和米黄, 保留强黄/橙
+    #      v4.10.1 漏掉 G-B=7 极淡米 (R-B 20-25, R-G 13-17, 位置眼底月牙), RGB 均值 (227, 214, 207) 看着像"米白"
+    #      v4.11 改 G > B+5 治本 G-B=7 残余, 0 误治 (R-G 13-17 = 眼周, 非肤色 R-G 50+)
     r2 = rgb_fixed[:,:,0].astype(int)
     g2 = rgb_fixed[:,:,1].astype(int)
     b2 = rgb_fixed[:,:,2].astype(int)
     sum2 = r2 + g2 + b2
-    yellow_white = (alpha == 255) & (r2 > 200) & (b2 < g2 - 15) & (r2 > b2 + 50) & (sum2 < 720)
+    yellow_white = (alpha >= 150) & (r2 > 200) & (g2 > b2 + 5) & ((r2 - b2) < 60) & (sum2 < 720)
     if yellow_white.sum() > 0:
-        # G 拉到 [B, R-20] 区间 — 消除黄绿感, 保留亮度
-        g_new = np.clip(g2, b2, r2 - 20)
-        # 写入
+        # G 拉到 B+5 (极淡米白, 接近纯白, 视觉干净)
+        g_new = np.minimum(g2, b2 + 5)
         rgb_fixed = rgb_fixed.copy()
         rgb_fixed[yellow_white, 1] = g_new[yellow_white].astype(np.uint8)
+    # v4.12: 眼底月牙 HSL 亮度增强 (治本"暗白 218 不够亮" — 用户反馈"雾蒙蒙")
+    #    诊断: 50 帧眼底月牙 brightness mean=218, max=220-227, 没一帧到 240 (R=235 G=212 B=207, 暗白)
+    #    mask: alpha=255 + R>200 + B<200 + R-B<60 (跟 v4.11 治本 mask 一致, 排除高光)
+    #    排除: 瞳孔 (R<100), 纯白 (R=G=B)
+    #    操作: HSL 空间提亮 L (亮度) 0.25 (mean 218 → 272 clip 255), 维持色相 (RGB 比例不变)
+    #    风险: 瞳孔 (R<100) / 高光 (R,G,B>240) 不参与, 0 误治
+    #    演进根因:
+    #      v4.8-v4.11 治本 G 偏色 (眼底月牙 RGB mean (235, 212, 207)), 但 R/B 没动
+    #      用户反馈"动画中视觉更差" → brightness 50 帧 max 220-227, 眼底月牙是"暗白"不是"亮白"
+    #      v4.12 在 HSL 空间提 L, RGB 比例不变, 维持色相
+    r3 = rgb_fixed[:,:,0].astype(int)
+    g3 = rgb_fixed[:,:,1].astype(int)
+    b3 = rgb_fixed[:,:,2].astype(int)
+    sum3 = r3 + g3 + b3
+    # v4.15: mask 限更严 — R>230 + R-B<40 (只治眼底月牙中心, 避免边缘"硬切")
+    #    v4.14.2 mask: R>200 + R-B<60 (治整个眼周, 边缘 partial 没治本 → 跟治后灰白"硬切")
+    #    v4.15 mask 收紧, 只治最亮眼白, 保留边缘 partial 像素, 软过渡
+    eye_white = (alpha == 255) & (r3 > 230) & ((r3 - b3) < 40) & (sum3 < 720) & (r3 > 100) & ~((r3 == g3) & (g3 == b3))
+    if eye_white.sum() > 0:
+        # 转 HLS (cv2 RGB->HLS_FULL, H in 0-255, L in 0-255, S in 0-255)
+        rgb_bgr_eye = cv2.cvtColor(rgb_fixed, cv2.COLOR_RGB2HLS_FULL)
+        l = rgb_bgr_eye[:,:,1].astype(float)
+        s = rgb_bgr_eye[:,:,2].astype(float)
+        # v4.12: L 提 18% (R 已饱和, 再多无效)
+        l_new = np.minimum(l * 1.18, 255.0)
+        l_boosted = l.copy()
+        l_boosted[eye_white] = l_new[eye_white]
+        # v4.14: S 拉低到 0 (眼白完全去色, 灰白 (240, 240, 240))
+        #    L 已提 18% → 228, S=0 → 眼白 = (228, 228, 228) 纯灰白
+        #    风险: 视觉"塑料感" (无色相 = 假白), 但用户说"还能更白" → 接受
+        #    演进: v4.13 S*0.10 仍剩 10% 色相, 视觉变化小, v4.14 S=0 完全去色
+        s_new = np.zeros_like(s)
+        s_lowered = s.copy()
+        s_lowered[eye_white] = s_new[eye_white]
+        rgb_bgr_eye[:,:,1] = l_boosted.astype(np.uint8)
+        rgb_bgr_eye[:,:,2] = s_lowered.astype(np.uint8)
+        rgb_fixed = cv2.cvtColor(rgb_bgr_eye, cv2.COLOR_HLS2RGB_FULL)
     return rgb_fixed
 
 
@@ -375,8 +429,8 @@ def process_frames(
         arr = np.array(img)
         # v4.6 流程: chroma key → alpha 激进收紧 → inpaint 修 RGB (含 partial 1px 膨胀 + r=8) → alpha 羽化
         alpha = chromakey_fn(arr)
-        # v4.6: alpha 通道激进收紧 (alpha < 80 → 0, > 175 → 255), partial 6000 → 1500
-        alpha = harden_alpha_edges(alpha, low_thresh=80, high_thresh=175)
+        # v4.9: alpha 通道激进收紧阈值 175 → 240, 治本"眼白雾蒙蒙" (alpha 240+ partial 残留)
+        alpha = harden_alpha_edges(alpha, low_thresh=80, high_thresh=240)
         # v4.6: 关键步骤 — 替换 partial + 透明 + 1px 外圈 (r=8), + 绿偏不透明 (r=4)
         rgb_fixed = inpaint_partial_rgb(arr, alpha, radius=8)
         # v4.6: alpha 羽化 (1 像素 Gaussian blur) 抗锯齿, blur 后低 alpha 重新归 0

@@ -18,7 +18,7 @@ Antigravity / Gemini CLI).
 | 窗口 | 116×116 透明, V2 APNG 192×192 在 `<canvas>` 内部 (CSS 缩放到 116×116) |
 | **3 V2 场景 (V2.1 默认)** | detective-study (H3 戴帽研究) · worker-construction (H3 工人施工) · **drink-coffee** (H3 喝咖啡, 2026-09-09 fef8017) |
 | 6 MCP tools | pet_show · pet_ask · pet_get_state · pet_set_state · pet_pet · pet_list_states |
-| **3 V2 APNG** | 50 帧/张 × 132ms ≈ 6.6s 循环, RGBA, 192×192, ~2.6-2.9MB 各, 走 PIL **v4.8** chroma key (相对绿度 + 严保护 + alpha 激进收紧 < 80/> 175 + inpaint Telea r=8 + 1px mask 膨胀 + 眼白 G 偏色 r=3 + alpha 羽化 + yellow_white color clamp 治本眼白米黄) |
+| **3 V2 APNG** | 50 帧/张 × 132ms ≈ 6.6s 循环, RGBA, 192×192, ~2.6-2.9MB 各, 走 PIL **v4.15** chroma key (v4.6 base 边界 + v4.8 yellow_white color clamp 治本米黄 + v4.9 alpha 240+ 收紧 + v4.10.1 R-B<60 限定温和米黄 + v4.11 G>B+5 治极淡米 + v4.12 HSL L*1.18 提亮 + v4.14.2 S=0 去色 + v4.15 mask R>230 R-B<40 限严避免边缘硬切) |
 | 14 V1 spritesheet (废弃) | 移到 `app/public/assets/octopus/_archive-v1-spritesheets/` 不再用 |
 | **scene 调度** | **事件驱动** (apng-js `end` 事件 → `SCENE_LOOPED` → FSM `rotateScene`), 0 累积延迟, 严格对齐 frame 0 |
 | Spec 依据 | [agent-plugins.org v1.0.0](https://agent-plugins.org/specification) + [MCP 2024-11-05](https://modelcontextprotocol.io/specification/2024-11-05) + [agentskills.io](https://agentskills.io/specification) |
@@ -40,15 +40,15 @@ Antigravity / Gemini CLI).
 | Rust 后端 | `src-tauri/src/` (lib · main · actions · mcp_stdio · state_bridge · http_fallback) |
 | 14 spritesheet (V1 废弃) | `app/public/assets/octopus/_archive-v1-spritesheets/spritesheet-*.webp` |
 | **3 V2 APNG (V2.1 默认)** | `app/public/assets/octopus/v2/{detective-study,worker-construction,drink-coffee}.png` |
-| **V2 APNG 生产脚本** | `scripts/extract-chromakey-apng.py` (mp4 → 50 帧 RGBA APNG, v4.8 chroma key 默认, v3 选项兼容) |
+| **V2 APNG 生产脚本** | `scripts/extract-chromakey-apng.py` (mp4 → 50 帧 RGBA APNG, v4.15 chroma key 默认, v3 选项兼容) |
 | 14 场景素材审计 | `docs/octopus-assets-audit.md` (W1 D1 产物) |
 | 变更历史 | `CHANGELOG.md` (Keep a Changelog 1.1.0) |
 | CI | `.github/workflows/ci.yml` (spec lint · asset audit · spritesheet regen · Rust build · Vitest) |
 | **V0.5-3 验证产物** | `docs/v053-validation/` (gen_videos 6s 视频 + 0s/5.5s 对比帧, 96.65% 相似) |
 | **V2.1 标准图** (V2 idle 起点) | `art/octopus-frames/standard-char-1x1.png` (3/4 视角, 1:1, 绿幕, 1920×1920; `art/` 在 .gitignore) |
 | **V2 绿幕清洗脚本** | `scripts/remove-hat-greenscreen.py` (V2.1 14 动作复用) |
-| **V2 视频 → 桌宠 APNG 流程** | `docs/v2-h3-to-pet-workflow.md` (5 步: H3 双图 → 抽帧 → chroma key v4.8 → alpha 羽化 → APNG, drink-coffee 最新跑通) |
-| **V2 抽帧 + chroma key + APNG 一键脚本** | `scripts/extract-chromakey-apng.py` (v4.8 公式沉淀, 14 动作复用) |
+| **V2 视频 → 桌宠 APNG 流程** | `docs/v2-h3-to-pet-workflow.md` (5 步: H3 双图 → 抽帧 → chroma key v4.15 → alpha 羽化 → APNG, drink-coffee 最新跑通) |
+| **V2 抽帧 + chroma key + APNG 一键脚本** | `scripts/extract-chromakey-apng.py` (v4.15 公式沉淀, 14 动作复用) |
 
 ## 协作规则 (根因型, 别打地鼠)
 
@@ -102,7 +102,7 @@ Antigravity / Gemini CLI).
   业务代码从 `./types` / `crate::scene_registry_generated` re-export, 不直接 import generated.
 
   **加新场景 5 步**:
-  1. 跑 `docs/v2-h3-to-pet-workflow.md` (H3 / gen_videos → 抽帧 → chroma key v4.8 → alpha 羽化 → 192×192 APNG)
+  1. 跑 `docs/v2-h3-to-pet-workflow.md` (H3 / gen_videos → 抽帧 → chroma key v4.15 → alpha 羽化 → 192×192 APNG)
   2. 放 `app/public/assets/octopus/v2/<new-scene>.png`
   3. 改 `scenes.json` 加 entry (`id`, `source`, `bubbleLines`)
   4. `bash scripts/build-scene-registry.sh`
@@ -141,8 +141,8 @@ Antigravity / Gemini CLI).
   APNG `disposal=0` (避免 PIL 合并相同帧), tauri.conf.json `macOSPrivateApi: true`
   (macOS 透明必需). 不用 GIF (透明兼容差). V1 默认 APNG, V2 长动作可走 WebM VP9 alpha
   (见下面"ffmpeg-full 接入"规则).
-- **V2 视频 → 桌宠 APNG (H3 / gen_videos 走完)**: 走 `docs/v2-h3-to-pet-workflow.md` 完整 5 步 (H3 双图 → ffmpeg 15fps 抽帧 → chroma key v4.8 → alpha 1px Gaussian blur 羽化 → 192×192 APNG). 关键坑:
-  - **chroma key v4.8 公式** (`(G - max(R,B)) / G` 相对绿度, `clip((rel - 0.15) / 0.3, 0, 1)`) + **严保护** (`(max<80) AND (G-max(R,B)<20)` 区分真阴影 vs 绿反射; `80 ≤ max < 150` 且 `G - max(R,B) < 30` 算皮肤保护中绿) + **alpha 激进收紧** (alpha < 80 → 0, > 175 → 255, partial 像素 6000 → 4600, 边缘 hard-key) + **cv2.inpaint 分 2 步** (1) partial+透明 1px 膨胀 + Telea r=8 (远处身体色 PDE 解算更彻底) (2) green_opaque 单独 mask 6px 膨胀 (kernel 3x3, iterations=2) + Telea r=4, 修身体/帽子的绿调反射 + **yellow_white color clamp** (alpha=255 + R>200 + B<G-15 + R>B+50 + R+G+B<720 检米黄像素, `G = np.clip(G, B, R-20)` 拉低 G 消除黄绿感, 0 模糊保护所有眼细节) + **alpha 羽化** (1 像素 Gaussian blur, blur 后低 alpha < 30 重新归 0 避免拖出半透残影). 详见 `scripts/extract-chromakey-apng.py`.
+- **V2 视频 → 桌宠 APNG (H3 / gen_videos 走完)**: 走 `docs/v2-h3-to-pet-workflow.md` 完整 5 步 (H3 双图 → ffmpeg 15fps 抽帧 → chroma key v4.15 → alpha 1px Gaussian blur 羽化 → 192×192 APNG). 关键坑:
+  - **chroma key v4.15 公式** (v4.6 base 边界 4 类 + v4.8 yellow_white color clamp 治本米黄 + v4.9 alpha 240+ 收紧 + v4.10.1 R-B<60 限定温和米黄 + v4.11 G>B+5 治极淡米 + **v4.12 HSL L*1.18 治暗白 218 → 228** + **v4.14.2 S=0 眼白去色** + **v4.15 mask R>230 R-B<40 限严避免边缘硬切**) = `(G - max(R,B)) / G` 相对绿度, `clip((rel - 0.15) / 0.3, 0, 1)` + **严保护** (`(max<80) AND (G-max(R,B)<20)` 区分真阴影 vs 绿反射; `80 ≤ max < 150` 且 `G - max(R,B) < 30` 算皮肤保护中绿) + **alpha 激进收紧** (alpha < 80 → 0, > 240 → 255, partial 像素 6000 → 4600, 边缘 hard-key) + **cv2.inpaint 分 2 步** (1) partial+透明 1px 膨胀 + Telea r=8 (远处身体色 PDE 解算更彻底) (2) green_opaque 单独 mask 6px 膨胀 (kernel 3x3, iterations=2) + Telea r=4, 修身体/帽子的绿调反射 + **yellow_white color clamp** (alpha>=150 + R>200 + G>B+5 + R-B<60 + sum<720 检温和米黄, `G = min(G, B+5)` 拉低 G, 治 v4.8 漏掉的 G-B=7 极淡米) + **HSL 亮度+去色** (mask R>230+R-B<40 内 cv2 HLS_FULL, L*1.18 提亮 + S=0 去色, 治"眼白雾蒙蒙" — H3 源素材眼底月牙 RGB (235,212,207) brightness 218 暗白治本 灰白 (228,228,228) 眼白主区) + **alpha 羽化** (1 像素 Gaussian blur, blur 后低 alpha < 30 重新归 0 避免拖出半透残影). 详见 `scripts/extract-chromakey-apng.py`.
   - **v3 → v4 演进根因**: v1 `clip(diff/60+0.5)` 跟 v3 `clip((diff-10)/20)` 都是绝对绿度阈值, 白色眼底微小绿影 (RGB 164,182,150, G-R=18) 触发 partial-alpha 153 → 桌宠眼白下边缘显"高亮透明". v4 改用相对绿度归一化到 G 本身, "绿在 G 里的占比" < 0.2 → 不透. 8 色 + H3 残留测试集全部通过.
   - **v4 → v4.1 演进根因**: H3 模型在脸颊/触手上渲染深绿反射 (RGB ~22,45,7), v4 公式看 (45-22)/45=0.51 > 0.2 → alpha=0 完全透明 → 桌宠透出 mcode UI 白底 → 用户看到"白色斑块". v4.1 加 `max(RGB) < 80` 强制不透明保护深色阴影.
   - **v4.1 → v4.2 演进根因**: H3 模型的"绿黄残留" (RGB ~155,188,75, 偏亮绿反射) 在 v4.1 公式下 `rel=0.135 < 0.2` → 保留为不透明绿色, 桌宠身体/帽子上有绿色斑. 阈值 0.2 → 0.15 + 中绿保护让绿黄也走 soft 透明 (-98%), alpha 羽化让边缘软化.
@@ -152,8 +152,16 @@ Antigravity / Gemini CLI).
   - **v4.5 → v4.5.1 演进根因**: v4.5 mask 6px 膨胀覆盖了眼睛 partial 边缘, 眼睛的高光(星形)/瞳孔(黑色)/眼底月牙(白色)被 inpaint 改成周围身体色(粉色), 眼睛清晰度从锐利变模糊. v4.5.1 把 mask 拆成 2 步独立 inpaint: (1) partial+透明 单独 inpaint (Telea r=5, 不膨胀, 保留 v4.4 行为 → 眼睛恢复清晰度) (2) green_opaque 单独 mask 6px 膨胀 (kernel 3x3, iterations=2) + Telea r=4 (修身体/帽子的绿调反射). 视觉验证: 侦探帽变纯净棕色 (v4.5 保留) + 眼睛锐利 (v4.4 清晰度恢复) + 黄色施工帽保留.
   - **v4.5.1 → v4.6 演进根因**: v4.5.1 残余 4 类问题 (1) 眼睛半透: 眼周 partial 60-139 个 RGB 暗 R=63-83 (2) 身体边缘绿阴影: 轮廓 partial 544-2479 个 RGB mean R=130-163 G=91-109 B=55-64 (棕色阴影带绿调) (3) 物品周围绿阴影: 物品边缘 alpha=255 深色像素 (70-100) 500-1000 个 (4) 切换绿残影: partial 中间值拖影. v4.6 加 (a) **alpha 激进收紧** `harden_alpha_edges` (alpha < 80 → 0, > 175 → 255, partial 6000 → 4600 -24-28%, 边缘 hard-key); (b) **partial mask 1px 膨胀** (覆盖 alpha=255 边缘外 1 像素); (c) **inpaint radius 5 → 8** (PDE 解算更彻底, 远处身体色覆盖到 partial 像素); (d) **alpha 羽化后低 alpha < 30 重新归 0** (避免 blur 拖出半透残影). 50 帧 partial: detective-study 6057 → 4621, worker-construction 5158 → 3707, drink-coffee 4036 → 2946. 视觉验证: detective-study f25 戴帽戴放大镜帽子纯净棕色 + 放大镜玻璃无绿反射 + 眼睛锐利; worker-construction f25 黄色施工帽边缘绿调消除; drink-coffee f25 咖啡杯绿色杯身边缘干净; 桌宠 116×116 透明窗口 3 场景轮转干净.
   - **v4.6 → v4.7 演进根因 → 撤回**: v4.6 治本 4 类边界后, 眼白发黄/发绿是 v4.6 未覆盖的"alpha=255 白色像素 G 偏色". drink-coffee 眼周 225 个 alpha=255 白色像素中 70% (157) G>B+10, RGB mean R=240 G=153 B=131 (米黄), H3 源视频眼底月牙 RGB 偏 G. detective/worker 残留 1-19 个 G 偏色. v4.7 加 (a) **green_tinted_white mask** (`alpha=255 + R>200 + R+G+B>600 + G>B+5` 检测"白色像素 G 偏色"); (b) **inpaint r=3 单独步** (小半径, 期望保护眼周星形高光/瞳孔边界). 像素治本: 3 场景眼周 G 偏色像素 → 0. **失败根因**: 即使 mask 限定"白色 G 偏色", inpaint r=3 仍把星形高光/瞳孔边界涂抹模糊, 眼白从"锐利纯白"变"灰月牙". 用户反馈"现在眼睛的处理更加糟糕了". 撤回 inpaint, 改 v4.8 纯色度 clamp.
-  - **v4.7 → v4.8 演进根因 (当前默认)**: 撤 v4.7 inpaint r=3 (保护眼锐利度优先, 0 模糊), 改纯像素级 RGB 调整. 新增 **yellow_white color clamp** (no inpaint, 0 模糊): alpha=255 + R>200 + B<G-15 + R>B+50 + R+G+B<720 检米黄像素, `G = np.clip(G, B, R-20)` 拉低 G 到 [B, R-20] 区间消除黄绿感, 保留亮度. 排除星形高光 (R+G+B>720, R=G=B 接近纯白不参与). 像素治本: 3 场景眼周米黄像素 → 0. 视觉: 眼白真正纯白 + 锐利 (跟 v4.6 锐利度持平, 优于 v4.7 涂抹 + 优于 v4.6 G 偏色), 边界 4 类 (v4.6 治本) 不退步.
-  - **chroma key 演进总表** (v1 → v3 → v4 → v4.1 → v4.2 → v4.3 → v4.4 → v4.5 → v4.5.1 → v4.6 → v4.7 → v4.8): `scripts/extract-chromakey-apng.py` docstring 顶部有完整记录 + 测试集 + 数据验证, 改 chroma key 前必读.
+  - **v4.7 → v4.8 演进根因**: 撤 v4.7 inpaint r=3 (保护眼锐利度优先, 0 模糊), 改纯像素级 RGB 调整. 新增 **yellow_white color clamp** (no inpaint, 0 模糊): alpha=255 + R>200 + B<G-15 + R>B+50 + R+G+B<720 检米黄像素, `G = np.clip(G, B, R-20)` 拉低 G 到 [B, R-20] 区间消除黄绿感, 保留亮度. 排除星形高光 (R+G+B>720, R=G=B 接近纯白不参与). 像素治本: 3 场景眼周米黄像素 → 0. 视觉: 眼白真正纯白 + 锐利 (跟 v4.6 锐利度持平, 优于 v4.7 涂抹 + 优于 v4.6 G 偏色), 边界 4 类 (v4.6 治本) 不退步.
+  - **v4.8 → v4.9 演进根因**: 用户反馈"眼白不清晰, 雾蒙蒙". harden_alpha_edges high_thresh 175 → 240, 治本 alpha 240+ partial 半透雾感 (3 场景 1732+1446+1089=4267 → 0). bug fix: `>` 改 `>=` (240+ 全归 255), alpha_soften blur 后再 hard-key 一次 (blur 把 240+ 降回 220-254 范围, blur 后再 240+ → 255 锁死).
+  - **v4.9 → v4.10 演进根因 → 撤回**: 改 color clamp `G > B + 8` 替代 `R > B + 50` 想治更多温和米黄. 失败: 误治 4000+ 强黄/橙像素 (detective 帽 4059 / worker 帽 4328 / drink 杯 4259), R-B>=100 帽色变橙红. 撤回.
+  - **v4.10 → v4.10.1 演进根因**: 加 `R-B < 60` 限定温和米黄, 保留强黄/橙 (R-B>=60, 黄色施工帽 / 棕色侦探帽 / 绿色咖啡杯 — 正确颜色不能 clamp). 治本: 3 场景温和米黄 135+109+18=262 → 0, 强黄 4171+4682+4414=13267 完整保留.
+  - **v4.10.1 → v4.11 演进根因**: v4.10.1 漏 G-B=7 极淡米 (R-B 20-25, R-G 13-17, 位置眼底月牙). 改 G > B+8 → G > B+5. 治本: 3 场景 G-B=7 极淡米 38+43+62=143 → 0. 0 误治 (R-G 13-17 是眼周, 非肤色 R-G 50+).
+  - **v4.11 → v4.12 演进根因 (反思根因)**: 50 帧逐帧诊断发现眼底月牙 brightness mean 215, max 220-227, **没一帧到 240** — 源素材眼底月牙就是"暗白" 不是"亮白". 治 G 偏色不动亮度治不到根. cv2 HSL 空间提 L * 1.18 (R 已饱和 235 → 255 不能再提), 维持色相 (RGB 比例不变). 治本: 3 场景 dark 像素 (≤220) 241-254 → 54-64 (-75%), mid (220-240) +50%, brightness mean 215 → 228. 帽/杯强黄 23147 完整保留. 锐利度 0 损失 (HSL 改 L 不动 H/S). **反思根因**: 之前 9 版一直在 RGB 空间补色, 没意识到真正问题是 L (亮度) + S (饱和度) 双低.
+  - **v4.12 → v4.13 → v4.14 演进根因**: 眼白 brightness 提上来但 R-B 22 仍偏暖. v4.13 S*=0.10 (拉 90%) 视觉变化小. v4.14 S=0 (完全去色, 眼白 = 灰白 (228, 228, 228)).
+  - **v4.14 → v4.14.2 演进根因 (mask bug 修复)**: v4.14 S=0 实际没生效 — 眼周 v4.12 mask 限 `B<200`, 但 v4.12 L*1.18 提亮后 B 都 > 200, **眼周最亮区被 mask 排除**治本不到. v4.14.2 mask 去掉 B<200 限制, R>200 + R-B<60 全部命中 → S=0 全治 → 灰白.
+  - **v4.14.2 → v4.15 演进根因 (当前默认)**: v4.14.2 全眼周治本灰白, 跟周围粉色身体色对比强烈, 视觉"塑料". v4.15 mask 限严 R>230 + R-B<40 (眼底月牙中心最亮区), 保留边缘色相 → 软过渡. 治本灰白 460-476 → 242-262 (-50%), 偏暖保留 6769-6932 → 6980-7127 (+200 软过渡). 视觉: 眼底月牙纯白 + 自然软过渡, 不塑料. 4 方对比 (v4.8 / v4.12 / v4.14.2 / v4.15) 中 v4.15 最自然.
+  - **chroma key 演进总表** (v1 → v3 → v4 → v4.1 → v4.2 → v4.3 → v4.4 → v4.5 → v4.5.1 → v4.6 → v4.7(撤回) → v4.8 → v4.9 → v4.10(撤回) → v4.10.1 → v4.11 → v4.12 → v4.14.2 → v4.15, 2026-09-09 16 步): `scripts/extract-chromakey-apng.py` docstring 顶部有完整记录 + 测试集 + 数据验证, 改 chroma key 前必读. v4.15 当前默认 (HSL L*1.18 + S=0 + mask R>230 R-B<40 限严 治"眼白雾蒙蒙").
   - **Tauri webview 不自动 reload `public/` 资源** — 替换 sprite 必须 kill 章鱼进程, `cargo tauri dev` 自动重启才生效.
   - **screencapture 截透明窗口必须用 `-l <window_id>`** — `-R x,y,w,h` 截不到透明 (穿透). 章鱼窗口 ID 用 swift CGWindowList 查 (osascript 报的 position 是 window-relative 不是屏幕坐标).
   - **H3 + `last_frame_image` 双图模式是首末一致循环视频唯一解** — Hailuo-2.3 物理做不到 (0s vs 5.5s 40-45% 相似, 道具不消失). 走 `~/.minimax/agents/mavis/skills/h3-dual-image-video-gen/`.

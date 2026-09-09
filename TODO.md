@@ -23,7 +23,7 @@
 - **M5b Lottie provider** (2026-08-27) ✅ 第二个 provider (lottie-web canvas renderer), 证明换格式业务代码零修改
 - **M5b regression fix** (2026-09-09 commit f2e0bb7) ✅ APNG num_plays 0 → 1, 删遗留 useMcpBridge.ts
 - **P0-2 端到端跑 Tauri 桌宠** (2026-09-09 fef8017) ✅ HTTP fallback 验证 3 scenes 切换 + 事件驱动 6.6s 自切
-- **chroma key v3 → v4.8 (9 步演进, 2026-09-09 commits 7b09fd3 / 2dc3428 / ab1ddcd / 8a2ca87 / 2e59875 / f18a3c7 / 27d9c74 / 06c70dc / b16c87f / current)** ✅ 沉淀到 `extract-chromakey-apng.py` 默认:
+- **chroma key v3 → v4.15 (16 步演进, 2026-09-09 commits 7b09fd3 / 2dc3428 / ab1ddcd / 8a2ca87 / 2e59875 / f18a3c7 / 27d9c74 / 06c70dc / b16c87f / current)** ✅ 沉淀到 `extract-chromakey-apng.py` 默认:
   - v3 → v4: 相对绿度公式修"白底偏绿被抠成半透" (眼白下边缘"高亮透明")
   - v4 → v4.1: + 深色阴影保护修 H3 在脸颊/触手上渲染的深绿反射被误扣 → 桌宠身体"白色斑块"
   - v4.1 → v4.2: 阈值收紧 + 中绿保护 + alpha 羽化, 修 H3"绿黄残留" (RGB 155,188,75) + 192→116 resize 边缘锯齿
@@ -33,8 +33,16 @@
   - v4.5 → v4.5.1: mask 拆成 2 步独立 inpaint — partial+透明 (Telea r=5, 不膨胀) 保留眼睛清晰度 + green_opaque 单独 6px 膨胀 (Telea r=4) 修身体/帽子绿调反射. 眼睛 v4.4 锐利恢复, 帽子/放大镜绿调反射仍消除
   - v4.5.1 → v4.6: alpha 激进收紧 (alpha < 80 → 0, > 175 → 255) + partial mask 1px 膨胀 + inpaint radius 5→8 → 治本 v4.5.1 残余 4 类 (眼睛半透 / 身体边缘绿阴影 / 物品周围绿阴影 / 切换绿残影). partial 6000 → 4600 -24-28%, alpha 羽化后低 alpha < 30 重新归 0
   - v4.6 → v4.7 → **撤回**: 试 green_tinted_white mask (`alpha=255 + R>200 + R+G+B>600 + G>B+5`) + 单独 inpaint r=3 → 像素治本 3 场景眼周 G 偏色 → 0. **失败**: 即使 mask 限定"白色 G 偏色", inpaint r=3 仍把星形高光/瞳孔边界涂抹模糊, 眼白从"锐利纯白"变"灰月牙". 用户反馈"现在眼睛的处理更加糟糕了"
-  - **v4.7 → v4.8 (当前默认)**: 撤 v4.7 inpaint r=3, 改 **yellow_white color clamp** (no inpaint, 0 模糊). 检米黄像素 (alpha=255 + R>200 + B<G-15 + R>B+50 + R+G+B<720, 排除 R=G=B 星形高光), `G = np.clip(G, B, R-20)` 拉低 G 消除黄绿感, 保留亮度. 像素治本 3 场景眼周米黄像素 → 0. 视觉取结果最优: 眼白纯度 (优于 v4.6 G 偏色) + 锐利度 (跟 v4.6 持平, 优于 v4.7 涂抹) + 边界 4 类 (v4.6 治本) 不退步
-  - 3 场景 v4.8 APNG 重建 (current) + 桌宠视觉验证 PASS: 完全无绿色描边/阴影/反射, 侦探帽纯净棕色, 放大镜玻璃反射消除, 黄色施工帽边缘绿调消除, 眼睛清晰锐利 + 真正纯白, 切换时无绿残影
+  - **v4.7 → v4.8 → v4.15 (8 步增量, 2026-09-09)**: 治本"眼白雾蒙蒙". 用户多次反馈"眼白不清晰, 像有白内障, 雾蒙蒙, 动画中视觉更差". 真正根因: **H3 源素材眼底月牙就是"暗暖白" RGB (235,212,207) brightness 218 max 227**, 物理上生成不出 RGB (255,255,255). 在不改源约束下, 像素层 8 步治本:
+    - **v4.8 → v4.9**: alpha 240+ 收紧治本 partial 半透雾感 (3 场景 4267 → 0)
+    - **v4.10 (撤回)**: G>B+8 不限 R-B 误治 4000+ 强黄 → 撤回
+    - **v4.10.1**: 加 R-B<60 限定温和米黄 (262 → 0, 强黄 13267 完整保留)
+    - **v4.11**: 改 G>B+5 治 v4.10.1 漏的 G-B=7 极淡米 (143 → 0)
+    - **v4.12**: **HSL L*1.18 治暗白 218 → 228** (核心发现: 治 G 偏色不动亮度治不到根, RGB 空间补色治不到 L, 必须在 HSL 空间)
+    - **v4.13 / v4.14**: S 拉低, 治 R-B 22 偏暖 (S=0 眼白完全去色)
+    - **v4.14.2**: mask 修 (v4.14 mask 限 B<200 排除最亮区, 治本 0 像素; 去掉 B<200 全治)
+    - **v4.15 (当前默认)**: mask 限严 R>230 R-B<40 避免边缘"塑料" 硬切 (治本灰白 -50%, 保留色相软过渡)
+  - 3 场景 v4.15 APNG 重建 (current) + 桌宠视觉验证 PASS: 完全无绿色描边/阴影/反射, 侦探帽纯净棕色, 放大镜玻璃反射消除, 黄色施工帽边缘绿调消除, 眼底月牙纯白 + 锐利 (HSL 提亮去色), 切换时无绿残影
 - **cargo test 预期值同步** (current) ✅: 修 mcp_roundtrip.rs::list_states_returns_2_v2_scenes 期望 2→3 (drink-coffee 加项遗漏), 8/8 cargo tests 绿
 - **运行时**: 桌宠进程按需启动 (cargo tauri dev), 3 V2 APNG ready (drink-coffee 99.91% 相似度, 本批最佳)
 

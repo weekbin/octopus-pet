@@ -1,11 +1,11 @@
 # V2 H3 视频 → 桌宠透明 APNG 完整流程
 
-> **状态**: ✅ V2.1 production baseline (2026-09-09), `scripts/extract-chromakey-apng.py` 沉淀 v4.8 chroma key 公式. 3 场景 (detective-study / worker-construction / drink-coffee) 已落地桌宠, 14 动作复用同样管线.
+> **状态**: ✅ V2.1 production baseline (2026-09-09), `scripts/extract-chromakey-apng.py` 沉淀 **v4.15** chroma key 公式. 3 场景 (detective-study / worker-construction / drink-coffee) 已落地桌宠, 14 动作复用同样管线.
 >
 > **用途**: 把 H3 / gen_videos 生成的绿幕动作视频,加工成 V2 桌宠可直接循环播放的透明 APNG,替换 V1 桌宠 sprite。
 > **适用场景**: V2 14 个动作视频统一加工流程;`prompts/01-detective-study.md` 第一个完整跑通, 13/14 复用同样管线。`prompts/03-drink-coffee.md` 验证 99.91% 相似度 (本批最佳).
 > **首次完成时间**: 2026-08-21 (W1 D5, 01-detective-study 桌宠集成验证 PASS)。
-> **chroma key 演进**: v1 → v3 → v4 → v4.1 → v4.2 → v4.3 → v4.4 → v4.5 → v4.5.1 → v4.6 → v4.7(撤回) → **v4.8 (当前默认)**, 详见 `scripts/extract-chromakey-apng.py` docstring 顶部.
+> **chroma key 演进**: v1 → v3 → v4 → v4.1 → v4.2 → v4.3 → v4.4 → v4.5 → v4.5.1 → v4.6 → v4.7(撤回) → v4.8 → v4.9 → v4.10(撤回) → v4.10.1 → v4.11 → v4.12 → v4.14.2 → **v4.15 (当前默认)**, 详见 `scripts/extract-chromakey-apng.py` docstring 顶部.
 > **配套文档**: `docs/v2-pipeline.md` (8 步总览) · `docs/action-prompt-methodology.md` (方法论) · `docs/breath-pipeline.md` (V1 眨眼流程, 对比参考) · `AGENTS.md` V2 chroma key 章节 (演进根因 + 测试集)
 
 ---
@@ -28,9 +28,9 @@
    ↓
 [Step 2] ffmpeg 抽帧 (15fps, PNG 序列)
    ↓
-[Step 3] PIL chroma key v4.8 + alpha 激进收紧 (alpha < 80/> 175) + cv2.inpaint 分 2 步 (partial+透明 1px 膨胀 Telea r=8 / green_opaque 6px 膨胀 Telea r=4) + yellow_white color clamp (no inpaint, 修眼白米黄) + 抽帧到 50 帧 + resize 192×192
+[Step 3] PIL chroma key v4.15 + alpha 激进收紧 (alpha < 80/> 240) + cv2.inpaint 分 2 步 (partial+透明 1px 膨胀 Telea r=8 / green_opaque 6px 膨胀 Telea r=4) + yellow_white color clamp (no inpaint, 修眼白温和米黄 R-B<60 G>B+5) + HSL 提亮+去色 (mask R>230 R-B<40 内 L*1.18 + S=0, 治暗白 + 去色, 避免边缘硬切) + 抽帧到 50 帧 + resize 192×192
    ↓
-[Step 4] PIL alpha 通道 1px Gaussian blur 羽化 (v4.8 抗锯齿, blur 后低 alpha < 30 归 0)
+[Step 4] PIL alpha 通道 1px Gaussian blur 羽化 (v4.15 抗锯齿, blur 后低 alpha < 30 归 0)
    ↓
 [Step 5] PIL APNG 输出 (disposal=0, 132ms/帧, 6.6s 循环, num_plays=1)
 ```
@@ -43,9 +43,9 @@
 
 **总耗时**: 3-4 分钟/动作 (不含视频生成的 2-3 分钟)。
 
-**关键参数 (Step 3-5)**: `python3 scripts/extract-chromakey-apng.py --input <mp4> --output <apng>` (默认 chromakey=v4.8, frame-count=50, size=192, duration=132, loop=1).
+**关键参数 (Step 3-5)**: `python3 scripts/extract-chromakey-apng.py --input <mp4> --output <apng>` (默认 chromakey=v4.15, frame-count=50, size=192, duration=132, loop=1).
 
-**v4.8 公式详情** (为什么这样改):
+**v4.15 公式详情** (为什么这样改):
 - **相对绿度** `(G - max(R,B)) / G`: 归一化到 G 本身, 避免"白底偏绿"被误扣
 - **严保护** `(max<80) AND (G-max(R,B)<20)` 区分真深色阴影 vs H3 深绿反射 (RGB ~20,55,8)
 - **中绿保护** `80 ≤ max < 150` 且 `G - max(R,B) < 30` 算皮肤: 避免阈值降低后误扣粉色皮肤
@@ -53,6 +53,8 @@
 - **inpaint 半径 8** (从 5 升): PDE 解算更彻底, 远处身体色覆盖到 partial 像素, 边缘绿调消失
 - **partial mask 1px 膨胀**: 覆盖到 alpha=255 边缘外 1 像素, 物品周围过渡带一起 inpaint 修
 - **alpha 羽化** `ImageFilter.GaussianBlur(radius=1)`: 192→116 resize 边缘从硬切变软边, blur 后低 alpha < 30 重新归 0 避免拖出半透残影
+- **v4.15 治本"眼白雾蒙蒙"** (mask R>230 R-B<40 + HSL L*1.18 + S=0): H3 源素材眼底月牙就是"暗暖白" RGB (235,212,207) brightness 218. cv2 HLS_FULL 转后, mask 命中的眼底月牙中心 (R>230 R-B<40) L*1.18 提亮 + S=0 去色 → 灰白 (228, 228, 228). 边缘色相保留 → 软过渡. 治本: 3 场景暗像素 241-254 → 54-64 (-75%), 治本灰白 460-476 → 242-262 (-50% 限严避免塑料感), 帽/杯强黄 23000+ 完整保留, 锐利度 0 损失
+- **v4.8 → v4.15 中间演进**: v4.9 (alpha 240+ 收紧) + v4.10.1 (R-B<60 限温和米黄) + v4.11 (G>B+5 治 G-B=7 极淡米) + v4.12 (HSL L*1.18 治暗白 218→228) + v4.14.2 (S=0 眼白去色, mask 修) → v4.15 (mask 限严 R>230 R-B<40 避免塑料感). 详见 CHANGELOG.md / AGENTS.md.
 - **v4.8 新增 yellow_white color clamp** (no inpaint, 0 模糊): 检米黄像素 (alpha=255 + R>200 + B<G-15 + R>B+50 + R+G+B<720, 排除 R=G=B 星形高光), `G = np.clip(G, B, R-20)` 拉低 G 到 [B, R-20] 区间消除黄绿感, 保留亮度 → 治本"眼白发黄"且保护眼锐利度
 - **v4.7 (撤回)**: green_tinted_white mask + 单独 inpaint Telea r=3 像素治本, 但 inpaint 把星形高光/瞳孔边界涂抹模糊, 眼白从"锐利纯白"变"灰月牙". 用户反馈"现在眼睛的处理更加糟糕了" → 撤回, 改 v4.8 纯色度 clamp
 
@@ -108,7 +110,7 @@ ffmpeg -y -i docs/v2-XX-name/v2-XX-name-h3.mp4 -vf fps=15 /tmp/h3-process/frames
 
 ---
 
-## Step 3: chroma key v4.8 + cv2.inpaint + 抽帧 + resize
+## Step 3: chroma key v4.15 + cv2.inpaint + 抽帧 + resize
 
 > **目的**: 99 帧 → 50 帧, 192×192 RGBA, 透明背景, 章鱼不透明。
 
