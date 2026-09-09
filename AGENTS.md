@@ -18,7 +18,7 @@ Antigravity / Gemini CLI).
 | 窗口 | 116×116 透明, V2 APNG 192×192 在 `<canvas>` 内部 (CSS 缩放到 116×116) |
 | **3 V2 场景 (V2.1 默认)** | detective-study (H3 戴帽研究) · worker-construction (H3 工人施工) · **drink-coffee** (H3 喝咖啡, 2026-09-09 fef8017) |
 | 6 MCP tools | pet_show · pet_ask · pet_get_state · pet_set_state · pet_pet · pet_list_states |
-| **3 V2 APNG** | 50 帧/张 × 132ms ≈ 6.6s 循环, RGBA, 192×192, ~2.6-2.9MB 各, 走 PIL **v4.17** chroma key (v4.6 base 边界 + v4.8 yellow_white color clamp 治本米黄 + v4.9 alpha 240+ 收紧 + v4.10.1 R-B<60 限定温和米黄 + v4.11 G>B+5 治极淡米 + v4.12 HSL L*1.18 提亮 + v4.14.2 S=0 去色 + v4.15 mask R>230 R-B<40 限严避免边缘硬切 + v4.16 放宽 color mask R∈[150,245] (R-G)<50 (G-B)∈[10,100] (R-B)<100 + 瞳位置 ±18px 空间约束 治 green-tinted sclera + **v4.17 移除 soften_alpha 1px blur 治 partial alpha 灰蒙蒙**) |
+| **3 V2 APNG** | 50 帧/张 × 132ms ≈ 6.6s 循环, RGBA, 192×192, ~2.6-2.9MB 各, 走 PIL **v4.18.1** chroma key (v4.6 base 边界 + v4.8 yellow_white color clamp + v4.9 alpha 240+ 收紧 + v4.11 G>B+5 治极淡米 + v4.12 HSL L*1.18 提亮 + v4.14.2 S=0 去色 + v4.16 放宽 color mask + 瞳 ±18px 空间约束 + v4.17 移除 soften_alpha + **v4.18 眼区 bypass inpaint + 瞳 ±25px sclera_zone + Bomberbot color spill suppression** + **v4.18.1 fix sclera 连通 fill 越界 bug (biggest_mask & color_mask)**) |
 | 14 V1 spritesheet (废弃) | 移到 `app/public/assets/octopus/_archive-v1-spritesheets/` 不再用 |
 | **scene 调度** | **事件驱动** (apng-js `end` 事件 → `SCENE_LOOPED` → FSM `rotateScene`), 0 累积延迟, 严格对齐 frame 0 |
 | Spec 依据 | [agent-plugins.org v1.0.0](https://agent-plugins.org/specification) + [MCP 2024-11-05](https://modelcontextprotocol.io/specification/2024-11-05) + [agentskills.io](https://agentskills.io/specification) |
@@ -161,7 +161,20 @@ Antigravity / Gemini CLI).
   - **v4.12 → v4.13 → v4.14 演进根因**: 眼白 brightness 提上来但 R-B 22 仍偏暖. v4.13 S*=0.10 (拉 90%) 视觉变化小. v4.14 S=0 (完全去色, 眼白 = 灰白 (228, 228, 228)).
   - **v4.14 → v4.14.2 演进根因 (mask bug 修复)**: v4.14 S=0 实际没生效 — 眼周 v4.12 mask 限 `B<200`, 但 v4.12 L*1.18 提亮后 B 都 > 200, **眼周最亮区被 mask 排除**治本不到. v4.14.2 mask 去掉 B<200 限制, R>200 + R-B<60 全部命中 → S=0 全治 → 灰白.
   - **v4.14.2 → v4.15 演进根因 (当前默认)**: v4.14.2 全眼周治本灰白, 跟周围粉色身体色对比强烈, 视觉"塑料". v4.15 mask 限严 R>230 + R-B<40 (眼底月牙中心最亮区), 保留边缘色相 → 软过渡. 治本灰白 460-476 → 242-262 (-50%), 偏暖保留 6769-6932 → 6980-7127 (+200 软过渡). 视觉: 眼底月牙纯白 + 自然软过渡, 不塑料. 4 方对比 (v4.8 / v4.12 / v4.14.2 / v4.15) 中 v4.15 最自然.
-  - **chroma key 演进总表** (v1 → v3 → v4 → v4.1 → v4.2 → v4.3 → v4.4 → v4.5 → v4.5.1 → v4.6 → v4.7(撤回) → v4.8 → v4.9 → v4.10(撤回) → v4.10.1 → v4.11 → v4.12 → v4.14.2 → v4.15 → v4.16 → **v4.17**, 2026-09-09 18 步): `scripts/extract-chromakey-apng.py` docstring 顶部有完整记录 + 测试集 + 数据验证, 改 chroma key 前必读. **v4.17 当前默认** (移除 soften_alpha 1px Gaussian blur 治 partial alpha 灰蒙蒙, 源视频 H3 高分辨率眼边本身锐利不需要额外抗锯齿).
+  - **chroma key 演进总表** (v1 → v3 → v4 → v4.1 → v4.2 → v4.3 → v4.4 → v4.5 → v4.5.1 → v4.6 → v4.7(撤回) → v4.8 → v4.9 → v4.10(撤回) → v4.10.1 → v4.11 → v4.12 → v4.14.2 → v4.15 → v4.16 → v4.17 → **v4.18 → v4.18.1**, 2026-09-09 21 步): `scripts/extract-chromakey-apng.py` docstring 顶部有完整记录 + 测试集 + 数据验证, 改 chroma key 前必读. **v4.18.1 当前默认** (v4.18 眼区 bypass inpaint + 瞳 ±25px + Bomberbot color spill + 放宽 color mask, 治本 inpaint r=8 把 186 个 sclera 改成身体粉; v4.18.1 修 sclera 连通 fill 越界 bug).
+  - **v4.17 → v4.18.1 演进根因 (2026-09-09 用户反馈"灰蒙蒙"治本)**:
+    - **v4.17 根因**: cv2.inpaint Telea r=8 在眼区 PDE 解算把 186 个 sclera 白像素改成 octopus 身体粉 (R=244 G=163 B=142), 5 个黑瞳边缘被擦掉成偏暖白. 诊断数据: drink-coffee f30 右眼 25x25 区 源 86.3% 白 → v4.17 18.9% 白 + 62.7% 粉.
+    - **v4.18 修复**:
+      1) `inpaint_partial_rgb` 接收 `eye_protect_mask` 参数 (瞳 ± 25 px 方块), 眼区 partial_mask 1px 膨胀 / dilation 后再跟 eye_protect 取差集, 跳过 inpaint. sclera 保留源偏暖白 (R=220 G=207 B=195), 黑瞳边缘保留黑.
+      2) color_mask 放宽: `R>150 + (R-G)<70 + (G-B)∈[0,80] + (R-B)<120` (去 R 上限), 命中数从 50-1100 升到 50-1500 px.
+      3) Bomberbot color spill suppression: partial alpha 像素 (眼区外) 前景 G 拉到 min(G,R,B), 抑制绿幕反射 spill.
+    - **v4.18.1 关键 fix (15 分钟反思)**: sclera 连通分量 fill 越界 — `sclera_alpha = (alpha == 255) & sclera_zone` 找最大连通分量, 但 sclera_zone 是 50x50 方块, 整片脸都是 alpha=255 连通分量, 把整片脸都 fill 治本 = 视觉"白方块"覆盖眼睛上半部分. 修复: `eye_white = eye_white | (biggest_mask & color_mask)`, fill 跟 color_mask 取交集, 治本不越界.
+    - **验证数据** (drink-coffee f30 右眼 25x25 区):
+      源白保留: v4.17 31.5% → v4.18.1 89.7% (+58pp)
+      变粉像素: v4.17 186 → v4.18.1 0 (-100%)
+      真纯白: v4.17 2 → v4.18.1 138
+      桌宠实际渲染 6.6s 循环 5/6 帧锐利白 + 星形高光 + 黑瞳保留.
+    - **教训**: 任何"fill/sclera_zone 扩展"步骤必须跟 color_mask 取交集, 避免 fill 越界到 skin/触角/边缘. 教训已写 agent memory.
   - **v4.15 → v4.16 演进根因**: v4.15 部署后用户仍反馈"灰蒙蒙, 不干净". 反思根因: v4.15 mask `R>230 R-B<40` 太严, 3 场景睁眼帧命中 0-1 px, 几乎不生效. 实际 sclera RGB mean R=199 G=149 B=127 (R-G=40, G-B=22, R-B=70) 是 **green-tinted 偏色**, 不是 yellow. 之前 7 版 (v4.8-v4.14.2) 用 yellow_white 公式 (G-B>5 + R-B<60) 治, 完全没碰到 green cast (G-B=22 在范围内但 mask 缺 (R-G)<50 条件 + R 范围不对). v4.16 三步: 1) **放宽 color mask** 到 `R∈[150,245] + (R-G)<50 + (G-B)∈[10,100] + (R-B)<100` — 命中 50-1100 px/帧 (v4.15 0-1), 真正捕 green-tinted sclera. 2) **加空间约束 (瞳位置)** — worker 木板 RGB (190,160,130) 跟 sclera 几乎相同, 只能按位置区分. 黑瞳 ±18 px = sclera zone, color mask AND sclera_zone → 0 误治木板/帽高光. 闭眼帧无瞳 → sclera zone 空 → v4.16 不生效 (0 误治). 3) **保留 HSL L*1.18 + S=0** → 治后 sclera RGB (251,236,231)~(255,247,247) 真接近纯白. 视觉 3 场景眼底月牙从 greenish hazy → clean bright white.
   - **v4.16 → v4.17 演进根因 (当前默认)**: v4.16 部署后用户问"为什么 H3 源这么好眼白还会变灰". 反思根因 (用户原话 + 像素诊断):
     源视频 0.5s 帧 alpha=255/40000 = 100% 无 partial, RGB 干净. v4.16 部署后眼区
