@@ -389,10 +389,56 @@ def inpaint_partial_rgb(rgb: np.ndarray, alpha: np.ndarray, radius: int = 8) -> 
     g3 = rgb_fixed[:,:,1].astype(int)
     b3 = rgb_fixed[:,:,2].astype(int)
     sum3 = r3 + g3 + b3
-    # v4.15: mask 限更严 — R>230 + R-B<40 (只治眼底月牙中心, 避免边缘"硬切")
-    #    v4.14.2 mask: R>200 + R-B<60 (治整个眼周, 边缘 partial 没治本 → 跟治后灰白"硬切")
-    #    v4.15 mask 收紧, 只治最亮眼白, 保留边缘 partial 像素, 软过渡
-    eye_white = (alpha == 255) & (r3 > 230) & ((r3 - b3) < 40) & (sum3 < 720) & (r3 > 100) & ~((r3 == g3) & (g3 == b3))
+    # v4.16: 治 green-tinted 眼底月牙 (v4.15 mask R>230 R-B<40 太严, 3 场景睁眼帧命中 0-1 px, 几乎不生效)
+    #    诊断 (3 场景睁眼帧 50 像素样本):
+    #      - sclera RGB mean: R=199 G=149 G=127 (detective) / R=189 G=149 B=118 (worker) / R=199 G=149 B=127 (drink)
+    #      - 特征: R-G ≈ 40-50, G-B ≈ 20-30, R-B ≈ 70 (off-white with green cast)
+    #    区分目标色域 (sclera green-tinted) vs 保留色域:
+    #      - 皮肤 (cheek): R=220 G=110 B=85 → R-G=110 (G 远低于 R) → 排除
+    #      - 黄色施工帽: R=255 G=200 B=0 → G-B=200 (G 远高于 B) → 排除
+    #      - 纯白 (R=G=B): sum=765 → 排除
+    #      - 棕色侦探帽: R=140 G=85 B=40 → R<150 → 排除
+    #      - 绿色咖啡杯: R=50 G=180 B=120 → G>R → 排除
+    #      - 木板/帽子高光 (worker 木板 R=190 G=160 B=130) — RGB 跟 sclera 几乎相同! 只能按位置排除
+    #    mask 公式 (catches green-tinted sclera, excludes 5 类保留色域):
+    #      alpha=255 + R∈[150,245] + (R-G)<50 + (G-B)∈[10,100] + (R-B)<100 + sum<720 + !R==G==B
+    #    空间约束 (避免误治木板/帽高光): 用黑瞳位置生成 sclera zone mask, 跟 color mask AND 起来
+    #      - 黑瞳检测: alpha=255 + R<50 + G<50 + B<50 (在 face 区 y=70-115, x=40-160)
+    #      - sclera zone: 瞳中心 ± 18 像素 (覆盖眼底月牙 + 部分眼周, 避免远距离误治)
+    #      - 闭眼帧没有瞳 → sclera zone 空 → v4.16 不生效 (0 误治)
+    #    操作: HSL L*=1.18 + S=0 → 纯白 (跟 v4.14.2 一致, 但 mask 是真正命中 green-tinted sclera)
+    #    风险: 边缘 (R-G<50 但 R-B=80-100 软过渡) 不治, 保留色相软过渡 (跟 v4.15 同样"塑料感避免" 逻辑)
+    #    演进根因:
+    #      v4.15 mask R>230 R-B<40 命中 0-1 px (眼底月牙实际 R=150-220, 阈值差太远)
+    #      v4.16 放宽 mask 到 R>150 R-G<50 G-B>10 — 命中 50-1100 px, 真正治 green-tinted sclera
+    #      v4.16 加空间约束 (瞳 ± 18 px) — 避免误治木板/帽高光 (RGB 跟 sclera 一样, 只能按位置分)
+    color_mask = (alpha == 255) & (r3 > 150) & (r3 < 245) & ((r3 - g3) < 50) & ((g3 - b3) > 10) & ((g3 - b3) < 100) & ((r3 - b3) < 100) & (sum3 < 720) & ~((r3 == g3) & (g3 == b3))
+    # 空间约束: 黑瞳 → sclera zone (瞳中心 ± 18 px)
+    pupil = (alpha == 255) & (r3 < 50) & (g3 < 50) & (b3 < 50)
+    pupil[:70, :] = False  # 限制脸区
+    pupil[115:, :] = False
+    pupil[:, :40] = False
+    pupil[:, 160:] = False
+    if pupil.sum() > 0:
+        # 找连通分量, 选最大的 2 个 (左右眼)
+        try:
+            from scipy import ndimage
+            labeled, n = ndimage.label(pupil)
+            sizes = ndimage.sum(pupil, labeled, range(1, n+1))
+            top_ids = sorted(range(1, n+1), key=lambda i: -sizes[i-1])[:2]
+            sclera_zone = np.zeros_like(pupil)
+            for cid in top_ids:
+                if sizes[cid-1] > 20:  # 瞳至少 20 px
+                    ys, xs = np.where(labeled == cid)
+                    cy, cx = int(ys.mean()), int(xs.mean())
+                    y0, y1 = max(0, cy-18), min(pupil.shape[0], cy+18)
+                    x0, x1 = max(0, cx-18), min(pupil.shape[1], cx+18)
+                    sclera_zone[y0:y1, x0:x1] = True
+        except ImportError:
+            sclera_zone = np.ones_like(pupil)  # fallback: 无空间约束
+    else:
+        sclera_zone = np.zeros_like(pupil)  # 闭眼 → 0 治
+    eye_white = color_mask & sclera_zone
     if eye_white.sum() > 0:
         # 转 HLS (cv2 RGB->HLS_FULL, H in 0-255, L in 0-255, S in 0-255)
         rgb_bgr_eye = cv2.cvtColor(rgb_fixed, cv2.COLOR_RGB2HLS_FULL)
