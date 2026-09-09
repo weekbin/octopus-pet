@@ -18,7 +18,7 @@ Antigravity / Gemini CLI).
 | 窗口 | 116×116 透明, V2 APNG 192×192 在 `<canvas>` 内部 (CSS 缩放到 116×116) |
 | **3 V2 场景 (V2.1 默认)** | detective-study (H3 戴帽研究) · worker-construction (H3 工人施工) · **drink-coffee** (H3 喝咖啡, 2026-09-09 fef8017) |
 | 6 MCP tools | pet_show · pet_ask · pet_get_state · pet_set_state · pet_pet · pet_list_states |
-| **3 V2 APNG** | **100 帧/张 × 66ms ≈ 6.6s 循环 (15fps, v4.20 流畅度优化)**, RGBA, 192×192, ~5.3-5.7MB 各, 走 PIL **v4.18.1** chroma key (v4.6 base 边界 + v4.8 yellow_white color clamp + v4.9 alpha 240+ 收紧 + v4.11 G>B+5 治极淡米 + v4.12 HSL L*1.18 提亮 + v4.14.2 S=0 去色 + v4.16 放宽 color mask + 瞳 ±18px 空间约束 + v4.17 移除 soften_alpha + **v4.18 眼区 bypass inpaint + 瞳 ±25px sclera_zone + Bomberbot color spill suppression** + **v4.18.1 fix sclera 连通 fill 越界 bug (biggest_mask & color_mask)**) |
+| **3 V2 APNG** | **100 帧/张 × 66ms ≈ 6.6s 循环 (15fps, v4.20 流畅度优化)**, RGBA, 192×192, ~5.3-5.7MB 各, 走 PIL **v4.24** chroma key (v4.6 base 边界 + v4.8 yellow_white color clamp + v4.9 alpha 240+ 收紧 + v4.11 G>B+5 治极淡米 + v4.12 HSL L*1.18 提亮 + v4.14.2 S=0 去色 + v4.16 放宽 color mask + 瞳 ±18px 空间约束 + v4.17 移除 soften_alpha + **v4.18 眼区 bypass inpaint + 瞳 ±25px sclera_zone + Bomberbot color spill suppression** + **v4.18.1 fix sclera 连通 fill 越界 bug** + **v4.24 forehead ROI (y=50-80 x=70-110) 纯白降级为 (240,220,210) 暖白 + 整图绿幕残留 (G-R>10, G-B>10, G>150) 拉低 G**) |
 | 14 V1 spritesheet (废弃) | 移到 `app/public/assets/octopus/_archive-v1-spritesheets/` 不再用 |
 | **scene 调度** | **事件驱动** (apng-js `end` 事件 → `SCENE_LOOPED` → FSM `rotateScene`), 0 累积延迟, 严格对齐 frame 0 |
 | Spec 依据 | [agent-plugins.org v1.0.0](https://agent-plugins.org/specification) + [MCP 2024-11-05](https://modelcontextprotocol.io/specification/2024-11-05) + [agentskills.io](https://agentskills.io/specification) |
@@ -161,7 +161,17 @@ Antigravity / Gemini CLI).
   - **v4.12 → v4.13 → v4.14 演进根因**: 眼白 brightness 提上来但 R-B 22 仍偏暖. v4.13 S*=0.10 (拉 90%) 视觉变化小. v4.14 S=0 (完全去色, 眼白 = 灰白 (228, 228, 228)).
   - **v4.14 → v4.14.2 演进根因 (mask bug 修复)**: v4.14 S=0 实际没生效 — 眼周 v4.12 mask 限 `B<200`, 但 v4.12 L*1.18 提亮后 B 都 > 200, **眼周最亮区被 mask 排除**治本不到. v4.14.2 mask 去掉 B<200 限制, R>200 + R-B<60 全部命中 → S=0 全治 → 灰白.
   - **v4.14.2 → v4.15 演进根因 (当前默认)**: v4.14.2 全眼周治本灰白, 跟周围粉色身体色对比强烈, 视觉"塑料". v4.15 mask 限严 R>230 + R-B<40 (眼底月牙中心最亮区), 保留边缘色相 → 软过渡. 治本灰白 460-476 → 242-262 (-50%), 偏暖保留 6769-6932 → 6980-7127 (+200 软过渡). 视觉: 眼底月牙纯白 + 自然软过渡, 不塑料. 4 方对比 (v4.8 / v4.12 / v4.14.2 / v4.15) 中 v4.15 最自然.
-  - **chroma key 演进总表** (v1 → v3 → v4 → v4.1 → v4.2 → v4.3 → v4.4 → v4.5 → v4.5.1 → v4.6 → v4.7(撤回) → v4.8 → v4.9 → v4.10(撤回) → v4.10.1 → v4.11 → v4.12 → v4.14.2 → v4.15 → v4.16 → v4.17 → **v4.18 → v4.18.1**, 2026-09-09 21 步): `scripts/extract-chromakey-apng.py` docstring 顶部有完整记录 + 测试集 + 数据验证, 改 chroma key 前必读. **v4.18.1 当前默认** (v4.18 眼区 bypass inpaint + 瞳 ±25px + Bomberbot color spill + 放宽 color mask, 治本 inpaint r=8 把 186 个 sclera 改成身体粉; v4.18.1 修 sclera 连通 fill 越界 bug).
+  - **chroma key 演进总表** (v1 → v3 → v4 → v4.1 → v4.2 → v4.3 → v4.4 → v4.5 → v4.5.1 → v4.6 → v4.7(撤回) → v4.8 → v4.9 → v4.10(撤回) → v4.10.1 → v4.11 → v4.12 → v4.14.2 → v4.15 → v4.16 → v4.17 → v4.18 → v4.18.1 → v4.19 → v4.20 → **v4.24**, 2026-09-09 25 步): `scripts/extract-chromakey-apng.py` docstring 顶部有完整记录 + 测试集 + 数据验证, 改 chroma key 前必读. **v4.24 当前默认** (v4.18.1 治眼白绿偏 + v4.19/v4.20 流畅度优化 50→100 帧 7.5→15fps + v4.24 forehead ROI 治本"白方块" + 整图绿幕残留治本).
+  - **v4.20 → v4.24 演进根因 (2026-09-09 用户反馈"眼睛上方额头位置冒白色空白")**:
+    - **症状**: v4.20 部署后用户"看起来好多了, 但是好像眼睛上方额头位置, 会有概率冒出白色的空白, 这个地方你没处理好". 桌宠循环 6.6s, 65/100 帧额头有 (255,255,255) 真纯白, 集中在 f075-f081 区间 (5-5.5s).
+    - **真根因 (像素诊断反直觉)**: 源视频 H3 在 detective f075-f081 帧 (章鱼抬头/转脸) 帽沿/帽顶在额头位置渲染"白色高光" (RGB 178,69,69 深红 → 部署后 255,255,255). 同样 drink-coffee f015-f022 帧 + worker 多个帧 H3 把绿幕反射进身体, chroma key 完美保留. **不是 chroma key bug, 是 H3 源视频物理光照特征** (帽反光 + 绿幕反射进章鱼身体).
+    - **之前 v4.21-23.2 多次缝补失败根因**: 全部在 color_mask 阈值层改 (R-G>=5, S*=0.5, sclera_zone ±15), 命中 0-5 px, 治不到 25+ px 的"帽反光真纯白". 反思: 源 (255,255,255) 跟 sclera (255,255,255) RGB 几乎相同, color_mask 永远区分不了.
+    - **v4.24 治本 (commit 68ed1e9)**: 不在 color_mask 层改, 改在 chroma key 末尾后处理加 2 道 position-based mask:
+      1. **green_residual_mask**: `alpha=255 + G-R>10 + G-B>10 + G>150` → 拉低 G 到 max(R, B+5) 跟周围身体色一致. 治本 drink-coffee 戴墨镜帧绿幕反射残留.
+      2. **forehead_white_mask**: `alpha=255 + RGB>=250 + y∈[50,80) + x∈[70,110)` → 强制 (240,220,210) 暖白. 治本 detective 戴帽抬头"白方块". 跟 sclera_zone (y=110-145) 距离 30+ px 不冲突.
+    - **验证数据 (100 帧 3 场景 forehead ROI)**: core 纯白 548/263/531 (v4.20) → 0/0/0 (v4.24). core 接近白 1042/618/1429 → 0/0/0. 整图绿幕残留 1100/2204/579 → 0/0/0. 有纯白帧数 62/55/73 → 0/0/0.
+    - **桌宠实际渲染 (60 帧 18s 1 轮)**: detective 戴帽拿放大镜 (pet-10/11/13) 额头干净粉色; drink-coffee 喝咖啡 (pet-22/50) 闭眼 + 干净眼白; worker 戴黄帽 (pet-36) 帽下额头干净.
+    - **教训**: 1) chroma key 任务"绿去干净 + alpha 锐利"完成后, 源视频物理光照特征 (帽反光/绿幕反射) 不是 chroma key 能治的, **position-based 后处理 mask** 才是正解. 2) 25 步 chroma key 演进 70% 时间浪费在 color_mask 阈值微调, 应该早看源视频物理光照, 早用 position mask. 3) PNG 看图工具 alpha=0 透明区域显示"棋盘格"误导"绿幕残留"判断, 实际桌宠透明窗口显示桌面背景. **必须看 alpha 数值, 不能凭 PNG 视觉**.
   - **v4.17 → v4.18.1 演进根因 (2026-09-09 用户反馈"灰蒙蒙"治本)**:
     - **v4.17 根因**: cv2.inpaint Telea r=8 在眼区 PDE 解算把 186 个 sclera 白像素改成 octopus 身体粉 (R=244 G=163 B=142), 5 个黑瞳边缘被擦掉成偏暖白. 诊断数据: drink-coffee f30 右眼 25x25 区 源 86.3% 白 → v4.17 18.9% 白 + 62.7% 粉.
     - **v4.18 修复**:
