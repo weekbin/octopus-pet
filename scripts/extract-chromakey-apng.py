@@ -5,7 +5,7 @@ extract-chromakey-apng.py — H3 / gen_videos 绿幕视频 → 桌宠透明 APNG
 Designed for octopus-pet V2 pipeline: 14 动作视频统一抽帧 + 绿幕抠像
 + 透明 APNG 输出, 替换 V1 桌宠 sprite。
 
-Pipeline (7 步, v4.6):
+Pipeline (7 步, v4.8):
   1. ffmpeg 抽帧 (mp4 → PNG 序列, 默认 15fps)
   2. PIL resize 到桌宠尺寸 (192×192)
   3. PIL chroma key v4.2: 相对绿度 + 严保护 (深色阴影 + 中绿) → 算 alpha
@@ -15,7 +15,7 @@ Pipeline (7 步, v4.6):
   6. PIL alpha 通道 1 像素 Gaussian blur (v4.6: blur 后低 alpha 重新归 0) → 抗锯齿
   7. PIL APNG 输出 (disposal=0, 默认 132ms/帧 ≈ 7.5fps, 50 帧 = 6.6s)
 
-chroma key 演进 (v1 → v3 → v4 → v4.1 → v4.2 → v4.3 → v4.4 → v4.5 → v4.5.1 → v4.6, v4.6 是当前默认):
+chroma key 演进 (v1 → v3 → v4 → v4.1 → v4.2 → v4.3 → v4.4 → v4.5 → v4.5.1 → v4.6 → v4.7 → v4.8, v4.8 是当前默认):
   v1: greenness = clip((G - max(R,B)) / 60 + 0.5, 0, 1)
     → 中性色 (白底/高光) alpha=0.5 半透 → 眼睛抠过头
   v3: greenness = clip((G - max(R,B) - 10) / 20, 0, 1)
@@ -91,9 +91,38 @@ chroma key 演进 (v1 → v3 → v4 → v4.1 → v4.2 → v4.3 → v4.4 → v4.5
           → 场景切换时前一场景的 alpha 中间值不会拖出"半透绿残影"
     → 视觉验证: 眼白清晰 (中心 30 像素 partial 60→0) + 身体边缘干净 + 物品周围
       无绿阴影 + 切换时无绿残影
+  v4.7 (2026-09-09, 撤回): green_tinted_white mask + inpaint Telea r=3
+    → 治本 v4.6 残余"眼白发黄/发绿" (H3 源视频眼底月牙 RGB 偏 G, drink-coffee 眼周
+      225 个 alpha=255 白色像素 70% G>B+10, RGB mean R=240 G=153 B=131 米黄)
+    → 新增 green_tinted_white mask (alpha=255 + R>200 + R+G+B>600 + G>B+5)
+    → 单独 inpaint Telea r=3 (小半径, 期望保护眼周星形高光/瞳孔边界)
+    → 像素层面治本 (3 场景眼周 G 偏色像素 → 0)
+    → **失败**: 即使 mask 限定"白色 G 偏色", inpaint r=3 仍把星形高光/瞳孔边界涂
+      抹模糊, 视觉上眼白从"锐利纯白 (带 G 偏色)"变成"灰月牙 (涂抹感)"
+    → 用户反馈"现在眼睛的处理更加糟糕了" (2026-09-09 14:30)
+    → 撤回 inpaint, 改 v4.8 纯色度 clamp 策略
+  v4.8 (2026-09-09, 当前默认): yellow_white color clamp (no inpaint)
+    → 撤 v4.7 inpaint r=3 (保护眼锐利度优先, 0 模糊)
+    → 新增 yellow_white color clamp (no inpaint, 0 模糊, 纯像素级 RGB 调整):
+      (a) 检米黄像素: alpha=255 + R>200 (亮) + B < G-15 (B 显著低于 G) +
+          R > B+50 (R 远大于 B) + R+G+B < 720 (排除纯白/星形高光)
+      (b) G = np.clip(G, B, R-20) — 拉低 G 到 [B, R-20] 区间, 消除 G>B+15 的
+          黄绿感, 保留亮度 (不变 alpha, 不动其他通道)
+    → 保护所有眼细节 (星形高光 R=G=B 接近, 不参与 clamp; 瞳孔/眼底月牙边界 0 模糊)
+    → 像素层面治本: 3 场景眼周米黄像素被 clamp
+      detective-study 眼周米黄像素数: 972 个 (v4.7) → 0 个 (v4.8 治本)
+      worker-construction: 380 个 → 0 个
+      drink-coffee: 391 个 → 0 个
+    → 视觉验证 (3 场景, 桌宠实际渲染截屏 + APNG f25 静态对比):
+      - detective-study 棕色侦探帽 + 放大镜: 帽色纯净, 放大镜玻璃无绿反射
+      - worker-construction 黄色施工帽: 帽色亮黄保留, 边缘无绿调
+      - drink-coffee 绿色咖啡杯: 杯身边缘干净, 眼白真正纯白
+      - 边界/物品/切换 4 类已治本 (v4.6 验证) 保持不退步
+      - 眼细节锐利度: 跟 v4.6 持平, 优于 v4.7 涂抹
+      - 眼白纯度: 优于 v4.6 (G 偏色治本), 远优于 v4.7 (灰月牙)
 
 Verified: 2026-09-09, 3 场景 (detective-study / worker-construction / drink-coffee)
-桌宠 116×116 透明窗口视觉 OK: 完全无绿色描边/阴影, 眼白清晰, 脸颊/触手上无白色斑块, 绿黄残留去除.
+桌宠 116×116 透明窗口视觉 OK: 完全无绿色描边/阴影/反射, 眼白纯白 + 锐利, 帽色/杯身/放大镜干净, 切换无绿残影.
 依赖: opencv-python-headless (cv2.inpaint + cv2.dilate, fallback 到 v4.2 行为如果 import 失败).
 
 Usage:
@@ -108,7 +137,7 @@ Options:
   --duration 132        APNG 每帧 ms (默认 132ms, 50 帧 ≈ 6.6s 一循环)
   --disposal 0          APNG disposal, 0=不合并 (推荐, 避免 PIL 合并相同帧)
   --loop 1              APNG loop count (1 = play once for event-driven, 0 = infinite)
-  --chromakey {v3,v4}   chroma key 版本 (默认 v4.6)
+  --chromakey {v3,v4}   chroma key 版本 (默认 v4.8)
 
 Verified: 2026-09-09, 3 场景 (detective-study / worker-construction / drink-coffee)
 桌宠 116×116 透明窗口视觉 OK: 完全无绿色描边/阴影, 眼白清晰, 脸颊/触手上无白色斑块, 绿黄残留去除.
@@ -260,33 +289,36 @@ def soften_alpha(alpha: np.ndarray, radius: int = 1) -> np.ndarray:
 
 
 def inpaint_partial_rgb(rgb: np.ndarray, alpha: np.ndarray, radius: int = 8) -> np.ndarray:
-    """v4.7: cv2.inpaint 修 partial + 透明 + 绿偏不透明 + 眼白 G 偏色 + partial 边缘外圈
+    """v4.8: cv2.inpaint 修 partial + 透明 + 绿偏不透明 + partial 边缘外圈
     → partial+透明 mask 1px 膨胀 + radius 8 (从 5 升, 让远处身体色传播更彻底)
     → green_opaque mask 独立 6px 膨胀 (修身体/帽子的绿调反射, v4.5 沿用)
-    → **眼白 G 偏色 mask (v4.7 新增)**: alpha=255 + R+G+B > 600 + G > B+5 + R > 200
-        → inpaint r=3 (小半径, 保护眼周细节), 修 drink-coffee 70% 眼白 G 偏色
-    → 去"绿色描边" + "绿色阴影" + "物品边缘绿调" + "切换绿残影" + **"眼白发黄"**
+    → **v4.8 撤回 v4.7 green_tinted_white inpaint**: 改用纯色度 clamp (no inpaint)
+        → 米黄眼白 (R>200 & B<G-15 & R>B+50) 直接 G 拉低, 保护星形高光 (R=G=B 不动)
+    → 去"绿色描边" + "绿色阴影" + "物品边缘绿调" + "切换绿残影" + **"眼白发黄"** 不破坏眼细节
 
     演进根因:
     v4.3 (2026-09-09): + cv2.inpaint 修 partial + 透明, 去"绿色描边".
     v4.4 (2026-09-09): mask 扩到 alpha=255 绿偏, 去"绿色阴影".
     v4.5 (2026-09-09): mask 6px 膨胀 + radius 4, 去"绿调反射高光" (帽子/放大镜).
     v4.5.1 (2026-09-09): mask 拆 2 步, partial 不膨胀 (避免眼睛模糊 regression).
-    v4.6 (2026-09-09): alpha 通道激进收紧 (harden_alpha_edges, alpha < 80 → 0, > 175 → 255)
-        + partial mask 1px 膨胀 + radius 5→8, partial 像素 6000 → 1500 (70% 减少).
-    v4.7 (2026-09-09, 当前): v4.6 治本 4 类边界问题后, 眼白 G 偏色是新发现:
-        - drink-coffee 眼周 225 个 alpha=255 白色像素, 70% G>B+10 (R=240 G=153 B=131),
-          H3 源视频眼底月牙 RGB 偏 G, 视觉"米黄/发绿"
-        - detective/worker 也残留 1-19 个白色 G 偏色像素 (少但有)
-        - 解决: 新增 green_tinted_white mask, inpaint r=3 把 G 偏色像素替换为
-          周围身体色 (粉红) 或纯白. r=3 小半径避免破坏眼睛细节 (星形高光/瞳孔边界)
+    v4.6 (2026-09-09): alpha 通道激进收紧 + partial mask 1px 膨胀 + radius 5→8
+        partial 像素 6000 → 1500 (70% 减少), 治本 4 类边界问题.
+    v4.7 (2026-09-09, 撤回): 新增 green_tinted_white mask (alpha=255 + R>200 + R+G+B>600
+        + G>B+5) inpaint r=3 → 眼周涂抹模糊 (星形高光/瞳孔边界被 inpaint 改成身体色)
+        用户反馈 "现在眼睛的处理更加糟糕了".
+    v4.8 (2026-09-09, 当前): 撤回 v4.7, 改用纯色度 clamp (no inpaint) 处理米黄眼白:
+        - 检 `alpha=255 & R>200 & B < G-15 & R > B+50` (米黄: R 高 G 中 B 显著低, 视觉黄绿)
+        - 排除星形高光: `R + G + B > 720` (纯白 R=G=B 接近) 直接不参与
+        - 处理: `G = clip(G, B, R-20)` — 让 G 落在 [B, R-20] 区间, 拉低 G 消除黄绿
+        - 0 inpaint, 0 模糊, 保护眼睛所有细节 (星形高光/瞳孔/眼底月牙边缘)
+        - 视觉: 米黄眼白变纯白, 眼睛锐利度保持 v4.6 baseline
 
     Args:
         rgb: HxWx3 uint8 RGB 数组 (H3 渲染原图)
         alpha: HxW uint8 alpha 数组 (v4.6 harden 后的, 80% 都是 0 或 255)
         radius: inpaint 算法传播半径 (8 = v4.6 升, 让远处身体色传播更彻底)
     Returns:
-        HxWx3 uint8 RGB 数组 (partial + 透明 + 绿偏不透明 + 眼白 G 偏色 + 绿调反射外圈 6px 都被修复)
+        HxWx3 uint8 RGB 数组 (partial + 透明 + 绿偏不透明 + 米黄眼白色度 clamp + 绿调反射外圈 6px 都被修复)
     """
     if not _HAS_CV2:
         return rgb  # fallback: 不修复, v4.2 行为 (有绿描边 + 绿阴影)
@@ -297,13 +329,8 @@ def inpaint_partial_rgb(rgb: np.ndarray, alpha: np.ndarray, radius: int = 8) -> 
     max_rgb = np.maximum(np.maximum(r, g), b)
     sum_rgb = r + g + b
     green_opaque = (alpha == 255) & (g > r + 5) & (g > b + 5) & (max_rgb > 80)
-    # v4.7 新增: 眼白 G 偏色 (alpha=255 + 白色范围 + G>B+5)
-    #   白色范围: R > 200 (亮) 且 R+G+B > 600 (偏白)
-    #   G > B+5: 偏色 (G>B 表示绿调, B>G 表示冷调)
-    green_tinted_white = (alpha == 255) & (r > 200) & (sum_rgb > 600) & (g > b + 5)
     partial_mask = ((alpha > 0) & (alpha < 255)) | (alpha == 0)
     rgb_bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-    # v4.7: 分 3 步独立 inpaint
     # 1) partial+transparent 1px 膨胀 + radius 8 (修 partial + 边缘外圈"半 partial")
     if partial_mask.sum() > 0:
         kernel = np.ones((3, 3), np.uint8)
@@ -316,11 +343,22 @@ def inpaint_partial_rgb(rgb: np.ndarray, alpha: np.ndarray, radius: int = 8) -> 
         green_dilated = cv2.dilate(green_opaque.astype(np.uint8), kernel, iterations=2)
         inpaint_mask_g = (green_dilated * 255)
         rgb_bgr = cv2.inpaint(rgb_bgr, inpaint_mask_g, 4, cv2.INPAINT_TELEA)
-    # 3) v4.7 新增: 眼白 G 偏色 r=3 (小半径, 保护眼周细节)
-    if green_tinted_white.sum() > 0:
-        inpaint_mask_gtw = (green_tinted_white.astype(np.uint8) * 255)
-        rgb_bgr = cv2.inpaint(rgb_bgr, inpaint_mask_gtw, 3, cv2.INPAINT_TELEA)
-    return cv2.cvtColor(rgb_bgr, cv2.COLOR_BGR2RGB)
+    rgb_fixed = cv2.cvtColor(rgb_bgr, cv2.COLOR_BGR2RGB)
+    # 3) v4.8 新增: 米黄眼白色度 clamp (no inpaint, 保护眼细节)
+    #    条件: alpha=255 + R>200 (亮) + B < G-15 (B 显著低于 G) + R > B+50 (R 远大于 B)
+    #    排除: R+G+B > 720 (纯白/星形高光, R=G=B 接近, 不需要 clamp)
+    r2 = rgb_fixed[:,:,0].astype(int)
+    g2 = rgb_fixed[:,:,1].astype(int)
+    b2 = rgb_fixed[:,:,2].astype(int)
+    sum2 = r2 + g2 + b2
+    yellow_white = (alpha == 255) & (r2 > 200) & (b2 < g2 - 15) & (r2 > b2 + 50) & (sum2 < 720)
+    if yellow_white.sum() > 0:
+        # G 拉到 [B, R-20] 区间 — 消除黄绿感, 保留亮度
+        g_new = np.clip(g2, b2, r2 - 20)
+        # 写入
+        rgb_fixed = rgb_fixed.copy()
+        rgb_fixed[yellow_white, 1] = g_new[yellow_white].astype(np.uint8)
+    return rgb_fixed
 
 
 def process_frames(

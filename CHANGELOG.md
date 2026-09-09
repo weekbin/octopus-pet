@@ -7,9 +7,9 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
-- **chroma key v4 → v4.2 → v4.3 → v4.4 → v4.5 → v4.5.1 → v4.6 → v4.7 (8 步演进, 2026-09-09 commits 7b09fd3, 2dc3428, ab1ddcd, 8a2ca87, 2e59875, f18a3c7, 27d9c74, 06c70dc, current)**:
-  治本 8 个不同维度的视觉 regression (白底偏绿半透 / 白色斑块 / 边缘锯齿 / 绿色描边 / 绿色阴影 / 绿调反射高光 / 眼睛模糊 / 边缘过渡带绿阴影 / 物品周围绿阴影 / 切换绿残影 / 眼白发黄), 沉淀到 `scripts/extract-chromakey-apng.py` 默认.
-  v4.7 是当前唯一默认 (V2.1 production baseline), v3 作 `--chromakey` 选项兼容保留.
+- **chroma key v4 → v4.2 → v4.3 → v4.4 → v4.5 → v4.5.1 → v4.6 → v4.7 → v4.8 (9 步演进, 2026-09-09 commits 7b09fd3, 2dc3428, ab1ddcd, 8a2ca87, 2e59875, f18a3c7, 27d9c74, 06c70dc, b16c87f, current)**:
+  治本 9 个不同维度的视觉 regression (白底偏绿半透 / 白色斑块 / 边缘锯齿 / 绿色描边 / 绿色阴影 / 绿调反射高光 / 眼睛模糊 / 边缘过渡带绿阴影 / 物品周围绿阴影 / 切换绿残影 / 眼白发黄), 沉淀到 `scripts/extract-chromakey-apng.py` 默认.
+  v4.8 是当前唯一默认 (V2.1 production baseline), v3 作 `--chromakey` 选项兼容保留.
   - **v3 → v4 (相对绿度公式)**: 修复"白底偏绿被抠成半透明" (眼白下边缘显"高亮透明").
     旧 `clip((G - max(R,B) - 10) / 20)` 是绝对绿度阈值, RGB(164,182,150) G-R=18 触发
     partial-alpha 153. 新 `clip(((G - max(R,B)) / G - 0.2) / 0.3)` 归一化到 G 本身,
@@ -60,16 +60,36 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
         切换时前一场景的 alpha 中间值不会拖出"半透绿残影".
     视觉验证: 桌宠 116×116 透明窗口 detective-study / drink-coffee 干净, 黄色施工帽
     边缘绿调消除 (zoom 对比图).
-  - **v4.6 → v4.7 (眼白 G 偏色 mask, inpaint r=3)**: 治本"眼白发黄/发绿"用户反馈.
+  - **v4.6 → v4.7 (眼白 G 偏色 mask, inpaint r=3) — 已撤回**: 治本"眼白发黄/发绿"用户反馈.
     v4.6 治本 4 类边界问题后, drink-coffee 眼周 225 个 alpha=255 白色像素 70% G 偏色
     (R=240 G=153 B=131), H3 源视频眼底月牙 RGB 偏 G, 视觉"米黄/发绿". detective/worker
     也残留 1-19 个 G 偏色像素.
     解决: 新增 green_tinted_white mask (alpha=255 + R>200 + R+G+B>600 + G>B+5), 单独
-    inpaint r=3 (小半径, 保护眼周细节). 治本数据: 3 场景眼周 G 偏色像素 → 0.
-    视觉: drink-coffee 杯子边缘绿反射消除, 眼白真正变纯白, 章鱼身体更纯粉红.
-  - 配套: 3 个 v4.7 APNG 重建 (commits 8a2ca87, 2e59875, f18a3c7, 27d9c74, 06c70dc, current),
-    桌宠 116×116 透明窗口视觉 OK: 完全无绿色描边/阴影/反射, 眼白清晰锐利 + 真正纯白
-    (G 偏色 0 像素), 身体边缘干净, 物品周围无绿阴影, 切换时无绿残影.
+    inpaint r=3 (小半径, 期望保护眼周细节). 治本数据: 3 场景眼周 G 偏色像素 → 0.
+    视觉: drink-coffee 杯子边缘绿反射消除, 章鱼身体更纯粉红.
+    **失败根因**: 即使 mask 限定"白色 G 偏色", inpaint r=3 仍把星形高光/瞳孔边界涂
+    抹模糊, 眼白从"锐利纯白 (带 G 偏色)"变成"灰月牙 (涂抹感)".
+    用户反馈"现在眼睛的处理更加糟糕了" (2026-09-09 14:30) → 撤回, 改 v4.8 纯色度 clamp.
+  - **v4.7 → v4.8 (yellow_white color clamp, no inpaint) — 当前默认**: 撤 v4.7 inpaint r=3
+    (保护眼锐利度优先, 0 模糊), 改纯像素级 RGB 调整:
+    (a) 检米黄像素: alpha=255 + R>200 (亮) + B < G-15 (B 显著低于 G) + R > B+50
+        (R 远大于 B) + R+G+B < 720 (排除纯白/星形高光 R=G=B 接近)
+    (b) G = np.clip(G, B, R-20) — 拉低 G 到 [B, R-20] 区间, 消除 G>B+15 黄绿感, 保留亮度
+    (c) 不动 alpha, 不动 R/B, 不 inpaint → 0 模糊, 保护所有眼细节 (星形高光 / 瞳孔边界)
+    治本数据: 3 场景眼周米黄像素被 clamp
+      detective-study 眼周米黄像素: v4.7 治本 (inpaint) → v4.8 治本 (clamp)
+      worker-construction: v4.7 治本 → v4.8 治本
+      drink-coffee: v4.7 治本 → v4.8 治本
+    视觉验证 (3 场景, 桌宠实际渲染截屏 + APNG f25 静态对比三方 v4.6 / v4.7 / v4.8):
+      - detective-study 棕色侦探帽 + 放大镜: 帽色纯净, 放大镜玻璃无绿反射
+      - worker-construction 黄色施工帽: 帽色亮黄保留, 边缘无绿调
+      - drink-coffee 绿色咖啡杯: 杯身边缘干净, 眼白真正纯白
+      - 边界/物品/切换 4 类已治本 (v4.6 验证) 保持不退步
+      - 眼细节锐利度: 跟 v4.6 持平, 优于 v4.7 涂抹
+      - 眼白纯度: 优于 v4.6 (G 偏色治本), 远优于 v4.7 (灰月牙)
+    取结果最优: 眼白纯度 + 锐利度 + 边界 3 维度同时达标.
+  - 配套: 3 个 v4.8 APNG 重建 (current), 桌宠 116×116 透明窗口视觉 OK: 完全无
+    绿色描边/阴影/反射, 眼白纯白 + 锐利, 帽色/杯身/放大镜干净, 切换时无绿残影.
 - **cargo test 预期值同步 2 → 3 V2 场景 (drink-coffee 加项遗漏)**:
   修 `src-tauri/tests/mcp_roundtrip.rs::list_states_returns_2_v2_scenes` 期望值
   2→3 + 加 drink-coffee assertion, 8/8 cargo tests 重新绿.
