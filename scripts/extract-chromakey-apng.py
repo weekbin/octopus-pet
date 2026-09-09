@@ -120,6 +120,44 @@ chroma key 演进 (v1 → v3 → v4 → v4.1 → v4.2 → v4.3 → v4.4 → v4.5
       - 边界/物品/切换 4 类已治本 (v4.6 验证) 保持不退步
       - 眼细节锐利度: 跟 v4.6 持平, 优于 v4.7 涂抹
       - 眼白纯度: 优于 v4.6 (G 偏色治本), 远优于 v4.7 (灰月牙)
+  v4.9 (2026-09-09): alpha harden high_thresh 175 → 240
+    → 治本"眼白雾蒙蒙" (alpha 240+ partial 残留 4267 个, 占眼底月牙 8.4%)
+    → 跟 v4.6 配套, 收紧 alpha 边界 → 桌宠实际渲染"真白"
+  v4.10 (2026-09-09, 撤回): yellow_white clamp 改 G > B+8 (不限 R-B)
+    → 失败: 误治 4000+ 强黄/橙 (帽/杯正确颜色), R-B>=100 帽色变橙红. 撤回.
+  v4.10.1 (2026-09-09): 加 R-B < 60 限定温和米黄, 保留强黄/橙
+    → 3 场景温和米黄 135+109+18=262 → 0, 强黄 13267 完整保留
+  v4.11 (2026-09-09): G > B+8 → G > B+5 治本 G-B=7 极淡米
+    → 3 场景 G-B=7 极淡米 38+43+62=143 → 0
+  v4.12 (2026-09-09): cv2 HSL L*1.18 提亮治本"暗白 218 不够亮"
+    → 50 帧眼底月牙 brightness mean 215 → 228, max 220-227 → 254
+    → 维持色相 (RGB 比例不变), 9 版 RGB 补色治不到根反思
+  v4.13 (撤回) → v4.14 (撤回) → v4.14.2 (2026-09-09): HSL S=0 完全去色
+    → mask 限 R>200+R-B<60 (眼周), 治本灰白 (228, 228, 228)
+  v4.15 (2026-09-09): mask 限严 R>230+R-B<40 (眼底月牙中心最亮区)
+    → 治本灰白 460-476 → 242-262, 偏暖保留 6769-6932 软过渡, 避免"塑料感"
+  v4.16 (2026-09-09): 放宽 color_mask + 加空间约束
+    → color_mask `R∈[150,245] + (R-G)<50 + (G-B)∈[10,100] + (R-B)<100` + 瞳位置 ± 18px
+    → 治 green-tinted sclera (源 R-G=40, G-B=22, R-B=70), 命中 50-1100 px
+  v4.17 (2026-09-09): 移除 soften_alpha 1px Gaussian blur
+    → 治本 52 个 partial alpha 像素 "灰蒙蒙" (透明 BG 上 RGB 跟桌面混合)
+    → 源 H3 768x768 高分辨率眼边本身锐利, 不需要额外 blur 抗锯齿
+  v4.18 (2026-09-09, 当前默认): **眼区 bypass inpaint + color_mask 放宽 + sclera 连通 fill + Bomberbot color spill suppression**
+    → **根因 (drink-coffee f30 右眼 25x25 像素诊断)**:
+      源 86.3% 偏暖白 (R=220 G=207 B=195) → v4.17 18.9% 白 + 62.7% 粉
+      源白像素 273 → v4.17 86 (31.5%), 186 个 sclera 被 inpaint r=8 PDE 解算改成 octopus 身体粉 (R=244 G=163 B=142)
+      5 个黑瞳边缘像素被擦掉成偏暖白 (源黑 [18,14,4] → v4.17 [240,222,218])
+    → **修复 1: 眼区 bypass inpaint** — process_frames 构造 eye_protect_mask (瞳 ± 25 px),
+      inpaint_partial_rgb 内 partial_mask / green_opaque / dilation 都跟 eye_protect 取差集
+      → 眼区 sclera 保留源偏暖白 (不被 PDE 改色), 黑瞳边缘保留黑
+    → **修复 2: color_mask 放宽** `R>150 + (R-G)<70 + (G-B)∈[0,80] + (R-B)<120` + 去 R 上限
+      → 命中数从 50-1100 升到 50-1500 px, 覆盖源 sclera 实际 RGB 范围
+    → **修复 3: sclera 连通分量 fill** — 在 sclera_zone 内找 alpha=255 像素最大连通分量 (>= 30 px),
+      强制 eye_white 治本 → 解决 v4.16 漏掉 sclera 边缘
+    → **修复 4: Bomberbot color spill suppression** — partial alpha 像素 (眼区外) 前景 G 拉到 min(G,R,B),
+      抑制绿幕反射 spill → 偏暖不偏绿
+    → 调研: Bomberbot 教程 (HSV + color spill suppression) + ChromaDespill (YCbCr + 前景 G 抑制)
+    → 视觉: 眼底月牙从 v4.17 18.9% 白 + 62.7% 粉 → 接近源 86.3% 偏暖白 + HSL 治本纯白混合
 
 Verified: 2026-09-09, 3 场景 (detective-study / worker-construction / drink-coffee)
 桌宠 116×116 透明窗口视觉 OK: 完全无绿色描边/阴影/反射, 眼白纯白 + 锐利, 帽色/杯身/放大镜干净, 切换无绿残影.
@@ -299,13 +337,22 @@ def soften_alpha(alpha: np.ndarray, radius: int = 1) -> np.ndarray:
     return blurred.astype(np.uint8)
 
 
-def inpaint_partial_rgb(rgb: np.ndarray, alpha: np.ndarray, radius: int = 8) -> np.ndarray:
-    """v4.8: cv2.inpaint 修 partial + 透明 + 绿偏不透明 + partial 边缘外圈
+def inpaint_partial_rgb(rgb: np.ndarray, alpha: np.ndarray, radius: int = 8, eye_protect_mask: np.ndarray = None) -> np.ndarray:
+    """v4.18: cv2.inpaint 修 partial + 透明 + 绿偏不透明 + partial 边缘外圈
     → partial+透明 mask 1px 膨胀 + radius 8 (从 5 升, 让远处身体色传播更彻底)
     → green_opaque mask 独立 6px 膨胀 (修身体/帽子的绿调反射, v4.5 沿用)
     → **v4.8 撤回 v4.7 green_tinted_white inpaint**: 改用纯色度 clamp (no inpaint)
         → 米黄眼白 (R>200 & B<G-15 & R>B+50) 直接 G 拉低, 保护星形高光 (R=G=B 不动)
     → 去"绿色描边" + "绿色阴影" + "物品边缘绿调" + "切换绿残影" + **"眼白发黄"** 不破坏眼细节
+    → **v4.18 关键修复**: eye_protect_mask 内 partial_mask 1px 膨胀 **跳过 inpaint**
+        → 根因 (2026-09-09 drink-coffee f30 像素诊断):
+          源右眼 25x25 区 86.3% 白 (497 px), v4.17 18.9% 白 + 62.7% 粉 (变粉 391 px)
+          186 个 sclera 白像素被 inpaint r=8 改成 octopus 身体色 (R=244 G=163 B=142)
+        → bypass 眼区 inpaint, sclera 保留源 R=220 G=207 B=195 偏暖白原貌
+        → 黑色瞳孔边缘 5 像素也被 inpaint 擦掉成偏暖白 — bypass 修
+    → **v4.18 Bomberbot color spill suppression**: partial alpha 像素前景 G 拉到 min(G,R,B)
+        → Bomberbot 教程: chroma keying after-color correction 关键步骤
+        → partial 像素绿色 spill 抑制: G = min(G, R, B) → 偏暖不偏绿
 
     演进根因:
     v4.3 (2026-09-09): + cv2.inpaint 修 partial + 透明, 去"绿色描边".
@@ -317,17 +364,28 @@ def inpaint_partial_rgb(rgb: np.ndarray, alpha: np.ndarray, radius: int = 8) -> 
     v4.7 (2026-09-09, 撤回): 新增 green_tinted_white mask (alpha=255 + R>200 + R+G+B>600
         + G>B+5) inpaint r=3 → 眼周涂抹模糊 (星形高光/瞳孔边界被 inpaint 改成身体色)
         用户反馈 "现在眼睛的处理更加糟糕了".
-    v4.8 (2026-09-09, 当前): 撤回 v4.7, 改用纯色度 clamp (no inpaint) 处理米黄眼白:
+    v4.8 (2026-09-09): 撤回 v4.7, 改用纯色度 clamp (no inpaint) 处理米黄眼白:
         - 检 `alpha=255 & R>200 & B < G-15 & R > B+50` (米黄: R 高 G 中 B 显著低, 视觉黄绿)
         - 排除星形高光: `R + G + B > 720` (纯白 R=G=B 接近) 直接不参与
         - 处理: `G = clip(G, B, R-20)` — 让 G 落在 [B, R-20] 区间, 拉低 G 消除黄绿
         - 0 inpaint, 0 模糊, 保护眼睛所有细节 (星形高光/瞳孔/眼底月牙边缘)
-        - 视觉: 米黄眼白变纯白, 眼睛锐利度保持 v4.6 baseline
+        - 视觉: 米黄眼白变纯白, 眼睛锐利度保持 v4.6 baseline.
+    v4.17 (2026-09-09): 移除 soften_alpha 1px Gaussian blur, 治本 52 个 partial alpha 像素灰蒙蒙.
+    v4.18 (2026-09-09): **眼区 bypass inpaint + Bomberbot color spill suppression**
+        - 用户原话: "持续对比源视频和实际去绿幕效果, 确保眼睛部分的效果一致"
+        - 源 vs v4.17 像素对比 (drink-coffee f30 右眼 25x25):
+          源 86.3% 偏暖白 (R=220 G=207 B=195) → v4.17 18.9% 白 + 62.7% 粉
+          186 个 sclera 被 inpaint r=8 PDE 解算改成身体粉, 视觉"粉色 dominant"
+          5 个黑瞳边缘被擦掉成偏暖白
+        - v4.18 修复: eye_protect_mask 瞳 ± 25 px 内的 partial+1px 膨胀**跳过 inpaint**
+          sclera 保留源偏暖白 R=220 G=207 B=195, 黑瞳边缘保留黑
+        - partial alpha 像素 Bomberbot color spill: G = min(G, R, B) 抑制绿色 spill
 
     Args:
         rgb: HxWx3 uint8 RGB 数组 (H3 渲染原图)
         alpha: HxW uint8 alpha 数组 (v4.6 harden 后的, 80% 都是 0 或 255)
         radius: inpaint 算法传播半径 (8 = v4.6 升, 让远处身体色传播更彻底)
+        eye_protect_mask: HxW bool, True = 跳过 inpaint (保护眼区 sclera + 黑瞳不被改色)
     Returns:
         HxWx3 uint8 RGB 数组 (partial + 透明 + 绿偏不透明 + 米黄眼白色度 clamp + 绿调反射外圈 6px 都被修复)
     """
@@ -341,20 +399,45 @@ def inpaint_partial_rgb(rgb: np.ndarray, alpha: np.ndarray, radius: int = 8) -> 
     sum_rgb = r + g + b
     green_opaque = (alpha == 255) & (g > r + 5) & (g > b + 5) & (max_rgb > 80)
     partial_mask = ((alpha > 0) & (alpha < 255)) | (alpha == 0)
+    # v4.18: 眼区 bypass inpaint — partial_mask 跟 eye_protect_mask 取差集
+    if eye_protect_mask is not None:
+        partial_mask = partial_mask & ~eye_protect_mask
+        green_opaque = green_opaque & ~eye_protect_mask
     rgb_bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
     # 1) partial+transparent 1px 膨胀 + radius 8 (修 partial + 边缘外圈"半 partial")
     if partial_mask.sum() > 0:
         kernel = np.ones((3, 3), np.uint8)
         partial_dilated = cv2.dilate(partial_mask.astype(np.uint8), kernel, iterations=1)
+        # v4.18: dilation 后再跟 eye_protect 取差集, 防止 1px 膨胀覆盖眼区
+        if eye_protect_mask is not None:
+            partial_dilated = partial_dilated & ~eye_protect_mask.astype(np.uint8)
         inpaint_mask_pt = (partial_dilated * 255)
         rgb_bgr = cv2.inpaint(rgb_bgr, inpaint_mask_pt, 8, cv2.INPAINT_TELEA)
     # 2) green_opaque 6px 膨胀 (v4.5 沿用, 修身体/帽子的绿调反射)
     if green_opaque.sum() > 0:
         kernel = np.ones((3, 3), np.uint8)
         green_dilated = cv2.dilate(green_opaque.astype(np.uint8), kernel, iterations=2)
+        if eye_protect_mask is not None:
+            green_dilated = green_dilated & ~eye_protect_mask.astype(np.uint8)
         inpaint_mask_g = (green_dilated * 255)
         rgb_bgr = cv2.inpaint(rgb_bgr, inpaint_mask_g, 4, cv2.INPAINT_TELEA)
     rgb_fixed = cv2.cvtColor(rgb_bgr, cv2.COLOR_BGR2RGB)
+    # 2.5) v4.18: Bomberbot color spill suppression (对 partial alpha 像素, 眼区外)
+    #    抑制绿幕反射 spill: 前景 G 拉低到 min(G, R, B) → 偏暖不偏绿
+    #    应用范围: partial alpha (alpha 1-254), 排除眼区 + 排除纯绿背景 (alpha=0)
+    partial_for_spill = (alpha > 0) & (alpha < 255)
+    if eye_protect_mask is not None:
+        partial_for_spill = partial_for_spill & ~eye_protect_mask
+    if partial_for_spill.sum() > 0:
+        r2s = rgb_fixed[:,:,0].astype(int)
+        g2s = rgb_fixed[:,:,1].astype(int)
+        b2s = rgb_fixed[:,:,2].astype(int)
+        # G > R AND G > B 表示还有 green spill
+        green_spill = partial_for_spill & (g2s > r2s) & (g2s > b2s) & (g2s > 50)
+        if green_spill.sum() > 0:
+            g_min = np.minimum(np.minimum(r2s, g2s), b2s)
+            rgb_fixed = rgb_fixed.copy()
+            rgb_fixed[green_spill, 1] = g_min[green_spill].astype(np.uint8)
     # 3) v4.11: 米黄眼白色度 clamp (no inpaint, 保护眼细节)
     #    条件: alpha >= 150 (扩到 partial) + R>200 (亮) + G > B+5 (黄绿指标, 放宽 1 单位) + R-B < 60 (温和米黄限定)
     #    排除: R+G+B > 720 (纯白/星形高光, R=G=B 接近, 不需要 clamp)
@@ -389,31 +472,22 @@ def inpaint_partial_rgb(rgb: np.ndarray, alpha: np.ndarray, radius: int = 8) -> 
     g3 = rgb_fixed[:,:,1].astype(int)
     b3 = rgb_fixed[:,:,2].astype(int)
     sum3 = r3 + g3 + b3
-    # v4.16: 治 green-tinted 眼底月牙 (v4.15 mask R>230 R-B<40 太严, 3 场景睁眼帧命中 0-1 px, 几乎不生效)
-    #    诊断 (3 场景睁眼帧 50 像素样本):
-    #      - sclera RGB mean: R=199 G=149 G=127 (detective) / R=189 G=149 B=118 (worker) / R=199 G=149 B=127 (drink)
-    #      - 特征: R-G ≈ 40-50, G-B ≈ 20-30, R-B ≈ 70 (off-white with green cast)
-    #    区分目标色域 (sclera green-tinted) vs 保留色域:
-    #      - 皮肤 (cheek): R=220 G=110 B=85 → R-G=110 (G 远低于 R) → 排除
-    #      - 黄色施工帽: R=255 G=200 B=0 → G-B=200 (G 远高于 B) → 排除
-    #      - 纯白 (R=G=B): sum=765 → 排除
-    #      - 棕色侦探帽: R=140 G=85 B=40 → R<150 → 排除
-    #      - 绿色咖啡杯: R=50 G=180 B=120 → G>R → 排除
-    #      - 木板/帽子高光 (worker 木板 R=190 G=160 B=130) — RGB 跟 sclera 几乎相同! 只能按位置排除
-    #    mask 公式 (catches green-tinted sclera, excludes 5 类保留色域):
-    #      alpha=255 + R∈[150,245] + (R-G)<50 + (G-B)∈[10,100] + (R-B)<100 + sum<720 + !R==G==B
-    #    空间约束 (避免误治木板/帽高光): 用黑瞳位置生成 sclera zone mask, 跟 color mask AND 起来
-    #      - 黑瞳检测: alpha=255 + R<50 + G<50 + B<50 (在 face 区 y=70-115, x=40-160)
-    #      - sclera zone: 瞳中心 ± 18 像素 (覆盖眼底月牙 + 部分眼周, 避免远距离误治)
-    #      - 闭眼帧没有瞳 → sclera zone 空 → v4.16 不生效 (0 误治)
-    #    操作: HSL L*=1.18 + S=0 → 纯白 (跟 v4.14.2 一致, 但 mask 是真正命中 green-tinted sclera)
-    #    风险: 边缘 (R-G<50 但 R-B=80-100 软过渡) 不治, 保留色相软过渡 (跟 v4.15 同样"塑料感避免" 逻辑)
-    #    演进根因:
-    #      v4.15 mask R>230 R-B<40 命中 0-1 px (眼底月牙实际 R=150-220, 阈值差太远)
-    #      v4.16 放宽 mask 到 R>150 R-G<50 G-B>10 — 命中 50-1100 px, 真正治 green-tinted sclera
-    #      v4.16 加空间约束 (瞳 ± 18 px) — 避免误治木板/帽高光 (RGB 跟 sclera 一样, 只能按位置分)
-    color_mask = (alpha == 255) & (r3 > 150) & (r3 < 245) & ((r3 - g3) < 50) & ((g3 - b3) > 10) & ((g3 - b3) < 100) & ((r3 - b3) < 100) & (sum3 < 720) & ~((r3 == g3) & (g3 == b3))
-    # 空间约束: 黑瞳 → sclera zone (瞳中心 ± 18 px)
+    # v4.18: 治 green-tinted 眼底月牙 + sclera 连通分量 fill
+    #    v4.16 反思 (2026-09-09 drink-coffee f30 像素诊断):
+    #      源 25x25 区 86.3% 偏暖白 (R=220 G=207 B=195), v4.17 18.9% 白 + 62.7% 粉
+    #      源白像素 273 → v4.17 86 (31.5%), 186 个 sclera 被 inpaint r=8 改成身体粉
+    #      v4.16 HSL mask `R∈[150,245] + (R-G)<50` 太严, 命中数不够, 漏掉大半 sclera
+    #    v4.18 修复:
+    #      1) color_mask 放宽: `(R-G)<70 + (G-B)∈[0,80] + (R-B)<120` + 去 R 上限 245
+    #         → 命中 50-1500 px (v4.16 50-1100), 覆盖源 sclera 实际 RGB 范围
+    #         → 仍保留 5 类排除 (sum<720, !R==G==B, skin G<R-70, 帽 R-B>=120, 绿杯 G>R)
+    #      2) sclera 连通分量 fill: 在 eye_white 命中的区域内, 找最大连通分量
+    #         → 用 ndimage.label 找 alpha=255 + R>200 + (R-G)<80 + (G-B)∈[0,80] 像素连通区
+    #         → 最大连通分量 (>= 30 px) 强制 eye_white 治本
+    #         → 解决 v4.16 漏掉 sclera 边缘 + 黑瞳周围问题
+    #    操作: HSL L*=1.18 + S=0 → 纯白 (跟 v4.14.2 一致, 命中像素)
+    color_mask = (alpha == 255) & (r3 > 150) & ((r3 - g3) < 70) & ((g3 - b3) >= 0) & ((g3 - b3) < 80) & ((r3 - b3) < 120) & (sum3 < 720) & ~((r3 == g3) & (g3 == b3))
+    # 空间约束: 黑瞳 → sclera zone (瞳中心 ± 25 px, v4.18 放大覆盖整片 sclera)
     pupil = (alpha == 255) & (r3 < 50) & (g3 < 50) & (b3 < 50)
     pupil[:70, :] = False  # 限制脸区
     pupil[115:, :] = False
@@ -431,14 +505,35 @@ def inpaint_partial_rgb(rgb: np.ndarray, alpha: np.ndarray, radius: int = 8) -> 
                 if sizes[cid-1] > 20:  # 瞳至少 20 px
                     ys, xs = np.where(labeled == cid)
                     cy, cx = int(ys.mean()), int(xs.mean())
-                    y0, y1 = max(0, cy-18), min(pupil.shape[0], cy+18)
-                    x0, x1 = max(0, cx-18), min(pupil.shape[1], cx+18)
+                    y0, y1 = max(0, cy-25), min(pupil.shape[0], cy+25)  # v4.18: ±18 → ±25 覆盖整片 sclera
+                    x0, x1 = max(0, cx-25), min(pupil.shape[1], cx+25)
                     sclera_zone[y0:y1, x0:x1] = True
         except ImportError:
             sclera_zone = np.ones_like(pupil)  # fallback: 无空间约束
     else:
         sclera_zone = np.zeros_like(pupil)  # 闭眼 → 0 治
     eye_white = color_mask & sclera_zone
+    # v4.18: sclera 连通分量 fill — 找 sclera_zone 内最大连通分量 (>= 30 px) 强制治本
+    #    v4.18.1 修复: biggest_mask 跟 color_mask 取交集, 避免 fill 扩展到 skin/触角/边缘
+    #      之前 biggest_mask 整个脸 (因为 sclera_zone 是瞳 ± 25 px 方块, 整片脸都是 alpha=255 连通)
+    #      → 整片脸都治本, 视觉"白方块"覆盖眼睛上半部分
+    #    修复: biggest_mask & color_mask → 只在色域符合的像素治本, fill 不越界
+    if eye_white.sum() > 0 and sclera_zone.sum() > 0:
+        try:
+            from scipy import ndimage as _nd
+            # 在 sclera_zone 内找 alpha=255 像素的连通分量
+            sclera_alpha = (alpha == 255) & sclera_zone
+            sclera_lab, sn = _nd.label(sclera_alpha)
+            if sn > 0:
+                ssizes = _nd.sum(sclera_alpha, sclera_lab, range(1, sn+1))
+                # 找最大连通分量
+                biggest_id = int(np.argmax(ssizes)) + 1
+                if ssizes[biggest_id-1] >= 30:
+                    biggest_mask = (sclera_lab == biggest_id)
+                    # v4.18.1 关键修复: 跟 color_mask 取交集, 避免 fill 越界
+                    eye_white = eye_white | (biggest_mask & color_mask)
+        except ImportError:
+            pass
     if eye_white.sum() > 0:
         # 转 HLS (cv2 RGB->HLS_FULL, H in 0-255, L in 0-255, S in 0-255)
         rgb_bgr_eye = cv2.cvtColor(rgb_fixed, cv2.COLOR_RGB2HLS_FULL)
@@ -477,8 +572,36 @@ def process_frames(
         alpha = chromakey_fn(arr)
         # v4.9: alpha 通道激进收紧阈值 175 → 240, 治本"眼白雾蒙蒙" (alpha 240+ partial 残留)
         alpha = harden_alpha_edges(alpha, low_thresh=80, high_thresh=240)
-        # v4.6: 关键步骤 — 替换 partial + 透明 + 1px 外圈 (r=8), + 绿偏不透明 (r=4)
-        rgb_fixed = inpaint_partial_rgb(arr, alpha, radius=8)
+        # v4.18: 构造 eye_protect_mask (瞳中心 ± 25 px), 让 inpaint 跳过眼区
+        #    根因: v4.17 inpaint r=8 PDE 解算把 186 个 sclera 像素改成 octopus 身体粉
+        #    + 5 个黑瞳边缘像素被擦掉成偏暖白
+        #    bypass 眼区后, sclera 保留源偏暖白 R=220 G=207 B=195, 黑瞳保留黑
+        r_arr = arr[:,:,0].astype(int)
+        g_arr = arr[:,:,1].astype(int)
+        b_arr = arr[:,:,2].astype(int)
+        pupil_mask = (alpha == 255) & (r_arr < 50) & (g_arr < 50) & (b_arr < 50)
+        pupil_mask[:70, :] = False
+        pupil_mask[115:, :] = False
+        pupil_mask[:, :40] = False
+        pupil_mask[:, 160:] = False
+        eye_protect_mask = np.zeros_like(pupil_mask)
+        if pupil_mask.sum() > 0:
+            try:
+                from scipy import ndimage as _nd_pf
+                labeled_p, np_p = _nd_pf.label(pupil_mask)
+                sizes_p = _nd_pf.sum(pupil_mask, labeled_p, range(1, np_p+1))
+                top_p = sorted(range(1, np_p+1), key=lambda k: -sizes_p[k-1])[:2]
+                for cid in top_p:
+                    if sizes_p[cid-1] > 20:
+                        ys, xs = np.where(labeled_p == cid)
+                        cy, cx = int(ys.mean()), int(xs.mean())
+                        y0, y1 = max(0, cy-25), min(pupil_mask.shape[0], cy+25)
+                        x0, x1 = max(0, cx-25), min(pupil_mask.shape[1], cx+25)
+                        eye_protect_mask[y0:y1, x0:x1] = True
+            except ImportError:
+                pass
+        # v4.6 关键步骤, v4.18 眼区 bypass — 替换 partial + 透明 + 1px 外圈 (r=8), + 绿偏不透明 (r=4)
+        rgb_fixed = inpaint_partial_rgb(arr, alpha, radius=8, eye_protect_mask=eye_protect_mask)
         # v4.17: 移除 alpha 羽化 (softer_alpha radius=1) — 它引入 52 个 partial alpha 像素让眼边"灰蒙蒙"
         #    源视频 H3 模型输出 768x768 高分辨率, 眼边缘已经锐利, 不需要额外 Gaussian blur 抗锯齿
         #    1px blur 把 alpha 255 → 200 范围, partial 像素 RGB 跟桌面背景混合 = "灰蒙蒙"
