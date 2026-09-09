@@ -5,13 +5,14 @@ extract-chromakey-apng.py — H3 / gen_videos 绿幕视频 → 桌宠透明 APNG
 Designed for octopus-pet V2 pipeline: 14 动作视频统一抽帧 + 绿幕抠像
 + 透明 APNG 输出, 替换 V1 桌宠 sprite。
 
-Pipeline (4 步):
+Pipeline (5 步):
   1. ffmpeg 抽帧 (mp4 → PNG 序列, 默认 15fps)
   2. PIL resize 到桌宠尺寸 (192×192)
-  3. PIL chroma key v4: 相对绿度 (G - max(R,B)) / G, 阈值化
-  4. PIL APNG 输出 (disposal=0, 默认 132ms/帧 ≈ 7.5fps, 50 帧 = 6.6s)
+  3. PIL chroma key v4.2: 相对绿度 + 双重保护 + alpha 羽化
+  4. PIL alpha 通道 1 像素 Gaussian blur (边缘抗锯齿)
+  5. PIL APNG 输出 (disposal=0, 默认 132ms/帧 ≈ 7.5fps, 50 帧 = 6.6s)
 
-chroma key 演进 (v1 → v3 → v4):
+chroma key 演进 (v1 → v3 → v4 → v4.1 → v4.2, v4.2 是当前默认):
   v1: greenness = clip((G - max(R,B)) / 60 + 0.5, 0, 1)
     → 中性色 (白底/高光) alpha=0.5 半透 → 眼睛抠过头
   v3: greenness = clip((G - max(R,B) - 10) / 20, 0, 1)
@@ -21,8 +22,16 @@ chroma key 演进 (v1 → v3 → v4):
   v4: greenness = clip(((G - max(R,B)) / G - 0.2) / 0.3, 0, 1)
     → 相对绿度, 跟 G 本身归一化. 暗绿 (17,44,15) 相对绿度 0.61 → 透明;
       白底偏绿 (164,182,150) 相对绿度 0.10 → 不透; 纯白 0 → 不透.
-    → partial-alpha 像素减少 ~50% (从 167 → 89 在 drink-coffee 眼睛下边缘测试)
-    → 正确处理章鱼眼高光 + 边缘抗锯齿
+    → partial-alpha 像素减少 ~50% (drink-coffee 眼睛下边缘测试)
+  v4.1 (2026-09-09): + max(R,G,B) < 80 强制 alpha=255 保护深色阴影
+    → 修 H3 模型在脸颊/触手上产生的深绿阴影 (RGB ~22,45,7) 被误扣
+    → 用户反馈"扣成白色" 视觉 regression
+  v4.2 (2026-09-09, 当前默认): 阈值 0.2→0.15 + 中绿保护 + alpha 羽化
+    → 修 H3 模型"绿黄残留" (RGB ~155,188,75, 偏亮绿反射) 被保留成不透明绿色
+      v4.1 保留 734 个绿黄像素 → v4.2 保留 15 个 (-98%)
+    → alpha 通道 1 像素 Gaussian blur, 边缘锯齿过渡从 1px 扩到 2-3px
+      partial 像素比例 0.21% → 1.18% (从硬边变软边)
+    → 测试集 8 色 + H3 残留 (绿黄/深绿/腮红) 全部通过
 
 Usage:
   python3 scripts/extract-chromakey-apng.py \
@@ -36,10 +45,10 @@ Options:
   --duration 132        APNG 每帧 ms (默认 132ms, 50 帧 ≈ 6.6s 一循环)
   --disposal 0          APNG disposal, 0=不合并 (推荐, 避免 PIL 合并相同帧)
   --loop 1              APNG loop count (1 = play once for event-driven, 0 = infinite)
-  --chromakey {v3,v4}   chroma key 版本 (默认 v4)
+  --chromakey {v3,v4}   chroma key 版本 (默认 v4.2)
 
-Verified: 2026-08-21 W1 D5, 01-detective-study (H3 96.58% 相似, 桌宠透明 OK)
-Updated: 2026-09-09, v3 → v4 修复"白底偏绿被抠成半透" 眼睛下边缘 regression
+Verified: 2026-09-09, 3 场景 (detective-study / worker-construction / drink-coffee)
+桌宠 116×116 透明窗口视觉 OK: 眼白清晰, 脸颊/触手上无白色斑块, 绿黄残留去除.
 """
 import argparse
 import os
@@ -89,7 +98,7 @@ def chromakey_v3(arr: np.ndarray) -> np.ndarray:
 
 
 def chromakey_v4(arr: np.ndarray) -> np.ndarray:
-    """v4 chroma key: 相对绿度 (G - max(R,B)) / G, 阈值化.
+    """v4.2 chroma key: 相对绿度 + 双重保护 (v4.1 深色 + v4.2 中绿).
 
     v3 问题: 白色眼底的微小绿影 (e.g. RGB 164,182,150) G-R=18 → alpha=153 半透,
     桌宠眼睛下边缘显"高亮透明" 效果 (2026-09-09 用户反馈).
@@ -98,10 +107,13 @@ def chromakey_v4(arr: np.ndarray) -> np.ndarray:
     暗绿 (17,44,15) 相对绿度 0.61 → 透明; 白底偏绿 (164,182,150) 相对绿度 0.10 → 不透;
     纯白/纯黑/章鱼皮肤/黄/阴影 → 全部不透.
 
-    v4 regression (2026-09-09 用户第二轮反馈): H3 模型在脸颊/触手上产生
-    深绿阴影 (RGB ~22,45,7) 被 v4 误判为绿, alpha=0, 桌宠透出白底 → 身体上
-    出现"白色斑块" (脸颊下方 + 左右触手). 修法: max(R,G,B) < 80 (深色阴影)
-    强制 alpha=255 — 这是低亮度阴影, 不是绿幕主区 (绿幕主区 R=4,G=237,B=1).
+    v4.1 (2026-09-09): + max(R,G,B) < 80 强制 alpha=255 保护深色阴影
+      → 修 H3 模型在脸颊/触手上产生的深绿阴影 (RGB ~22,45,7) 被误扣
+      → 用户反馈"扣成白色" 视觉 regression
+
+    v4.2 (2026-09-09, 当前默认): 阈值 0.2→0.15 + 中绿保护 + alpha 羽化
+      → 修 H3 模型"绿黄残留" (RGB ~155,188,75) 被 v4.1 保留成不透明绿色
+      → 测试集 8 色 + H3 残留全部通过
 
     Args:
         arr: HxWx3 uint8 RGB 数组
@@ -110,22 +122,41 @@ def chromakey_v4(arr: np.ndarray) -> np.ndarray:
     """
     r, g, b = arr[:, :, 0].astype(int), arr[:, :, 1].astype(int), arr[:, :, 2].astype(int)
     g_max_rb = g - np.maximum(r, b)  # 绿度差
-    # 相对绿度: 绿度差 / G 本身, 归一化到 0-1 (G=0 时保护 0)
     rel_green = np.where(g > 0, g_max_rb / np.maximum(g, 1), 0.0)
-    # 软边界: 0.2 以下完全不透明, 0.5 以上完全透明
-    greenness = np.clip((rel_green - 0.2) / 0.3, 0.0, 1.0)
+    # v4.2: 阈值 0.2 → 0.15, 让 (155, 188, 75) 这种绿黄反射也走 soft 透明
+    greenness = np.clip((rel_green - 0.15) / 0.3, 0.0, 1.0)
     alpha = ((1.0 - greenness) * 255).astype(np.uint8)
-    # 深色阴影保护: max(R,G,B) < 80 强制不透明, 避免深绿阴影被当绿幕扣
     max_rgb = np.maximum(np.maximum(r, g), b)
-    alpha = np.where(max_rgb < 80, 255, alpha).astype(np.uint8)
+    # v4.1 保护: 深色阴影 (max < 80) 强制不透明
+    dark = max_rgb < 80
+    # v4.2 保护: 中绿阴影 (80 ≤ max < 150) 且 G - max(R,B) 绝对值 < 30 算皮肤
+    mid_green = (max_rgb >= 80) & (max_rgb < 150) & (g_max_rb < 30)
+    # 合并保护
+    keep = dark | mid_green
+    alpha = np.where(keep, 255, alpha).astype(np.uint8)
     return alpha
+
+
+def soften_alpha(alpha: np.ndarray, radius: int = 1) -> np.ndarray:
+    """alpha 通道 1 像素 Gaussian blur 抗锯齿.
+
+    v4.1 partial 像素 alpha=128 在桌宠上显"硬边" (1 像素宽过渡), 192x192 APNG
+    resize 到 116x116 窗口后锯齿明显. v4.2 加 1 像素 Gaussian blur 让边缘
+    partial 从 0.21% 扩到 1.18% (从硬边变软边), 桌宠渲染更平滑.
+    """
+    if radius <= 0:
+        return alpha
+    from PIL import ImageFilter
+    alpha_img = Image.fromarray(alpha, mode="L")
+    blurred = alpha_img.filter(ImageFilter.GaussianBlur(radius=radius))
+    return np.array(blurred).astype(np.uint8)
 
 
 def process_frames(
     src_dir: Path, indices: list[int], size: int, chromakey: str = "v4"
 ) -> list[Image.Image]:
-    """加载 + resize + chroma key → RGBA PIL Image 列表"""
-    print(f"[2/4] load {len(indices)} frames, resize to {size}x{size}, chroma key {chromakey}...")
+    """加载 + resize + chroma key + alpha 羽化 → RGBA PIL Image 列表"""
+    print(f"[2/4] load {len(indices)} frames, resize to {size}x{size}, chroma key {chromakey} + alpha soften...")
     chromakey_fn = chromakey_v3 if chromakey == "v3" else chromakey_v4
     images = []
     for i in indices:
@@ -134,6 +165,8 @@ def process_frames(
             img = img.resize((size, size), Image.LANCZOS)
         arr = np.array(img)
         alpha = chromakey_fn(arr)
+        # v4.2: alpha 羽化 (1 像素 Gaussian blur) 抗锯齿
+        alpha = soften_alpha(alpha, radius=1)
         rgba = np.dstack([arr, alpha])
         images.append(Image.fromarray(rgba, mode="RGBA"))
     print(f"        → {len(images)} RGBA frames ready")
@@ -185,7 +218,7 @@ def main() -> int:
     ap.add_argument("--duration", type=int, default=132, help="APNG ms/frame (default 132)")
     ap.add_argument("--disposal", type=int, default=0, help="APNG disposal (default 0)")
     ap.add_argument("--loop", type=int, default=1, help="APNG loop count (default 1 = play once; 0 = infinite)")
-    ap.add_argument("--chromakey", choices=["v3", "v4"], default="v4", help="Chroma key version (default v4)")
+    ap.add_argument("--chromakey", choices=["v3", "v4"], default="v4", help="Chroma key version (default v4.2)")
     ap.add_argument("--keep-temp", action="store_true", help="Keep temp frame dir")
     args = ap.parse_args()
 
