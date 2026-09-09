@@ -132,6 +132,20 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
       木板/帽高光. 闭眼帧无瞳 → sclera zone 空 → v4.16 不生效 (0 误治).
       3) **保留 HSL L*1.18 + S=0** → 治后 sclera RGB (251, 236, 231) ~ (255, 247, 247),
       真接近纯白. 视觉 3 场景眼底月牙从 greenish hazy → clean bright white.
+    - **v4.16 → v4.17 (移除 soften_alpha, 治 partial alpha 灰蒙蒙)**: v4.16 部署后
+      用户问"为什么 H3 源这么好眼白还会变灰". 反思根因 (用户原话 + 像素诊断):
+      源视频 0.5s 帧眼白完全锐利, alpha=255/40000 = 100% 无 partial, RGB 干净.
+      v4.16 部署后眼区 alpha=255 仅 90.8% (52 个 partial 100-240 像素), 这些
+      partial 像素 RGB 混合桌面背景 → 视觉"灰蒙蒙".
+      根因: `soften_alpha(radius=1)` 1px Gaussian blur 把锐利 alpha 边变软.
+      v4.17 移除 `softer_alpha` 步骤 — 源视频 H3 模型 768x768 高分辨率输出,
+      眼边缘本身锐利, 不需要额外 blur 抗锯齿. 治本: partial alpha 52 → 1,
+      锐利度恢复, 桌宠实际渲染眼边无"灰蒙蒙".
+      调研佐证: Bomberbot 教程用 HSV + color spill suppression (前景 G 拉到
+      min(G,R,B)), ChromaDespill (本科论文) YCbCr palette + green channel
+      suppression, 都强调"对前景去绿"+"锐利 alpha 边界" — 我的 v4.16 缺这两步.
+      风险: body 边缘可能"硬切". 实际验证: v4.6 的 inpaint r=8 已填 partial
+      像素使 alpha 0/255 化, soften 影响小, 视觉 body 仍可接受.
     视觉根因 (反思): v4.15 之前 9 版 (v4.6-v4.13) 一直在 RGB 空间补色 (G 偏色 / R-B 偏色),
     没意识到真正问题是 **L (亮度) + S (饱和度) 双低 + green cast**. HSL 空间提 L + 拉 S
     治本后, v4.16 又发现新问题: green cast (G > B + 10) 而不是 yellow (G > B + 5),

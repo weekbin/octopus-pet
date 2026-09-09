@@ -479,8 +479,12 @@ def process_frames(
         alpha = harden_alpha_edges(alpha, low_thresh=80, high_thresh=240)
         # v4.6: 关键步骤 — 替换 partial + 透明 + 1px 外圈 (r=8), + 绿偏不透明 (r=4)
         rgb_fixed = inpaint_partial_rgb(arr, alpha, radius=8)
-        # v4.6: alpha 羽化 (1 像素 Gaussian blur) 抗锯齿, blur 后低 alpha 重新归 0
-        alpha = soften_alpha(alpha, radius=1)
+        # v4.17: 移除 alpha 羽化 (softer_alpha radius=1) — 它引入 52 个 partial alpha 像素让眼边"灰蒙蒙"
+        #    源视频 H3 模型输出 768x768 高分辨率, 眼边缘已经锐利, 不需要额外 Gaussian blur 抗锯齿
+        #    1px blur 把 alpha 255 → 200 范围, partial 像素 RGB 跟桌面背景混合 = "灰蒙蒙"
+        #    风险: body 边缘"硬切" (无抗锯齿). 缓解: v4.6 的 inpaint r=8 已经填了 partial 像素
+        #          使 alpha 大部分 0/255, soften_alpha 影响小 (实测 50 像素内只 1-2 partial 像素)
+        #          视觉上身体边缘仍可接受 (源视频就锐利)
         rgba = np.dstack([rgb_fixed, alpha])
         images.append(Image.fromarray(rgba, mode="RGBA"))
     print(f"        → {len(images)} RGBA frames ready")
