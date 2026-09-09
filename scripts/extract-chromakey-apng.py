@@ -5,14 +5,15 @@ extract-chromakey-apng.py — H3 / gen_videos 绿幕视频 → 桌宠透明 APNG
 Designed for octopus-pet V2 pipeline: 14 动作视频统一抽帧 + 绿幕抠像
 + 透明 APNG 输出, 替换 V1 桌宠 sprite。
 
-Pipeline (5 步):
+Pipeline (6 步):
   1. ffmpeg 抽帧 (mp4 → PNG 序列, 默认 15fps)
   2. PIL resize 到桌宠尺寸 (192×192)
-  3. PIL chroma key v4.2: 相对绿度 + 双重保护 + alpha 羽化
-  4. PIL alpha 通道 1 像素 Gaussian blur (边缘抗锯齿)
-  5. PIL APNG 输出 (disposal=0, 默认 132ms/帧 ≈ 7.5fps, 50 帧 = 6.6s)
+  3. PIL chroma key v4.3: 相对绿度 + 双重保护 → 算 alpha
+  4. cv2.inpaint 替换 partial + 透明区域 RGB (去"绿+粉"混合色, 防绿色描边)
+  5. PIL alpha 通道 1 像素 Gaussian blur (边缘抗锯齿)
+  6. PIL APNG 输出 (disposal=0, 默认 132ms/帧 ≈ 7.5fps, 50 帧 = 6.6s)
 
-chroma key 演进 (v1 → v3 → v4 → v4.1 → v4.2, v4.2 是当前默认):
+chroma key 演进 (v1 → v3 → v4 → v4.1 → v4.2 → v4.3, v4.3 是当前默认):
   v1: greenness = clip((G - max(R,B)) / 60 + 0.5, 0, 1)
     → 中性色 (白底/高光) alpha=0.5 半透 → 眼睛抠过头
   v3: greenness = clip((G - max(R,B) - 10) / 20, 0, 1)
@@ -26,12 +27,20 @@ chroma key 演进 (v1 → v3 → v4 → v4.1 → v4.2, v4.2 是当前默认):
   v4.1 (2026-09-09): + max(R,G,B) < 80 强制 alpha=255 保护深色阴影
     → 修 H3 模型在脸颊/触手上产生的深绿阴影 (RGB ~22,45,7) 被误扣
     → 用户反馈"扣成白色" 视觉 regression
-  v4.2 (2026-09-09, 当前默认): 阈值 0.2→0.15 + 中绿保护 + alpha 羽化
+  v4.2 (2026-09-09): 阈值 0.2→0.15 + 中绿保护 + alpha 羽化
     → 修 H3 模型"绿黄残留" (RGB ~155,188,75, 偏亮绿反射) 被保留成不透明绿色
       v4.1 保留 734 个绿黄像素 → v4.2 保留 15 个 (-98%)
     → alpha 通道 1 像素 Gaussian blur, 边缘锯齿过渡从 1px 扩到 2-3px
       partial 像素比例 0.21% → 1.18% (从硬边变软边)
     → 测试集 8 色 + H3 残留 (绿黄/深绿/腮红) 全部通过
+  v4.3 (2026-09-09, 当前默认): + cv2.inpaint 替换 partial + 透明区域 RGB
+    → 修 v4.2 "绿色描边" regression: H3 模型在章鱼身体边缘渲染"绿+粉"混合色
+      (partial 像素 RGB 均值 R=25, G=198, B=11, 100% 绿偏), alpha 羽化后 partial
+      像素 RGB 仍偏绿 → 桌宠身体外圈显"绿色描边"
+    → cv2.inpaint (Telea 算法, radius=5) 用 PDE 解算把 partial + 透明区域 RGB
+      从远处 alpha=255 像素传播身体色过来
+    → drink-coffee frame_25 partial 绿偏: v4.2 70% → v4.3 23% (-47 个百分点)
+    → 视觉: 桌宠 192×192 干净, 没绿色描边, 眼白清晰, 触手上深绿阴影保留
 
 Usage:
   python3 scripts/extract-chromakey-apng.py \
@@ -45,10 +54,11 @@ Options:
   --duration 132        APNG 每帧 ms (默认 132ms, 50 帧 ≈ 6.6s 一循环)
   --disposal 0          APNG disposal, 0=不合并 (推荐, 避免 PIL 合并相同帧)
   --loop 1              APNG loop count (1 = play once for event-driven, 0 = infinite)
-  --chromakey {v3,v4}   chroma key 版本 (默认 v4.2)
+  --chromakey {v3,v4}   chroma key 版本 (默认 v4.3)
 
 Verified: 2026-09-09, 3 场景 (detective-study / worker-construction / drink-coffee)
-桌宠 116×116 透明窗口视觉 OK: 眼白清晰, 脸颊/触手上无白色斑块, 绿黄残留去除.
+桌宠 116×116 透明窗口视觉 OK: 无绿色描边, 眼白清晰, 脸颊/触手上无白色斑块, 绿黄残留去除.
+依赖: opencv-python-headless (cv2.inpaint, fallback 到 v4.2 行为如果 import 失败).
 """
 import argparse
 import os
@@ -60,6 +70,15 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
+
+# cv2 软依赖: inpaint 修"绿色描边"是 v4.3 关键, 没装就 fallback 到 v4.2 (有绿描边)
+try:
+    import cv2
+    _HAS_CV2 = True
+except ImportError:
+    _HAS_CV2 = False
+    print("WARNING: opencv-python-headless 未装, v4.3 inpaint 步骤跳过 (fallback 到 v4.2 行为)", file=sys.stderr)
+    print("  安装: python3 -m pip install --user --break-system-packages opencv-python-headless", file=sys.stderr)
 
 
 def extract_frames(mp4: Path, fps: int, out_dir: Path) -> int:
@@ -152,11 +171,38 @@ def soften_alpha(alpha: np.ndarray, radius: int = 1) -> np.ndarray:
     return np.array(blurred).astype(np.uint8)
 
 
+def inpaint_partial_rgb(rgb: np.ndarray, alpha: np.ndarray, radius: int = 5) -> np.ndarray:
+    """v4.3: cv2.inpaint 替换 partial + 透明区域 RGB → 去"绿色描边" 视觉 regression.
+
+    v4.2 根因: H3 模型在章鱼身体边缘渲染"绿+粉" 混合色 (partial 像素 RGB 均值
+    R=25, G=198, B=11, 100% 绿偏), alpha 羽化后 partial 像素 RGB 仍偏绿 →
+    桌宠身体外圈显"绿色描边". cv2.inpaint (Telea 算法) 用 PDE 解算把 partial
+    + 透明区域 RGB 从远处 alpha=255 像素传播身体色过来.
+
+    Args:
+        rgb: HxWx3 uint8 RGB 数组 (H3 渲染原图)
+        alpha: HxW uint8 alpha 数组 (v4.2 chroma key 算的)
+        radius: inpaint 算法传播半径 (5 = 速度效果甜点)
+    Returns:
+        HxWx3 uint8 RGB 数组 (partial + 透明区域被 inpaint 修复)
+    """
+    if not _HAS_CV2:
+        return rgb  # fallback: 不修复, v4.2 行为 (有绿描边)
+    # mask = partial (0 < alpha < 255) ∪ 透明 (alpha == 0) — 都让 inpaint 修复
+    mask = ((alpha > 0) & (alpha < 255)) | (alpha == 0)
+    if mask.sum() == 0:
+        return rgb
+    inpaint_mask = mask.astype(np.uint8) * 255
+    rgb_bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+    rgb_inpainted_bgr = cv2.inpaint(rgb_bgr, inpaint_mask, radius, cv2.INPAINT_TELEA)
+    return cv2.cvtColor(rgb_inpainted_bgr, cv2.COLOR_BGR2RGB)
+
+
 def process_frames(
     src_dir: Path, indices: list[int], size: int, chromakey: str = "v4"
 ) -> list[Image.Image]:
-    """加载 + resize + chroma key + alpha 羽化 → RGBA PIL Image 列表"""
-    print(f"[2/4] load {len(indices)} frames, resize to {size}x{size}, chroma key {chromakey} + alpha soften...")
+    """加载 + resize + chroma key + inpaint 修绿描边 + alpha 羽化 → RGBA PIL Image 列表"""
+    print(f"[2/4] load {len(indices)} frames, resize to {size}x{size}, chroma key {chromakey} + inpaint + alpha soften...")
     chromakey_fn = chromakey_v3 if chromakey == "v3" else chromakey_v4
     images = []
     for i in indices:
@@ -164,10 +210,13 @@ def process_frames(
         if img.size != (size, size):
             img = img.resize((size, size), Image.LANCZOS)
         arr = np.array(img)
+        # v4.3 流程: chroma key → inpaint 修 RGB → alpha 羽化
         alpha = chromakey_fn(arr)
+        # v4.3: 关键步骤 — 替换 partial + 透明区域 RGB, 修"绿+粉"混合色 → 视觉无绿描边
+        rgb_fixed = inpaint_partial_rgb(arr, alpha, radius=5)
         # v4.2: alpha 羽化 (1 像素 Gaussian blur) 抗锯齿
         alpha = soften_alpha(alpha, radius=1)
-        rgba = np.dstack([arr, alpha])
+        rgba = np.dstack([rgb_fixed, alpha])
         images.append(Image.fromarray(rgba, mode="RGBA"))
     print(f"        → {len(images)} RGBA frames ready")
     return images
