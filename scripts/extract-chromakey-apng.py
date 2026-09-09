@@ -98,6 +98,11 @@ def chromakey_v4(arr: np.ndarray) -> np.ndarray:
     暗绿 (17,44,15) 相对绿度 0.61 → 透明; 白底偏绿 (164,182,150) 相对绿度 0.10 → 不透;
     纯白/纯黑/章鱼皮肤/黄/阴影 → 全部不透.
 
+    v4 regression (2026-09-09 用户第二轮反馈): H3 模型在脸颊/触手上产生
+    深绿阴影 (RGB ~22,45,7) 被 v4 误判为绿, alpha=0, 桌宠透出白底 → 身体上
+    出现"白色斑块" (脸颊下方 + 左右触手). 修法: max(R,G,B) < 80 (深色阴影)
+    强制 alpha=255 — 这是低亮度阴影, 不是绿幕主区 (绿幕主区 R=4,G=237,B=1).
+
     Args:
         arr: HxWx3 uint8 RGB 数组
     Returns:
@@ -109,7 +114,11 @@ def chromakey_v4(arr: np.ndarray) -> np.ndarray:
     rel_green = np.where(g > 0, g_max_rb / np.maximum(g, 1), 0.0)
     # 软边界: 0.2 以下完全不透明, 0.5 以上完全透明
     greenness = np.clip((rel_green - 0.2) / 0.3, 0.0, 1.0)
-    return ((1.0 - greenness) * 255).astype(np.uint8)
+    alpha = ((1.0 - greenness) * 255).astype(np.uint8)
+    # 深色阴影保护: max(R,G,B) < 80 强制不透明, 避免深绿阴影被当绿幕扣
+    max_rgb = np.maximum(np.maximum(r, g), b)
+    alpha = np.where(max_rgb < 80, 255, alpha).astype(np.uint8)
+    return alpha
 
 
 def process_frames(
