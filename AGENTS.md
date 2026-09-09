@@ -18,7 +18,7 @@ Antigravity / Gemini CLI).
 | 窗口 | 116×116 透明, V2 APNG 192×192 在 `<canvas>` 内部 (CSS 缩放到 116×116) |
 | **3 V2 场景 (V2.1 默认)** | detective-study (H3 戴帽研究) · worker-construction (H3 工人施工) · **drink-coffee** (H3 喝咖啡, 2026-09-09 fef8017) |
 | 6 MCP tools | pet_show · pet_ask · pet_get_state · pet_set_state · pet_pet · pet_list_states |
-| **3 V2 APNG** | 50 帧/张 × 132ms ≈ 6.6s 循环, RGBA, 192×192, ~2.6-2.9MB 各, 走 PIL **v4.18.1** chroma key (v4.6 base 边界 + v4.8 yellow_white color clamp + v4.9 alpha 240+ 收紧 + v4.11 G>B+5 治极淡米 + v4.12 HSL L*1.18 提亮 + v4.14.2 S=0 去色 + v4.16 放宽 color mask + 瞳 ±18px 空间约束 + v4.17 移除 soften_alpha + **v4.18 眼区 bypass inpaint + 瞳 ±25px sclera_zone + Bomberbot color spill suppression** + **v4.18.1 fix sclera 连通 fill 越界 bug (biggest_mask & color_mask)**) |
+| **3 V2 APNG** | **80 帧/张 × 82ms ≈ 6.6s 循环 (12.2fps, v4.19 流畅度优化)**, RGBA, 192×192, ~4.3-4.5MB 各, 走 PIL **v4.18.1** chroma key (v4.6 base 边界 + v4.8 yellow_white color clamp + v4.9 alpha 240+ 收紧 + v4.11 G>B+5 治极淡米 + v4.12 HSL L*1.18 提亮 + v4.14.2 S=0 去色 + v4.16 放宽 color mask + 瞳 ±18px 空间约束 + v4.17 移除 soften_alpha + **v4.18 眼区 bypass inpaint + 瞳 ±25px sclera_zone + Bomberbot color spill suppression** + **v4.18.1 fix sclera 连通 fill 越界 bug (biggest_mask & color_mask)**) |
 | 14 V1 spritesheet (废弃) | 移到 `app/public/assets/octopus/_archive-v1-spritesheets/` 不再用 |
 | **scene 调度** | **事件驱动** (apng-js `end` 事件 → `SCENE_LOOPED` → FSM `rotateScene`), 0 累积延迟, 严格对齐 frame 0 |
 | Spec 依据 | [agent-plugins.org v1.0.0](https://agent-plugins.org/specification) + [MCP 2024-11-05](https://modelcontextprotocol.io/specification/2024-11-05) + [agentskills.io](https://agentskills.io/specification) |
