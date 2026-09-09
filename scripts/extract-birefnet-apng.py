@@ -198,11 +198,15 @@ def post_forehead_white_mask(arr_rgba: np.ndarray) -> tuple[np.ndarray, int]:
 
 
 def post_inpaint_partial(arr_rgba: np.ndarray, radius: int = 8) -> np.ndarray:
-    """v5.1 保留: cv2.inpaint Telea 治本 partial 绿光晕.
+    """v5.2 保留: cv2.inpaint Telea 治本 partial 绿光晕.
 
     BiRefNet soft mask → 阈值后剩余 partial 像素 (alpha 64-128) 边缘会有"绿光晕",
     因为 BiRefNet 软边把源绿幕 RGB 混合到 partial 像素. cv2.inpaint Telea PDE 解算
     用周围纯色填充 partial 像素的 RGB, alpha 保持不变.
+
+    v5.2 增量: inpaint 之后 alpha 收紧 (跟 v4.6 一致):
+    partial 像素 (alpha 64-128) RGB 已被 inpaint 改成周围身体色,
+    把 alpha 提到 255 让"章鱼脸完整" — 不再因 BiRefNet 半透判断而打洞.
 
     Returns: 新 rgba
     """
@@ -219,6 +223,8 @@ def post_inpaint_partial(arr_rgba: np.ndarray, radius: int = 8) -> np.ndarray:
     rgb_inpainted = cv2.inpaint(rgb, inpaint_mask.astype(np.uint8) * 255, radius, cv2.INPAINT_TELEA)
     out = arr_rgba.copy()
     out[:, :, :3] = rgb_inpainted
+    # v5.2 alpha 收紧: partial 像素 → 255 (跟 v4.6 行为一致, 治本"打洞")
+    out[:, :, 3] = np.where((out[:, :, 3] > 0) & (out[:, :, 3] < 255), 255, out[:, :, 3])
     return out
 
 
