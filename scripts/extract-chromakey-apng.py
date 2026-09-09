@@ -203,7 +203,9 @@ def soften_alpha(alpha: np.ndarray, radius: int = 1) -> np.ndarray:
 
 
 def inpaint_partial_rgb(rgb: np.ndarray, alpha: np.ndarray, radius: int = 4) -> np.ndarray:
-    """v4.5: cv2.inpaint 修 partial + 透明 + 绿偏不透明 RGB + 6px mask 膨胀
+    """v4.5.1: cv2.inpaint 修 partial + 透明 + 绿偏不透明 RGB
+    → partial+透明 mask 不膨胀 (避免模糊眼睛)
+    → green_opaque mask 独立 6px 膨胀 (修身体/帽子的绿调反射)
     → 去"绿色描边" + "绿色阴影" + H3 帽子的绿调反射.
 
     v4.2 根因: H3 模型在章鱼身体边缘渲染"绿+粉" 混合色 (partial 像素 RGB 均值
@@ -218,12 +220,16 @@ def inpaint_partial_rgb(rgb: np.ndarray, alpha: np.ndarray, radius: int = 4) -> 
     v4.5 mask 6px 膨胀 (kernel 3x3, iterations=2) 把绿偏像素外圈 6 像素都算 mask,
     radius 从 5 降到 4 (膨胀已经覆盖更广, 不需要大 r).
 
+    v4.5.1 修正: v4.5 把 partial+transparent 也一起膨胀, 模糊了眼睛(partial 边缘
+    在眼睛附近). v4.5.1 分开 mask: partial+transparent 不膨胀(保留眼睛清晰度),
+    green_opaque 单独 mask 6px 膨胀(只修身体/帽子的绿调反射).
+
     Args:
         rgb: HxWx3 uint8 RGB 数组 (H3 渲染原图)
         alpha: HxW uint8 alpha 数组 (v4.4 chroma key 算的, 含严保护)
         radius: inpaint 算法传播半径 (4 = 配合 6px 膨胀甜点)
     Returns:
-        HxWx3 uint8 RGB 数组 (partial + 透明 + 绿偏不透明 + 外圈 6px 都被修复)
+        HxWx3 uint8 RGB 数组 (partial + 透明 + 绿偏不透明 + 绿调反射外圈 6px 都被修复)
     """
     if not _HAS_CV2:
         return rgb  # fallback: 不修复, v4.2 行为 (有绿描边 + 绿阴影)
@@ -233,17 +239,20 @@ def inpaint_partial_rgb(rgb: np.ndarray, alpha: np.ndarray, radius: int = 4) -> 
     b = rgb[:,:,2].astype(int)
     max_rgb = np.maximum(np.maximum(r, g), b)
     green_opaque = (alpha == 255) & (g > r + 5) & (g > b + 5) & (max_rgb > 80)
-    mask = ((alpha > 0) & (alpha < 255)) | (alpha == 0) | green_opaque
-    if mask.sum() == 0:
-        return rgb
-    # v4.5: 6px 膨胀 (kernel 3x3, iterations=2) 把 mask 外圈 6 像素都覆盖
-    # → 绿偏像素周围的"绿调反射"也被 inpaint 修成身体色
-    kernel = np.ones((3, 3), np.uint8)
-    mask_dilated = cv2.dilate(mask.astype(np.uint8), kernel, iterations=2)
-    inpaint_mask = mask_dilated * 255
+    partial_mask = ((alpha > 0) & (alpha < 255)) | (alpha == 0)
+    # v4.5.1: 分开 inpaint 避免眼睛被模糊
+    # 1) partial+transparent 单独 inpaint (v4.3/v4.4 行为, 不膨胀)
     rgb_bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-    rgb_inpainted_bgr = cv2.inpaint(rgb_bgr, inpaint_mask, radius, cv2.INPAINT_TELEA)
-    return cv2.cvtColor(rgb_inpainted_bgr, cv2.COLOR_BGR2RGB)
+    if partial_mask.sum() > 0:
+        inpaint_mask_pt = (partial_mask.astype(np.uint8) * 255)
+        rgb_bgr = cv2.inpaint(rgb_bgr, inpaint_mask_pt, 5, cv2.INPAINT_TELEA)
+    # 2) green_opaque 6px 膨胀 (v4.5 新增, 修身体/帽子的绿调反射)
+    if green_opaque.sum() > 0:
+        kernel = np.ones((3, 3), np.uint8)
+        green_dilated = cv2.dilate(green_opaque.astype(np.uint8), kernel, iterations=2)
+        inpaint_mask_g = (green_dilated * 255)
+        rgb_bgr = cv2.inpaint(rgb_bgr, inpaint_mask_g, radius, cv2.INPAINT_TELEA)
+    return cv2.cvtColor(rgb_bgr, cv2.COLOR_BGR2RGB)
 
 
 def process_frames(

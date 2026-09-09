@@ -1,11 +1,11 @@
 # V2 H3 视频 → 桌宠透明 APNG 完整流程
 
-> **状态**: ✅ V2.1 production baseline (2026-09-09), `scripts/extract-chromakey-apng.py` 沉淀 v4.5 chroma key 公式. 3 场景 (detective-study / worker-construction / drink-coffee) 已落地桌宠, 14 动作复用同样管线.
+> **状态**: ✅ V2.1 production baseline (2026-09-09), `scripts/extract-chromakey-apng.py` 沉淀 v4.5.1 chroma key 公式. 3 场景 (detective-study / worker-construction / drink-coffee) 已落地桌宠, 14 动作复用同样管线.
 >
 > **用途**: 把 H3 / gen_videos 生成的绿幕动作视频,加工成 V2 桌宠可直接循环播放的透明 APNG,替换 V1 桌宠 sprite。
 > **适用场景**: V2 14 个动作视频统一加工流程;`prompts/01-detective-study.md` 第一个完整跑通, 13/14 复用同样管线。`prompts/03-drink-coffee.md` 验证 99.91% 相似度 (本批最佳).
 > **首次完成时间**: 2026-08-21 (W1 D5, 01-detective-study 桌宠集成验证 PASS)。
-> **chroma key 演进**: v1 → v3 → v4 → v4.1 → v4.2 → v4.3 → v4.4 → **v4.5 (当前默认)**, 详见 `scripts/extract-chromakey-apng.py` docstring 顶部.
+> **chroma key 演进**: v1 → v3 → v4 → v4.1 → v4.2 → v4.3 → v4.4 → v4.5 → **v4.5.1 (当前默认)**, 详见 `scripts/extract-chromakey-apng.py` docstring 顶部.
 > **配套文档**: `docs/v2-pipeline.md` (8 步总览) · `docs/action-prompt-methodology.md` (方法论) · `docs/breath-pipeline.md` (V1 眨眼流程, 对比参考) · `AGENTS.md` V2 chroma key 章节 (演进根因 + 测试集)
 
 ---
@@ -28,9 +28,9 @@
    ↓
 [Step 2] ffmpeg 抽帧 (15fps, PNG 序列)
    ↓
-[Step 3] PIL chroma key v4.5 + cv2.inpaint 修 RGB (Telea r=4, 6px mask 膨胀) + 抽帧到 50 帧 + resize 192×192
+[Step 3] PIL chroma key v4.5.1 + cv2.inpaint 分 2 步 (partial+透明 Telea r=5 / green_opaque 6px 膨胀 Telea r=4) + 抽帧到 50 帧 + resize 192×192
    ↓
-[Step 4] PIL alpha 通道 1px Gaussian blur 羽化 (v4.5 抗锯齿)
+[Step 4] PIL alpha 通道 1px Gaussian blur 羽化 (v4.5.1 抗锯齿)
    ↓
 [Step 5] PIL APNG 输出 (disposal=0, 132ms/帧, 6.6s 循环, num_plays=1)
 ```
@@ -43,9 +43,9 @@
 
 **总耗时**: 3-4 分钟/动作 (不含视频生成的 2-3 分钟)。
 
-**关键参数 (Step 3-5)**: `python3 scripts/extract-chromakey-apng.py --input <mp4> --output <apng>` (默认 chromakey=v4.5, frame-count=50, size=192, duration=132, loop=1).
+**关键参数 (Step 3-5)**: `python3 scripts/extract-chromakey-apng.py --input <mp4> --output <apng>` (默认 chromakey=v4.5.1, frame-count=50, size=192, duration=132, loop=1).
 
-**v4.5 公式详情** (为什么这样改):
+**v4.5.1 公式详情** (为什么这样改):
 - **相对绿度** `(G - max(R,B)) / G`: 归一化到 G 本身, 避免"白底偏绿"被误扣
 - **严保护** `(max<80) AND (G-max(R,B)<20)` 区分真深色阴影 vs H3 深绿反射 (RGB ~20,55,8)
 - **中绿保护** `80 ≤ max < 150` 且 `G - max(R,B) < 30` 算皮肤: 避免阈值降低后误扣粉色皮肤
@@ -103,7 +103,7 @@ ffmpeg -y -i docs/v2-XX-name/v2-XX-name-h3.mp4 -vf fps=15 /tmp/h3-process/frames
 
 ---
 
-## Step 3: chroma key v4.5 + cv2.inpaint + 抽帧 + resize
+## Step 3: chroma key v4.5.1 + cv2.inpaint + 抽帧 + resize
 
 > **目的**: 99 帧 → 50 帧, 192×192 RGBA, 透明背景, 章鱼不透明。
 

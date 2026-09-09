@@ -23,14 +23,15 @@
 - **M5b Lottie provider** (2026-08-27) ✅ 第二个 provider (lottie-web canvas renderer), 证明换格式业务代码零修改
 - **M5b regression fix** (2026-09-09 commit f2e0bb7) ✅ APNG num_plays 0 → 1, 删遗留 useMcpBridge.ts
 - **P0-2 端到端跑 Tauri 桌宠** (2026-09-09 fef8017) ✅ HTTP fallback 验证 3 scenes 切换 + 事件驱动 6.6s 自切
-- **chroma key v3 → v4.5 (5 步演进, 2026-09-09 commits 7b09fd3 / 2dc3428 / ab1ddcd / 8a2ca87 / 2e59875 / f18a3c7 / 27d9c74 / 06c70dc / current)** ✅ 沉淀到 `extract-chromakey-apng.py` 默认:
+- **chroma key v3 → v4.5.1 (6 步演进, 2026-09-09 commits 7b09fd3 / 2dc3428 / ab1ddcd / 8a2ca87 / 2e59875 / f18a3c7 / 27d9c74 / 06c70dc / current)** ✅ 沉淀到 `extract-chromakey-apng.py` 默认:
   - v3 → v4: 相对绿度公式修"白底偏绿被抠成半透" (眼白下边缘"高亮透明")
   - v4 → v4.1: + 深色阴影保护修 H3 在脸颊/触手上渲染的深绿反射被误扣 → 桌宠身体"白色斑块"
   - v4.1 → v4.2: 阈值收紧 + 中绿保护 + alpha 羽化, 修 H3"绿黄残留" (RGB 155,188,75) + 192→116 resize 边缘锯齿
   - v4.2 → v4.3: + cv2.inpaint (Telea r=5) 修 partial + 透明区域 RGB → 修"绿色描边" (H3 边缘"绿+粉"混合色, partial 像素 100% 绿偏)
   - v4.3 → v4.4: v4.1 保护加严 `(max<80) AND (g_max_rb<20)` 区分真阴影 vs 绿反射, mask 扩展到 alpha=255 绿偏不透明像素 → 修"绿色阴影" (深绿反射 28214 个被 v4.4 排除保护)
   - v4.4 → v4.5: mask 6px 膨胀 (kernel 3x3, iterations=2) + radius=4 → 修"绿调反射高光" (H3 帽子/放大镜 RGB ~150,130,60 或 145,147,23, 视觉像绿调). 50 帧总和: detective-study -81px, worker-construction -690px, drink-coffee 持平
-  - 3 场景 v4.5 APNG 重建 (current) + 桌宠视觉验证 PASS: 完全无绿色描边/阴影, 侦探帽纯净棕色, 放大镜玻璃反射消除, 黄色施工帽保留
+  - v4.5 → v4.5.1: mask 拆成 2 步独立 inpaint — partial+透明 (Telea r=5, 不膨胀) 保留眼睛清晰度 + green_opaque 单独 6px 膨胀 (Telea r=4) 修身体/帽子绿调反射. 眼睛 v4.4 锐利恢复, 帽子/放大镜绿调反射仍消除
+  - 3 场景 v4.5.1 APNG 重建 (current) + 桌宠视觉验证 PASS: 完全无绿色描边/阴影, 侦探帽纯净棕色, 放大镜玻璃反射消除, 黄色施工帽保留, 眼睛清晰度恢复
 - **cargo test 预期值同步** (current) ✅: 修 mcp_roundtrip.rs::list_states_returns_2_v2_scenes 期望 2→3 (drink-coffee 加项遗漏), 8/8 cargo tests 绿
 - **运行时**: 桌宠进程按需启动 (cargo tauri dev), 3 V2 APNG ready (drink-coffee 99.91% 相似度, 本批最佳)
 

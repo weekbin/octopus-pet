@@ -18,7 +18,7 @@ Antigravity / Gemini CLI).
 | 窗口 | 116×116 透明, V2 APNG 192×192 在 `<canvas>` 内部 (CSS 缩放到 116×116) |
 | **3 V2 场景 (V2.1 默认)** | detective-study (H3 戴帽研究) · worker-construction (H3 工人施工) · **drink-coffee** (H3 喝咖啡, 2026-09-09 fef8017) |
 | 6 MCP tools | pet_show · pet_ask · pet_get_state · pet_set_state · pet_pet · pet_list_states |
-| **3 V2 APNG** | 50 帧/张 × 132ms ≈ 6.6s 循环, RGBA, 192×192, ~2.7-3.0MB 各, 走 PIL **v4.5** chroma key (相对绿度 + 严保护 + inpaint Telea r=4 + 6px mask 膨胀 + alpha 羽化) |
+| **3 V2 APNG** | 50 帧/张 × 132ms ≈ 6.6s 循环, RGBA, 192×192, ~2.7-3.0MB 各, 走 PIL **v4.5.1** chroma key (相对绿度 + 严保护 + inpaint Telea r=4 + 6px mask 膨胀 + alpha 羽化) |
 | 14 V1 spritesheet (废弃) | 移到 `app/public/assets/octopus/_archive-v1-spritesheets/` 不再用 |
 | **scene 调度** | **事件驱动** (apng-js `end` 事件 → `SCENE_LOOPED` → FSM `rotateScene`), 0 累积延迟, 严格对齐 frame 0 |
 | Spec 依据 | [agent-plugins.org v1.0.0](https://agent-plugins.org/specification) + [MCP 2024-11-05](https://modelcontextprotocol.io/specification/2024-11-05) + [agentskills.io](https://agentskills.io/specification) |
@@ -40,15 +40,15 @@ Antigravity / Gemini CLI).
 | Rust 后端 | `src-tauri/src/` (lib · main · actions · mcp_stdio · state_bridge · http_fallback) |
 | 14 spritesheet (V1 废弃) | `app/public/assets/octopus/_archive-v1-spritesheets/spritesheet-*.webp` |
 | **3 V2 APNG (V2.1 默认)** | `app/public/assets/octopus/v2/{detective-study,worker-construction,drink-coffee}.png` |
-| **V2 APNG 生产脚本** | `scripts/extract-chromakey-apng.py` (mp4 → 50 帧 RGBA APNG, v4.5 chroma key 默认, v3 选项兼容) |
+| **V2 APNG 生产脚本** | `scripts/extract-chromakey-apng.py` (mp4 → 50 帧 RGBA APNG, v4.5.1 chroma key 默认, v3 选项兼容) |
 | 14 场景素材审计 | `docs/octopus-assets-audit.md` (W1 D1 产物) |
 | 变更历史 | `CHANGELOG.md` (Keep a Changelog 1.1.0) |
 | CI | `.github/workflows/ci.yml` (spec lint · asset audit · spritesheet regen · Rust build · Vitest) |
 | **V0.5-3 验证产物** | `docs/v053-validation/` (gen_videos 6s 视频 + 0s/5.5s 对比帧, 96.65% 相似) |
 | **V2.1 标准图** (V2 idle 起点) | `art/octopus-frames/standard-char-1x1.png` (3/4 视角, 1:1, 绿幕, 1920×1920; `art/` 在 .gitignore) |
 | **V2 绿幕清洗脚本** | `scripts/remove-hat-greenscreen.py` (V2.1 14 动作复用) |
-| **V2 视频 → 桌宠 APNG 流程** | `docs/v2-h3-to-pet-workflow.md` (5 步: H3 双图 → 抽帧 → chroma key v4.5 → alpha 羽化 → APNG, drink-coffee 最新跑通) |
-| **V2 抽帧 + chroma key + APNG 一键脚本** | `scripts/extract-chromakey-apng.py` (v4.5 公式沉淀, 14 动作复用) |
+| **V2 视频 → 桌宠 APNG 流程** | `docs/v2-h3-to-pet-workflow.md` (5 步: H3 双图 → 抽帧 → chroma key v4.5.1 → alpha 羽化 → APNG, drink-coffee 最新跑通) |
+| **V2 抽帧 + chroma key + APNG 一键脚本** | `scripts/extract-chromakey-apng.py` (v4.5.1 公式沉淀, 14 动作复用) |
 
 ## 协作规则 (根因型, 别打地鼠)
 
@@ -102,7 +102,7 @@ Antigravity / Gemini CLI).
   业务代码从 `./types` / `crate::scene_registry_generated` re-export, 不直接 import generated.
 
   **加新场景 5 步**:
-  1. 跑 `docs/v2-h3-to-pet-workflow.md` (H3 / gen_videos → 抽帧 → chroma key v4.5 → alpha 羽化 → 192×192 APNG)
+  1. 跑 `docs/v2-h3-to-pet-workflow.md` (H3 / gen_videos → 抽帧 → chroma key v4.5.1 → alpha 羽化 → 192×192 APNG)
   2. 放 `app/public/assets/octopus/v2/<new-scene>.png`
   3. 改 `scenes.json` 加 entry (`id`, `source`, `bubbleLines`)
   4. `bash scripts/build-scene-registry.sh`
@@ -141,15 +141,16 @@ Antigravity / Gemini CLI).
   APNG `disposal=0` (避免 PIL 合并相同帧), tauri.conf.json `macOSPrivateApi: true`
   (macOS 透明必需). 不用 GIF (透明兼容差). V1 默认 APNG, V2 长动作可走 WebM VP9 alpha
   (见下面"ffmpeg-full 接入"规则).
-- **V2 视频 → 桌宠 APNG (H3 / gen_videos 走完)**: 走 `docs/v2-h3-to-pet-workflow.md` 完整 5 步 (H3 双图 → ffmpeg 15fps 抽帧 → chroma key v4.5 → alpha 1px Gaussian blur 羽化 → 192×192 APNG). 关键坑:
-  - **chroma key v4.5 公式** (`(G - max(R,B)) / G` 相对绿度, `clip((rel - 0.15) / 0.3, 0, 1)`) + **严保护** (`(max<80) AND (G-max(R,B)<20)` 区分真阴影 vs 绿反射; `80 ≤ max < 150` 且 `G - max(R,B) < 30` 算皮肤保护中绿) + **cv2.inpaint 修 RGB** (Telea r=4 + 6px mask 膨胀, 修 partial + 透明 + alpha=255 绿偏不透明像素 + 外圈绿调反射) + **alpha 羽化** (1 像素 Gaussian blur 让 192→116 resize 边缘从硬切变软边). 详见 `scripts/extract-chromakey-apng.py`.
+- **V2 视频 → 桌宠 APNG (H3 / gen_videos 走完)**: 走 `docs/v2-h3-to-pet-workflow.md` 完整 5 步 (H3 双图 → ffmpeg 15fps 抽帧 → chroma key v4.5.1 → alpha 1px Gaussian blur 羽化 → 192×192 APNG). 关键坑:
+  - **chroma key v4.5.1 公式** (`(G - max(R,B)) / G` 相对绿度, `clip((rel - 0.15) / 0.3, 0, 1)`) + **严保护** (`(max<80) AND (G-max(R,B)<20)` 区分真阴影 vs 绿反射; `80 ≤ max < 150` 且 `G - max(R,B) < 30` 算皮肤保护中绿) + **cv2.inpaint 分 2 步** (1) partial+透明 单独 inpaint (Telea r=5, 不膨胀, 保护眼睛清晰度) (2) green_opaque 单独 mask 6px 膨胀 (kernel 3x3, iterations=2) + Telea r=4, 修身体/帽子的绿调反射 + **alpha 羽化** (1 像素 Gaussian blur 让 192→116 resize 边缘从硬切变软边). 详见 `scripts/extract-chromakey-apng.py`.
   - **v3 → v4 演进根因**: v1 `clip(diff/60+0.5)` 跟 v3 `clip((diff-10)/20)` 都是绝对绿度阈值, 白色眼底微小绿影 (RGB 164,182,150, G-R=18) 触发 partial-alpha 153 → 桌宠眼白下边缘显"高亮透明". v4 改用相对绿度归一化到 G 本身, "绿在 G 里的占比" < 0.2 → 不透. 8 色 + H3 残留测试集全部通过.
   - **v4 → v4.1 演进根因**: H3 模型在脸颊/触手上渲染深绿反射 (RGB ~22,45,7), v4 公式看 (45-22)/45=0.51 > 0.2 → alpha=0 完全透明 → 桌宠透出 mcode UI 白底 → 用户看到"白色斑块". v4.1 加 `max(RGB) < 80` 强制不透明保护深色阴影.
   - **v4.1 → v4.2 演进根因**: H3 模型的"绿黄残留" (RGB ~155,188,75, 偏亮绿反射) 在 v4.1 公式下 `rel=0.135 < 0.2` → 保留为不透明绿色, 桌宠身体/帽子上有绿色斑. 阈值 0.2 → 0.15 + 中绿保护让绿黄也走 soft 透明 (-98%), alpha 羽化让边缘软化.
   - **v4.2 → v4.3 演进根因**: alpha 羽化让 partial 像素变多 (0.21% → 1.18%), 但 partial 像素 RGB 均值 R=25, G=198, B=11 (100% 绿偏, H3 边缘渲染"绿+粉"混合色), 羽化后 partial 像素仍偏绿 → 桌宠身体外圈显"绿色描边". v4.3 加 cv2.inpaint (Telea r=5) 修 partial + 透明区域 RGB.
   - **v4.3 → v4.4 演进根因**: v4.3 残余"绿色阴影"在触手/身体 (alpha=255 但 RGB 绿偏), v4.1 保护 `max<80` 把 H3 深绿反射 (RGB ~20,55,8) 误保留了. v4.4 加严保护 `(max<80) AND (g_max_rb<20)` 区分真阴影 vs 绿反射 (深绿反射 28214 个被 v4.4 排除保护), inpaint mask 扩展到 alpha=255 绿偏像素 (G>R+5 AND G>B+5).
   - **v4.4 → v4.5 演进根因**: v4.4 残余"绿调反射高光"在 H3 帽子/放大镜 (RGB ~150,130,60 或 145,147,23, R>G 但 B 极低, 视觉像绿调), v4.4 mask 只覆盖绿偏像素本身, 没扩到外圈"绿调反射"区域. v4.5 mask 6px 膨胀 (kernel 3x3, iterations=2) + radius 4 (替代 r=5, 配合膨胀). 50 帧总和: detective-study -81px, worker-construction -690px, drink-coffee 持平 0. 视觉: 侦探帽变纯净棕色, 放大镜玻璃绿色反射消失, 黄色施工帽保留, 白色眼睛/腮红/阴影细节保留.
-  - **chroma key 演进总表** (v1 → v3 → v4 → v4.1 → v4.2 → v4.3 → v4.4 → v4.5): `scripts/extract-chromakey-apng.py` docstring 顶部有完整记录 + 测试集 + 数据验证, 改 chroma key 前必读.
+  - **v4.5 → v4.5.1 演进根因**: v4.5 mask 6px 膨胀覆盖了眼睛 partial 边缘, 眼睛的高光(星形)/瞳孔(黑色)/眼底月牙(白色)被 inpaint 改成周围身体色(粉色), 眼睛清晰度从锐利变模糊. v4.5.1 把 mask 拆成 2 步独立 inpaint: (1) partial+透明 单独 inpaint (Telea r=5, 不膨胀, 保留 v4.4 行为 → 眼睛恢复清晰度) (2) green_opaque 单独 mask 6px 膨胀 (kernel 3x3, iterations=2) + Telea r=4 (修身体/帽子的绿调反射). 视觉验证: 侦探帽变纯净棕色 (v4.5 保留) + 眼睛锐利 (v4.4 清晰度恢复) + 黄色施工帽保留.
+  - **chroma key 演进总表** (v1 → v3 → v4 → v4.1 → v4.2 → v4.3 → v4.4 → v4.5 → v4.5.1): `scripts/extract-chromakey-apng.py` docstring 顶部有完整记录 + 测试集 + 数据验证, 改 chroma key 前必读.
   - **Tauri webview 不自动 reload `public/` 资源** — 替换 sprite 必须 kill 章鱼进程, `cargo tauri dev` 自动重启才生效.
   - **screencapture 截透明窗口必须用 `-l <window_id>`** — `-R x,y,w,h` 截不到透明 (穿透). 章鱼窗口 ID 用 swift CGWindowList 查 (osascript 报的 position 是 window-relative 不是屏幕坐标).
   - **H3 + `last_frame_image` 双图模式是首末一致循环视频唯一解** — Hailuo-2.3 物理做不到 (0s vs 5.5s 40-45% 相似, 道具不消失). 走 `~/.minimax/agents/mavis/skills/h3-dual-image-video-gen/`.

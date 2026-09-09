@@ -7,9 +7,9 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
-- **chroma key v4 → v4.2 → v4.3 → v4.4 → v4.5 (5 步演进, 2026-09-09 commits 7b09fd3, 2dc3428, ab1ddcd, 8a2ca87, 2e59875, f18a3c7, 27d9c74, 06c70dc, current)**:
-  治本 5 个不同维度的视觉 regression (白底偏绿半透 / 白色斑块 / 边缘锯齿 / 绿色描边 / 绿色阴影 / 绿调反射高光), 沉淀到 `scripts/extract-chromakey-apng.py` 默认.
-  v4.5 是当前唯一默认 (V2.1 production baseline), v3 作 `--chromakey` 选项兼容保留.
+- **chroma key v4 → v4.2 → v4.3 → v4.4 → v4.5 → v4.5.1 (6 步演进, 2026-09-09 commits 7b09fd3, 2dc3428, ab1ddcd, 8a2ca87, 2e59875, f18a3c7, 27d9c74, 06c70dc, current)**:
+  治本 6 个不同维度的视觉 regression (白底偏绿半透 / 白色斑块 / 边缘锯齿 / 绿色描边 / 绿色阴影 / 绿调反射高光 / 眼睛模糊), 沉淀到 `scripts/extract-chromakey-apng.py` 默认.
+  v4.5.1 是当前唯一默认 (V2.1 production baseline), v3 作 `--chromakey` 选项兼容保留.
   - **v3 → v4 (相对绿度公式)**: 修复"白底偏绿被抠成半透明" (眼白下边缘显"高亮透明").
     旧 `clip((G - max(R,B) - 10) / 20)` 是绝对绿度阈值, RGB(164,182,150) G-R=18 触发
     partial-alpha 153. 新 `clip(((G - max(R,B)) / G - 0.2) / 0.3)` 归一化到 G 本身,
@@ -40,9 +40,15 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
     降到 4 (膨胀已经覆盖更广, 不需要大 r).
     50 帧总和: detective-study partial 65→0 + opaque 16→0 (-81px),
     worker-construction partial 690→0 + opaque 0→0 (-690px), drink-coffee 0→0 (持平).
-  - 配套: 3 个 v4.5 APNG 重建 (commits 8a2ca87, 2e59875, f18a3c7, 27d9c74, 06c70dc, current),
+  - **v4.5 → v4.5.1 (mask 分开处理, partial 不膨胀)**: 修"眼睛模糊" regression.
+    v4.5 mask 6px 膨胀覆盖了眼睛 partial 边缘, 眼睛的高光(星形)/瞳孔(黑色)/眼底
+    月牙(白色)被 inpaint 改成周围身体色(粉色), 眼睛清晰度从锐利变模糊.
+    v4.5.1 把 mask 拆成 2 步: (1) partial+transparent 单独 inpaint (r=5, 不膨胀,
+    保留 v4.4 行为); (2) green_opaque 单独 mask 6px 膨胀 inpaint (r=4, 修身体/帽子的
+    绿调反射). 眼睛恢复 v4.4 清晰度, 帽子/放大镜绿调反射仍消除.
+  - 配套: 3 个 v4.5.1 APNG 重建 (commits 8a2ca87, 2e59875, f18a3c7, 27d9c74, 06c70dc, current),
     桌宠 116×116 透明窗口视觉 OK: 完全无绿色描边/阴影, 侦探帽变纯净棕色, 放大镜玻璃
-    绿色反射消失, 黄色施工帽保留, 白色眼睛/腮红/阴影细节保留.
+    绿色反射消失, 黄色施工帽保留, 白色眼睛/腮红/阴影细节保留 (v4.4 清晰度恢复).
 - **cargo test 预期值同步 2 → 3 V2 场景 (drink-coffee 加项遗漏)**:
   修 `src-tauri/tests/mcp_roundtrip.rs::list_states_returns_2_v2_scenes` 期望值
   2→3 + 加 drink-coffee assertion, 8/8 cargo tests 重新绿.
