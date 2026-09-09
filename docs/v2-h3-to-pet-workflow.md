@@ -1,14 +1,12 @@
 # V2 H3 视频 → 桌宠透明 APNG 完整流程
 
-> **状态**: APNG 生产管线 4 步本身仍然有效 (PIL v3 chroma key 公式沉淀可用);
-> **2026-08-17 18:21 V2.1 桌宠渲染层 (webm + canvas chroma key) 已被用户否决回退**,
-> 桌宠当前仍跑 V1 spritesheet. V2 APNG 路线作为"治本方案" 储备, 等用户拍板
-> "想别的办法做动画切换" 后再讨论是否启用.
+> **状态**: ✅ V2.1 production baseline (2026-09-09), `scripts/extract-chromakey-apng.py` 沉淀 v4.2 chroma key 公式. 3 场景 (detective-study / worker-construction / drink-coffee) 已落地桌宠, 14 动作复用同样管线.
 >
 > **用途**: 把 H3 / gen_videos 生成的绿幕动作视频,加工成 V2 桌宠可直接循环播放的透明 APNG,替换 V1 桌宠 sprite。
-> **适用场景**: V2 14 个动作视频统一加工流程;`prompts/01-detective-study.md` 第一个完整跑通, 13/14 复用同样管线。
+> **适用场景**: V2 14 个动作视频统一加工流程;`prompts/01-detective-study.md` 第一个完整跑通, 13/14 复用同样管线。`prompts/03-drink-coffee.md` 验证 99.91% 相似度 (本批最佳).
 > **首次完成时间**: 2026-08-21 (W1 D5, 01-detective-study 桌宠集成验证 PASS)。
-> **配套文档**: `docs/v2-pipeline.md` (8 步总览) · `docs/action-prompt-methodology.md` (方法论) · `docs/breath-pipeline.md` (V1 眨眼流程, 对比参考)
+> **chroma key 演进**: v1 → v3 → v4 → v4.1 → **v4.2 (当前默认)**, 详见 `scripts/extract-chromakey-apng.py` docstring 顶部.
+> **配套文档**: `docs/v2-pipeline.md` (8 步总览) · `docs/action-prompt-methodology.md` (方法论) · `docs/breath-pipeline.md` (V1 眨眼流程, 对比参考) · `AGENTS.md` V2 chroma key 章节 (演进根因 + 测试集)
 
 ---
 
@@ -23,28 +21,35 @@
 
 ---
 
-## 完整流程 (4 步)
+## 完整流程 (5 步)
 
 ```
 [Step 1] H3 / gen_videos 生成绿幕视频 (双图模式)
    ↓
 [Step 2] ffmpeg 抽帧 (15fps, PNG 序列)
    ↓
-[Step 3] PIL chroma key v3 + 抽帧到 50 帧 + resize 192×192
+[Step 3] PIL chroma key v4.2 + 抽帧到 50 帧 + resize 192×192
    ↓
-[Step 4] PIL APNG 输出 (disposal=0, 132ms/帧, 6.6s 循环)
+[Step 4] PIL alpha 通道 1px Gaussian blur 羽化 (v4.2 抗锯齿)
    ↓
-[Step 5] 替换 breath-idle.png + 重启 Tauri dev (验证用)
+[Step 5] PIL APNG 输出 (disposal=0, 132ms/帧, 6.6s 循环, num_plays=1)
 ```
 
 | Step | 工具 | 输入 | 输出 | 时间 |
 |------|------|------|------|------|
 | 1 | H3 (skill: `run_h3_video.py`) 或 Hailuo-2.3 | prompt + first_frame | 1 个 mp4 (6.6s, 768×768) | 2-3 分钟 |
 | 2 | ffmpeg | mp4 | 99 帧 PNG 序列 | 5 秒 |
-| 3-4 | PIL | 99 帧 PNG | 1 个 192×192 APNG (2.3MB) | 10 秒 |
-| 5 | 手工 cp + 重启 | APNG | 桌宠显示新动作 | 30 秒 |
+| 3-5 | PIL (`extract-chromakey-apng.py`) | 99 帧 PNG | 1 个 192×192 APNG (2.3MB, RGBA) | 10 秒 |
 
 **总耗时**: 3-4 分钟/动作 (不含视频生成的 2-3 分钟)。
+
+**关键参数 (Step 3-5)**: `python3 scripts/extract-chromakey-apng.py --input <mp4> --output <apng>` (默认 chromakey=v4.2, frame-count=50, size=192, duration=132, loop=1).
+
+**v4.2 公式详情** (为什么这样改):
+- **相对绿度** `(G - max(R,B)) / G`: 归一化到 G 本身, 避免"白底偏绿"被误扣
+- **深色阴影保护** `max(R,G,B) < 80` 强制不透明: H3 在脸颊/触手产生深绿反射, 保留为深色阴影而不是透出白底
+- **中绿保护** `80 ≤ max < 150` 且 `G - max(R,B) < 30` 算皮肤: 避免阈值降低后误扣粉色皮肤
+- **alpha 羽化** `ImageFilter.GaussianBlur(radius=1)`: 192→116 resize 边缘从硬切变软边, partial 比例 0.21% → 1.18%
 
 ---
 

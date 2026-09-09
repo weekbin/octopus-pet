@@ -23,6 +23,11 @@
 - **M5b Lottie provider** (2026-08-27) ✅ 第二个 provider (lottie-web canvas renderer), 证明换格式业务代码零修改
 - **M5b regression fix** (2026-09-09 commit f2e0bb7) ✅ APNG num_plays 0 → 1, 删遗留 useMcpBridge.ts
 - **P0-2 端到端跑 Tauri 桌宠** (2026-09-09 fef8017) ✅ HTTP fallback 验证 3 scenes 切换 + 事件驱动 6.6s 自切
+- **chroma key v3 → v4.2 (3 步演进, 2026-09-09 commits 7b09fd3 / 2dc3428 / ab1ddcd)** ✅ 沉淀到 `extract-chromakey-apng.py` 默认:
+  - v3 → v4: 相对绿度公式修"白底偏绿被抠成半透" (眼白下边缘"高亮透明")
+  - v4 → v4.1: + 深色阴影保护修 H3 在脸颊/触手上渲染的深绿反射被误扣 → 桌宠身体"白色斑块"
+  - v4.1 → v4.2: 阈值收紧 + 中绿保护 + alpha 羽化, 修 H3"绿黄残留" (RGB 155,188,75) + 192→116 resize 边缘锯齿
+  - 3 场景 v4.2 APNG 重建 (8a2ca87, 2e59875, f18a3c7) + 桌宠视觉验证 PASS
 - **运行时**: 桌宠进程按需启动 (cargo tauri dev), 3 V2 APNG ready (drink-coffee 99.91% 相似度, 本批最佳)
 
 ---
