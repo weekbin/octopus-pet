@@ -109,7 +109,9 @@ V2 14 动作统一改为: 变出道具 → 戴/举 → 收回触手 → 道具�
 
 ## 5. 产物清单
 
-- `v2-01-detective-study.mp4` (5.875s, 768×768, 719KB)
+> 注: v1 Hailuo-2.3 4-段 视频 (`v2-01-detective-study.mp4`) 已清理,
+> 见 VERIFICATION-V3.md §8 替代为 H3 双图版 (`v2-01-detective-study-h3.mp4` ⭐).
+
 - `frame_0s.png` ~ `frame_55s.png` (6 个关键帧)
 - `preview.gif` (12fps 384px 动效预览)
 

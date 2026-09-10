@@ -132,12 +132,10 @@
 ## 8. 产物清单
 
 `docs/v2-01-detective-study/`:
-- `v2-01-detective-study.mp4` (v1 Hailuo-2.3 4段, 5.875s, 719KB)
-- `v2-01-detective-study-v2.mp4` (v2 Hailuo-2.3 3段, 5.875s, 595KB)
 - `v2-01-detective-study-h3.mp4` (v3 H3 双图, 6.583s, 825KB) ⭐
 - `h3_frame_0s/2s/35s/48s/55s.png` (5 H3 关键帧)
 - `h3_preview.gif` (H3 动效预览)
-- `VERIFICATION.md` (v1+v2 完整报告, 4.8KB)
+- `VERIFICATION.md` (v1+v2 完整报告, 4.8KB — v1/v2 mp4s 已清理)
 - `VERIFICATION-V3.md` (本文件, v3 H3 报告, 7KB)
 
 ## 9. 给用户的对比表
