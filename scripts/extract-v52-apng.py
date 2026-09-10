@@ -199,6 +199,41 @@ def post_green_residual_mask(rgba: np.ndarray) -> tuple[np.ndarray, int]:
     return out, n
 
 
+def post_green_residual_mask_v54plus(rgba: np.ndarray) -> tuple[np.ndarray, int]:
+    """v5.4+ (2026-09-10): more aggressive per-pixel color gate.
+
+    Replaces v5.4's ratio mask (G/(R+B+1) > 1.15) with the simpler
+    G > R+15 AND G > B+15 AND G > 80. Catches more of the green residue that
+    v5.4's ratio mask missed (yellow-green, edge transitions).
+
+      - R=150 G=200 B=30 (yellow-green): now demoted (v5.4 ratio: 1.10 < 1.15 = keep)
+      - R=80 G=160 B=40 (olive hat): demoted (same as v5.4)
+      - R=200 G=70 B=50 (body pink): G<R+15 → kept
+      - R=254 G=150 B=125 (salmon cup): G<R+15 → kept
+      - R=200 G=180 B=200 (body highlight): G<R+15 → kept
+
+    v10.1 update: applies to a > 128 (all visible pixels, not just fully opaque).
+    v10 (original) only applied to a == 255, leaving partial-alpha green pixels
+    visible (e.g. transition pixels at prop edges). v10.1 catches those too.
+
+    This is v9's per-pixel gate, extended to partial alpha. Combined with v5.4 base
+    (BiRefNet+CorridorKey), gives v10.1: keeps all props (including far-away
+    magnifier) while demoting all green pixels in the v5.4 alpha mask.
+
+    Returns (rgba, n_demoted).
+    """
+    rgb = rgba[:, :, :3].astype(np.int32)
+    a = rgba[:, :, 3]
+    R, G, B = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
+    green = (a > 128) & (G > R + 15) & (G > B + 15) & (G > 80)
+    n = int(green.sum())
+    if n == 0:
+        return rgba, 0
+    out = rgba.copy()
+    out[green, 3] = 0
+    return out, n
+
+
 def post_forehead_white_mask(rgba: np.ndarray, roi=H3_FOREHEAD_ROI) -> tuple[np.ndarray, int]:
     """H3 source video bug: hat reflection paints forehead as pure (255,255,255) in some
     frames. Force those pixels to a warm off-white (240,220,210) that matches the body tone.
@@ -310,7 +345,7 @@ def process_frames(
 
         # H3 source-specific post-process
         # 1) Demote olive/green pixels (H3 source renders hat/table green in f66-71)
-        rgba, n_green = post_green_residual_mask(rgba)
+        rgba, n_green = post_green_residual_mask_v54plus(rgba)
         # 2) Fix H3 hat reflection on forehead
         rgba, n_forehead = post_forehead_white_mask(rgba)
 
