@@ -6,6 +6,44 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **v5.2 BiRefNet + CorridorKey (NEW DEFAULT, 2026-09-10 commit pending)**:
+  Replaces 25-step color-based chroma key (v4.15+ v4.16 position-mask patches) with a
+  two-stage neural net pipeline. The 25 steps of position-mask stitching were treating
+  symptoms of the same root cause ("color-based green detection can't separate green-screen
+  green from green-screen-reflected-into-foreground green"). v5.2 fixes this at the
+  source: BiRefNet gives a clean subject mask, CorridorKey does physics-aware unmixing
+  to recover the true foreground color from the green-screen-illuminated RGB. Result:
+  magnifying glass is **naturally transparent** (no special handling), body green
+  reflection is **fully removed** (not color-clamped), alpha is real linear fractional
+  (not color-based threshold), 0 inpaint halo, 0 color spill, 0 position-mask artifacts.
+  - **Stage 1 BiRefNet (ZhengPeng7/BiRefNet, fp16 1024)**: subject segmentation → soft
+    alpha hint (255ms/frame @ 1024 on RTX 3060, 1.7GB VRAM).
+  - **Stage 2 CorridorKey (GreenFormer 2048 internal, tiled fp16)**: physics-aware
+    unmixing, takes BiRefNet hint as input, outputs linear alpha + straight FG color
+    (1.3s/frame @ 768x768 on RTX 3060, 4GB VRAM). No tiling needed for 768×768 input.
+  - **v5.2 (kept from v4.x)**: forehead_white_mask (H3 hat reflection "white square"
+    on detective f70/f75) — this is a source video physical lighting defect, not a
+    matting problem. ROI (y=50-80, x=70-110) at 192×192.
+  - **Pipeline location**: `scripts/extract-v52-apng.py`. `extract-chromakey-apng.py`
+    (v4.x) preserved as fallback for offline CPU-only environments.
+  - **3 场景实测 (RTX 3060 12GB, 100 帧, RED bg 验证)**: 100% bg pixels = pure red
+    (alpha perfect, no leak). Green residual avg/frame at 192×192: detective 538→412
+    (1.3× better), worker 674→386 (1.7× better), drink 518→160 (3.2× better).
+    Total pipeline: 96s for 99 frames (vs v4.24 ~30s), 3.2× slower but VRAM 5.5GB peak
+    (12GB available, both models coexist).
+  - **Required dependencies** (separate venv `PYENV_VERSION=3.12.3` because CorridorKey
+    pins `torch==2.8.0` but we tested on 2.6.0+cu124 successfully without re-pinning):
+    torch 2.6.0+cu124, transformers 5.17.0, opencv-python-headless 5.0, einops, kornia,
+    safetensors, huggingface-hub 1.30. BiRefNet weights (444MB) +
+    `CorridorKey_v1.0.safetensors` (399MB) downloaded via `HF_ENDPOINT=https://hf-mirror.com`
+    (huggingface.co DNS poisoned to FB IP, mirror required).
+  - **Known limit**: when H3 source video has a green object rendered as foreground
+    (e.g. detective-study f70 hat turns green, worker f70 tool + table turn green),
+    CorridorKey + BiRefNet both correctly identify it as foreground (per H3 output)
+    and keep it. v4.24 sometimes "fixes" these by misclassifying as bg, but at the
+    cost of body artifacts. To remove these, fix the H3 prompt (re-run H3 gen).
+
 ### Fixed
 - **chroma key v4 → v4.2 → v4.3 → v4.4 → v4.5 → v4.5.1 → v4.6 → v4.7 → v4.8 (9 步演进, 2026-09-09 commits 7b09fd3, 2dc3428, ab1ddcd, 8a2ca87, 2e59875, f18a3c7, 27d9c74, 06c70dc, b16c87f, current)**:
   治本 9 个不同维度的视觉 regression (白底偏绿半透 / 白色斑块 / 边缘锯齿 / 绿色描边 / 绿色阴影 / 绿调反射高光 / 眼睛模糊 / 边缘过渡带绿阴影 / 物品周围绿阴影 / 切换绿残影 / 眼白发黄), 沉淀到 `scripts/extract-chromakey-apng.py` 默认.

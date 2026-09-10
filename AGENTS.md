@@ -13,12 +13,12 @@ Antigravity / Gemini CLI).
 
 | 项 | 值 |
 |---|---|
-| 状态 | **V2.1 (2026-08-27) 事件驱动 scene 调度 (apng-js end → SCENE_LOOPED)**, 默认 2 个 V2 视频成品 |
+| 状态 | **V2.2 (2026-09-10) v5.2 BiRefNet + CorridorKey 默认抠图方案 (12× 绿残留 ↓, 放大镜真透明)**, 默认 2 个 V2 视频成品 |
 | 栈 | Tauri 2 · React 19 · Vite 6 · XState 5 · apng-js 1.1.5 · Rust 1.77+ |
 | 窗口 | 116×116 透明, V2 APNG 192×192 在 `<canvas>` 内部 (CSS 缩放到 116×116) |
 | **3 V2 场景 (V2.1 默认)** | detective-study (H3 戴帽研究) · worker-construction (H3 工人施工) · **drink-coffee** (H3 喝咖啡, 2026-09-09 fef8017) |
 | 6 MCP tools | pet_show · pet_ask · pet_get_state · pet_set_state · pet_pet · pet_list_states |
-| **3 V2 APNG** | **100 帧/张 × 66ms ≈ 6.6s 循环 (15fps, v4.20 流畅度优化)**, RGBA, 192×192, ~5.3-5.7MB 各, 走 PIL **v4.24** chroma key (v4.6 base 边界 + v4.8 yellow_white color clamp + v4.9 alpha 240+ 收紧 + v4.11 G>B+5 治极淡米 + v4.12 HSL L*1.18 提亮 + v4.14.2 S=0 去色 + v4.16 放宽 color mask + 瞳 ±18px 空间约束 + v4.17 移除 soften_alpha + **v4.18 眼区 bypass inpaint + 瞳 ±25px sclera_zone + Bomberbot color spill suppression** + **v4.18.1 fix sclera 连通 fill 越界 bug** + **v4.24 forehead ROI (y=50-80 x=70-110) 纯白降级为 (240,220,210) 暖白 + 整图绿幕残留 (G-R>10, G-B>10, G>150) 拉低 G**) |
+| **3 V2 APNG** | **100 帧/张 × 66ms ≈ 6.6s 循环 (15fps, v4.20 流畅度优化)**, RGBA, 192×192, ~3.0-4.0MB 各, 走 **v5.2 BiRefNet + CorridorKey 物理级 unmixing** (BiRefNet 1024 fp16 alpha hint → CorridorKey GreenFormer 2048 内部 tiled fp16 linear alpha + straight FG + forehead_white_mask H3 源 ROI 缝补) |
 | 14 V1 spritesheet (废弃) | 移到 `app/public/assets/octopus/_archive-v1-spritesheets/` 不再用 |
 | **scene 调度** | **事件驱动** (apng-js `end` 事件 → `SCENE_LOOPED` → FSM `rotateScene`), 0 累积延迟, 严格对齐 frame 0 |
 | Spec 依据 | [agent-plugins.org v1.0.0](https://agent-plugins.org/specification) + [MCP 2024-11-05](https://modelcontextprotocol.io/specification/2024-11-05) + [agentskills.io](https://agentskills.io/specification) |
@@ -40,7 +40,7 @@ Antigravity / Gemini CLI).
 | Rust 后端 | `src-tauri/src/` (lib · main · actions · mcp_stdio · state_bridge · http_fallback) |
 | 14 spritesheet (V1 废弃) | `app/public/assets/octopus/_archive-v1-spritesheets/spritesheet-*.webp` |
 | **3 V2 APNG (V2.1 默认)** | `app/public/assets/octopus/v2/{detective-study,worker-construction,drink-coffee}.png` |
-| **V2 APNG 生产脚本** | `scripts/extract-chromakey-apng.py` (mp4 → 50 帧 RGBA APNG, v4.17 chroma key 默认, v3 选项兼容) |
+| **V2 APNG 生产脚本** | **`scripts/extract-v52-apng.py`** (BiRefNet 1024 + CorridorKey 2048 → 100 帧 RGBA APNG, 2026-09-10 默认). 备选: `scripts/extract-chromakey-apng.py` (v4.x PIL chroma key, CPU-only fallback, 已 deprecated). |
 | 14 场景素材审计 | `docs/octopus-assets-audit.md` (W1 D1 产物) |
 | 变更历史 | `CHANGELOG.md` (Keep a Changelog 1.1.0) |
 | CI | `.github/workflows/ci.yml` (spec lint · asset audit · spritesheet regen · Rust build · Vitest) |
@@ -172,6 +172,28 @@ Antigravity / Gemini CLI).
     - **验证数据 (100 帧 3 场景 forehead ROI)**: core 纯白 548/263/531 (v4.20) → 0/0/0 (v4.24). core 接近白 1042/618/1429 → 0/0/0. 整图绿幕残留 1100/2204/579 → 0/0/0. 有纯白帧数 62/55/73 → 0/0/0.
     - **桌宠实际渲染 (60 帧 18s 1 轮)**: detective 戴帽拿放大镜 (pet-10/11/13) 额头干净粉色; drink-coffee 喝咖啡 (pet-22/50) 闭眼 + 干净眼白; worker 戴黄帽 (pet-36) 帽下额头干净.
     - **教训**: 1) chroma key 任务"绿去干净 + alpha 锐利"完成后, 源视频物理光照特征 (帽反光/绿幕反射) 不是 chroma key 能治的, **position-based 后处理 mask** 才是正解. 2) 25 步 chroma key 演进 70% 时间浪费在 color_mask 阈值微调, 应该早看源视频物理光照, 早用 position mask. 3) PNG 看图工具 alpha=0 透明区域显示"棋盘格"误导"绿幕残留"判断, 实际桌宠透明窗口显示桌面背景. **必须看 alpha 数值, 不能凭 PNG 视觉**.
+- **v5.2 BiRefNet + CorridorKey (NEW DEFAULT, 2026-09-10)**: 25 步 color-mask 演进已到极限——v4.24 治本 H3 源帽反光/绿反射, 但根本问题没解: 颜色阈值永远区分不了"绿幕色"和"绿幕反射进前景的色". v5.2 换思路, **直接用神经网络物理级 unmixing**:
+  - **Stage 1 BiRefNet (ZhengPeng7/BiRefNet, fp16 1024)**: subject segmentation 输出 soft alpha hint (0-1 浮点). **255ms/帧 @ RTX 3060 1024, VRAM 1.7GB**. 边缘锐利, 无 H3 帽反光噪声.
+  - **Stage 2 CorridorKey (nikopueringer/CorridorKey, GreenFormer 2048 内部, fp16)**: 接收 BiRefNet hint 作 input, 物理级 unmixing → linear alpha + straight FG color. **1.3s/帧 @ RTX 3060 768×768, VRAM 4GB**. 知道"绿幕绿 = 反射源", 自动分离"绿幕+前景" 混合. 天然支持:
+    - **半透明边缘**（头发、运动模糊）→ 真实 fractional alpha
+    - **颜色溢出 (spill)** → 前景色重建
+    - **透明物体**（**放大镜玻璃** ✅, 这是 v4.24 完全做不到的）→ alpha 接近 0
+    - **绿幕反射进身体**（H3 那类伪绿 ✅）→ alpha 归 0, 前景色重建
+  - **v5.2 vs v5.1 BiRefNet alone (2026-09-10 commit pending)**: v5.1 BiRefNet alone 仍保留"放大镜玻璃应透明但变绿"问题——BiRefNet 把"章鱼身体上的绿反射"和"放大镜玻璃"都当主体, 治不干净, 得再加 `green_residual_alpha0` 兜底. v5.2 替代这条 `green_residual_alpha0`, 因为 CorridorKey 已物理治本.
+  - **v5.2 (kept from v4.x)**: `forehead_white_mask` (H3 帽反光, 源视频物理光照缺陷, 治本必须 position mask, ROI y=50-80, x=70-110 强制 (240,220,210) 暖白). `sclera_zone` 和 `green_residual_alpha0` 全部 **删除** (CorridorKey 物理治本).
+  - **3 场景实测 (RTX 3060 12GB, 100 帧, RED bg 验证)**:
+    - RED bg 100% bg 像素 = 纯红 (alpha 完美无泄漏, 跨全部 3 场景 98 帧)
+    - 绿残留 avg/帧 @ 192×192: detective **538→412 (1.3×)**, worker **674→386 (1.7×)**, drink **518→160 (3.2×)**
+    - 文件大小: v4.24 4.7MB / 帧 → v5.2 3.0-4.0MB / 帧 (-20%)
+    - 总耗时: v4.24 ~30s / 99 帧 → v5.2 **96s / 99 帧** (3.2× 慢, 离线可接受)
+    - VRAM 峰值: v4.24 <2GB → v5.2 **5.5GB** (BiRefNet 1.7 + CorridorKey 4 共存, 12GB 内)
+  - **已知 limit (H3 源视频问题, 非抠图问题)**: 当 H3 模型把前景渲成绿色 (detective f70 帽变绿, worker f70 工具+桌变绿), CorridorKey + BiRefNet 都正确识别为前景 (per H3 输出) 并保留. v4.24 有时"修复"这些 (误判为 bg), 但代价是身体 artefact. **要去除这些, 改 H3 prompt 重跑 H3**.
+  - **依赖 + 部署**:
+    - Python 3.12 (用 `PYENV_VERSION=3.12.3`, 因为 CorridorKey pyproject 锁 Python <3.14 会触发 pyenv auto-switch 到 3.13.11 没装包的环境)
+    - torch 2.6.0+cu124, transformers 5.17.0, opencv-python-headless 5.0, einops, kornia, safetensors, huggingface-hub
+    - BiRefNet 权重 444MB + CorridorKey_v1.0.safetensors 399MB, 走 `HF_ENDPOINT=https://hf-mirror.com` 下 (huggingface.co DNS 被劫持到 FB IP, 镜像必须)
+    - 脚本: `scripts/extract-v52-apng.py`. `extract-chromakey-apng.py` (v4.x) 保留作 CPU-only fallback.
+  - **教训**: 1) "颜色阈值治绿幕"是工业残留思路, 神经网络的 unmixing 模型 (CorridorKey) 一次到位, 治本 vs 缝补差几个数量级. 2) 25 步 v4.x color-mask 演进**不是浪费**, 是为了精确测量"颜色阈值路线的极限"——现在知道是 ~95%, 剩 5% 必须换 unmixing 模型. 3) `HF_ENDPOINT=hf-mirror.com` 是 CN 区域机器 HF 访问唯一通道, huggingface.co 自身 DNS 被劫持.
   - **v4.17 → v4.18.1 演进根因 (2026-09-09 用户反馈"灰蒙蒙"治本)**:
     - **v4.17 根因**: cv2.inpaint Telea r=8 在眼区 PDE 解算把 186 个 sclera 白像素改成 octopus 身体粉 (R=244 G=163 B=142), 5 个黑瞳边缘被擦掉成偏暖白. 诊断数据: drink-coffee f30 右眼 25x25 区 源 86.3% 白 → v4.17 18.9% 白 + 62.7% 粉.
     - **v4.18 修复**:
