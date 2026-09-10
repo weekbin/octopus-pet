@@ -6,10 +6,25 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **v5.3 BiRefNet + CorridorKey + green residual mask (2026-09-10 commit pending)**:
+  Adds `post_green_residual_mask` to demote alpha=255 pixels with pure green-screen
+  color (G>180, R<100, B<100) to transparent. Fixes v5.2 regression where H3 source
+  renders the magnifying glass interior as solid green (RGB ~40,220,60), which
+  BiRefNet hint includes as "subject" and CorridorKey preserves.
+  - **Why strict G>180 R<100 B<100**: coffee cup green (drink-coffee) is salmon
+    (~254,150,125) → fails R<100 check, kept. Body highlights R>200 → fail. Only
+    actual "green screen green" gets demoted. Zero false positives.
+  - **Results (3 scenes, 100 frames, strict threshold green residual avg/frame)**:
+    detective 197 → **4** (49× ↓), worker 53 → **7** (7.5× ↓), drink 0 → 0.
+  - **Visual verification**: detective f35/f50 magnifying glass now properly
+    transparent (red bg shows through). f70 hat-green unchanged (H3 source bug,
+    not matting).
+
 ### Changed
-- **v5.2 BiRefNet + CorridorKey (NEW DEFAULT, 2026-09-10 commit pending)**:
+- **v5.2 BiRefNet + CorridorKey (2026-09-10 commit 7d1587a)**:
   Replaces 25-step color-based chroma key (v4.15+ v4.16 position-mask patches) with a
-  two-stage neural net pipeline. The 25 steps of position-mask stitching were treating
+  two-stage neural net pipeline. (Superseded by v5.3 above for magnifying glass fix.)
   symptoms of the same root cause ("color-based green detection can't separate green-screen
   green from green-screen-reflected-into-foreground green"). v5.2 fixes this at the
   source: BiRefNet gives a clean subject mask, CorridorKey does physics-aware unmixing

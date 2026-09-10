@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """
-v5.2 BiRefNet + CorridorKey green screen matting pipeline (2026-09-10).
+v5.3 BiRefNet + CorridorKey green screen matting pipeline (2026-09-10).
+
+Updated from v5.2: added post_green_residual_mask to demote pure green-screen
+color (G>180, R<100, B<100) at alpha=255 → transparent. Fixes H3 magnifying glass
+interior where BiRefNet hint incorrectly included the green as 'subject'.
 
 Two-stage neural net pipeline for high-fidelity green/blue screen keying:
   Stage 1: BiRefNet (subject segmentation, 1024 fp16) -> soft alpha hint
@@ -149,6 +153,31 @@ def corrkey_unmix(engine, img_rgb_u8: np.ndarray, hint_f32: np.ndarray) -> dict:
 # --------------------------------------------------------------------------------------
 
 
+def post_green_residual_mask(rgba: np.ndarray) -> tuple[np.ndarray, int]:
+    """v5.3 (2026-09-10): H3 source video may render the magnifying glass interior as solid
+    green-screen color (e.g. RGB ~40,220,60). BiRefNet hint includes the glass as 'subject',
+    so CorridorKey preserves the green. Detect pure green-screen color (G>180, R<100, B<100)
+    at alpha=255 and demote to transparent.
+
+    This is safe because:
+      - coffee cup (drink-coffee) green is salmon (~254,150,125) — fails strict check
+      - body highlights have R>200 — fails R<100 check
+      - only "actual green screen green" gets demoted
+
+    Returns (rgba, n_demoted).
+    """
+    rgb = rgba[:, :, :3]
+    a = rgba[:, :, 3]
+    # Strict pure green screen color detection
+    pure_green = (a == 255) & (rgb[:, :, 1] > 180) & (rgb[:, :, 0] < 100) & (rgb[:, :, 2] < 100)
+    n = int(pure_green.sum())
+    if n == 0:
+        return rgba, 0
+    out = rgba.copy()
+    out[pure_green, 3] = 0
+    return out, n
+
+
 def post_forehead_white_mask(rgba: np.ndarray, roi=H3_FOREHEAD_ROI) -> tuple[np.ndarray, int]:
     """H3 source video bug: hat reflection paints forehead as pure (255,255,255) in some
     frames. Force those pixels to a warm off-white (240,220,210) that matches the body tone.
@@ -259,6 +288,9 @@ def process_frames(
         rgba = np.dstack([rgb_u8, alpha_u8])
 
         # H3 source-specific post-process
+        # 1) Demote pure green-screen color (H3 magnifier interior is solid green)
+        rgba, n_green = post_green_residual_mask(rgba)
+        # 2) Fix H3 hat reflection on forehead
         rgba, n_forehead = post_forehead_white_mask(rgba)
 
         # Resize to target size
