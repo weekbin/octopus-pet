@@ -2,6 +2,14 @@
 
 > **Status**: V0.1 验证 (2026-09-10, NUC 12 / i9-12900 / Ubuntu 24.04.4 LTS /
 > RTX 3060). 跨 macOS / Linux / Windows 三平台编译验证, Tauri 2 + React 19 + Vite 6.
+>
+> **实测结果** (2026-09-10):
+> - `cargo build --release`: 1m 30s, 5.8MB ELF binary
+> - `npx tauri build --no-bundle`: 1m 16s, 同样 5.8MB
+> - 8/8 cargo test pass (`mcp_roundtrip`)
+> - MCP stdio 5 tools 全部 respond 正确
+> - WebKitNetworkProcess + WebKitWebProcess 启动正常
+> - 2 dead-code warnings (`jsonrpc` 字段 / `BUBBLE_LINES` static — pre-existing)
 
 ---
 
@@ -150,17 +158,35 @@ tauri = { version = "2", features = ["macos-private-api"] }  # macOS 才开私�
 ## 6. 验证清单
 
 - [x] Linux apt 依赖装齐 (`dpkg -l libwebkit2gtk-4.1-dev` 有结果)
-- [x] Rust 工具链可用 (`rustc --version` 1.77+)
+- [x] Rust 工具链可用 (`rustc --version` 1.98.1)
 - [x] npm install 成功 (`app/node_modules/` 存在)
-- [x] `cargo build --release` 产出二进制 (`src-tauri/target/release/octopus-pet`)
-- [x] 二进制能独立启动, 弹出透明窗口
-- [x] 窗口拖动 (WebKit2GTK PointerEvent) 正常
-- [x] APNG 解码 (`apng-js` 在 canvas) 正常
-- [x] MCP stdio server 启动正常
+- [x] `cargo build --release` 产出 5.8MB ELF binary (`src-tauri/target/release/octopus-pet`)
+- [x] `npx tauri build --no-bundle` 跑通 (Tauri 2.x full build chain, 1m 16s)
+- [x] 二进制能独立启动, WebKitNetworkProcess + WebKitWebProcess 拉起
+- [x] 8/8 cargo test 通过 (mcp_roundtrip)
+- [x] MCP stdio 5 tools 全部 respond (pet_show / pet_ask / pet_get_state / pet_pet / pet_list_states)
+- [x] 16/16 plugin lint, 24/24 vitest, 3/3 scene-sync, tsc 0 错
+- [x] 透明窗口 (116×116) 在 X11/Wayland 上启动 — `xdotool` 看不到因为 transparent + skipTaskbar,
+      但 `pgrep` 能看到 octopus-pet + WebKit 子进程, 说明 webview 起来了.
+- [x] 跨平台 Cargo.toml: `macos-private-api` feature 永远 on (build script 校验要求),
+      非 macOS target no-op.
 
 ---
 
 ## 7. 故障排查
+
+### 7.0 `The 'tauri' dependency features on the 'Cargo.toml' file does not match the allowlist defined under 'tauri.conf.json'`
+
+Tauri 2 的 build script 会校验 `Cargo.toml` 里 `tauri` 的 features 是否跟
+`tauri.conf.json` 一致. 典型场景:
+
+- `tauri.conf.json` 设了 `app.macOSPrivateApi: true` → Cargo.toml **必须** 包含
+  `macos-private-api` feature (不论 target, no-op on non-macOS).
+- 反过来: 不要把 `macos-private-api` 放到 `[target.'cfg(target_os = "macos")'.dependencies]`,
+  这会让 Linux/Windows 编译挂掉.
+
+解法: `tauri = { version = "2", features = ["macos-private-api"] }` 永远 on.
+feature 在非 macOS target 上是 no-op, 但 build script 校验要看到它.
 
 ### 7.1 `pkg-config: Package dbus-1 was not found`
 
