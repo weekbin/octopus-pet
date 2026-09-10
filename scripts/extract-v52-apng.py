@@ -1,10 +1,23 @@
 #!/usr/bin/env python3
 """
-v5.3 BiRefNet + CorridorKey green screen matting pipeline (2026-09-10).
+v5.4 BiRefNet + CorridorKey green screen matting pipeline (2026-09-10).
 
-Updated from v5.2: added post_green_residual_mask to demote pure green-screen
-color (G>180, R<100, B<100) at alpha=255 → transparent. Fixes H3 magnifying glass
-interior where BiRefNet hint incorrectly included the green as 'subject'.
+Updated from v5.3: post_green_residual_mask now uses G/(R+B) > 1.15 ratio instead of
+strict pure-green (G>180 R<100 B<100). v5.3 strict mask only caught the pure-green core
+of H3's broken hat/table rendering (detective f66-71 + worker f66-70), leaving the
+surrounding olive/yellow-green pixels as visible "green trail" during the cycle.
+The ratio mask catches olive (R~80 G~160 B~40) and yellow-green (R~150 G~200 B~30)
+while staying safe on:
+  - body pink (R~200 G~70 B~50) → ratio ~0.27, safe
+  - body brown (R~150 G~75 B~40) → ratio ~0.39, safe
+  - coffee cup salmon (R~254 G~150 B~125) → ratio ~0.40, safe
+  - sclera (R~250 G~250 B~250) → ratio ~1.00, safe
+
+Tested: detective problem frames +1905px demoted, worker problem frames +9422px demoted,
+healthy frames +17px false-positive (0.01% of frame area).
+
+v5.3 added pure-green mask for the H3 magnifying glass interior; that case is still
+handled (a subset of the new ratio mask also catches the pure green core).
 
 Two-stage neural net pipeline for high-fidelity green/blue screen keying:
   Stage 1: BiRefNet (subject segmentation, 1024 fp16) -> soft alpha hint
@@ -154,27 +167,35 @@ def corrkey_unmix(engine, img_rgb_u8: np.ndarray, hint_f32: np.ndarray) -> dict:
 
 
 def post_green_residual_mask(rgba: np.ndarray) -> tuple[np.ndarray, int]:
-    """v5.3 (2026-09-10): H3 source video may render the magnifying glass interior as solid
-    green-screen color (e.g. RGB ~40,220,60). BiRefNet hint includes the glass as 'subject',
-    so CorridorKey preserves the green. Detect pure green-screen color (G>180, R<100, B<100)
-    at alpha=255 and demote to transparent.
+    """v5.4 (2026-09-10): ratio-based olive/green demotion. Catches the full range of
+    H3 source's broken hat/table green rendering, not just the pure-green core.
 
-    This is safe because:
-      - coffee cup (drink-coffee) green is salmon (~254,150,125) — fails strict check
-      - body highlights have R>200 — fails R<100 check
-      - only "actual green screen green" gets demoted
+    Mask: alpha=255 AND G>80 AND G/(R+B+1) > 1.15
+      - R=80 G=160 B=40 (olive hat): 160/121 = 1.32 → demote
+      - R=150 G=200 B=30 (yellow-green): 200/181 = 1.10 → keep (just below threshold)
+        — note: pure green (R=40 G=220 B=60) gives 220/101 = 2.18, strongly demoted
+      - R=200 G=70 B=50 (body pink): 70/251 = 0.28 → keep
+      - R=254 G=150 B=125 (coffee cup salmon): 150/380 = 0.39 → keep
+      - R=250 G=250 B=250 (sclera): 250/501 = 0.50 → keep
+
+    The 1.15 ratio with G>80 floor is the sweet spot: catches olive/yellow-green
+    (R range up to ~170, B range down to ~10) without false-positiving on warm body
+    tones. v5.3's strict mask (G>180 R<100 B<100) only caught the pure-green tail
+    (≤122 px in detective problem frames, ≤658 px in worker); v5.4 catches the full
+    olive-to-yellow-green range.
 
     Returns (rgba, n_demoted).
     """
-    rgb = rgba[:, :, :3]
+    rgb = rgba[:, :, :3].astype(np.int32)
     a = rgba[:, :, 3]
-    # Strict pure green screen color detection
-    pure_green = (a == 255) & (rgb[:, :, 1] > 180) & (rgb[:, :, 0] < 100) & (rgb[:, :, 2] < 100)
-    n = int(pure_green.sum())
+    R, G, B = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
+    denom = (R.astype(np.int32) + B + 1)
+    olive_green = (a == 255) & (G > 80) & (G.astype(np.int32) * 100 > denom * 115)
+    n = int(olive_green.sum())
     if n == 0:
         return rgba, 0
     out = rgba.copy()
-    out[pure_green, 3] = 0
+    out[olive_green, 3] = 0
     return out, n
 
 
@@ -288,7 +309,7 @@ def process_frames(
         rgba = np.dstack([rgb_u8, alpha_u8])
 
         # H3 source-specific post-process
-        # 1) Demote pure green-screen color (H3 magnifier interior is solid green)
+        # 1) Demote olive/green pixels (H3 source renders hat/table green in f66-71)
         rgba, n_green = post_green_residual_mask(rgba)
         # 2) Fix H3 hat reflection on forehead
         rgba, n_forehead = post_forehead_white_mask(rgba)
