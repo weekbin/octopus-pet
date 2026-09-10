@@ -71,3 +71,6 @@ __pycache__/
 
 # Deprecated matting pipeline outputs (replaced by current default)
 *.v*-deprecated
+
+# H3 source mp4 临时区 (绿幕去除前, 明天 GPU 机器 v10-final 跑完即删)
+app/public/assets/octopus/_h3-source/
