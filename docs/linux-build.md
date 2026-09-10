@@ -145,7 +145,7 @@ cargo tauri dev
 | 维度 | macOS | Linux (Ubuntu 24.04) | Windows |
 |------|-------|----------------------|---------|
 | 透明窗口 | 需要 `macOSPrivateApi: true` (tauri.conf.json) + `features = ["macos-private-api"]` (Cargo.toml) | webkit2gtk 原生支持, 不需要 | Win32 `WS_EX_LAYERED` |
-| alwaysOnTop | Tauri 2 抽象 | Tauri 2 抽象 (X11/Wayland 行为略不同) | Tauri 2 抽象 |
+| alwaysOnTop | Tauri 2 抽象 (`NSWindow.Level = .floating` 真正置顶所有) | Tauri 2 → `gtk_window_set_keep_above(true)` → Mutter/GNOME 尊重; **非 fullscreen 窗口**置顶 OK, fullscreen app 仍可盖. wlroots 桌面 (Sway/Hyprland) 还需 wlr-layer-shell 才等于 macOS .floating | Tauri 2 抽象 |
 | skipTaskbar | Dock 不显示 | 多数 DE 隐藏图标, 少数不 | 任务栏不显示 |
 | 图标 (Tauri 2) | `.icns` 必须 | `.png` 多尺寸 | `.ico` 多尺寸 |
 | 沙箱 | App 沙箱 | AppArmor / 没有 | UAC |
@@ -187,6 +187,12 @@ tauri = { version = "2", features = ["macos-private-api"] }  # macOS 才开私�
       但 `pgrep` 能看到 octopus-pet + WebKit 子进程, 说明 webview 起来了.
 - [x] 跨平台 Cargo.toml: `macos-private-api` feature 永远 on (build script 校验要求),
       非 macOS target no-op.
+- [x] alwaysOnTop 在 Wayland 验证 (2026-09-10) — `gtk_window_set_keep_above(true)` 调通,
+      pet 窗口在 mcode terminal + Cursor IDE 上面. macOS NSWindow.Level=.floating 等价.
+- [ ] 已知缺口: Wayland x/y 坐标不被完全尊重 — Tauri 2 / GTK 4 在 Wayland 下
+      `tauri.conf.json` 的 `x: 100, y: 100` 不保证绝对屏幕位置, 可能落到 primary
+      monitor 中心附近. 解决: 在 `setup` 钩子里调 `window.set_position()` 显式
+      设置, 或用 `center: true`. macOS 上 x/y 正常.
 
 ---
 
@@ -239,3 +245,21 @@ Wayland 默认透明工作良好. X11 需要 compositor (如 picom). 桌面环�
 
 `tauri.conf.json` windows[0] 有 `x: 100, y: 100` 硬编码, 多显示器 / 高 DPI
 可能位置不对. 改用 `center: true` 或在 `setup` 钩子里动态计算.
+
+**Wayland 专属坑** (实测 2026-09-10): `x: 0, y: 0` 在 3 显示器布局下
+不会放到绝对左上, Tauri 2 / GTK 4 在 Wayland native backend 会落到
+primary monitor (带 `*` 标记) 的中心附近. 原因: Wayland 不允许 app
+自己定位窗口 (compositor 决定), x/y hint 是请求不是命令. 验证方法:
+截图全屏看 pet 实际位置, 不要凭 x/y 推测.
+
+### 7.7 透明窗口在 Wayland 黑底区域 (屏幕边缘 / 屏幕外)
+
+transparent + decorations:false 的 116×116 窗口如果定位到没有任何 monitor
+覆盖的逻辑坐标 (如 0-1440, 0-320 在某些 3 屏布局), 窗口会被创建但
+视觉上"消失" — 透明背景透出屏幕外黑色, 用户看不到章鱼.
+
+解法:
+1. 用 `center: true` 让 Tauri 自动选 primary monitor 中心
+2. 或在 `setup` 钩子里调 `window.set_position(LogicalPosition::new(x, y))` 且
+   先 `monitor_size()` 校验
+3. 或 `--gui` 启动时从 stdin / env var 接受位置参数
