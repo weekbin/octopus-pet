@@ -68,3 +68,6 @@ docs/v2-*/preview.gif
 __pycache__/
 *.pyc
 *.pyo
+
+# Deprecated matting pipeline outputs (replaced by current default)
+*.v*-deprecated
