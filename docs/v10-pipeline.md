@@ -4,6 +4,20 @@
 > 适用: 章鱼桌宠 V2 (detective-study / worker-construction / drink-coffee)
 > 状态: **v10-final 已定稿**, commit `da8484d` → 增量 `0748b02` 部署
 
+## 唯一 default + 1 个 CPU fallback
+
+| 脚本 | 角色 | 何时用 |
+|------|------|--------|
+| `scripts/extract-v10-final.py` | **唯一 default** (BiRefNet+CorridorKey+6 阶段 fixup) | 任何时候 GPU + 网络可用 |
+| `scripts/extract-v4-chromakey-cpu-fallback.py` | CPU-only fallback (PIL+opencv, 25 步 color-mask 演进到 v4.24) | **仅** GPU / 网络 / torch 不可用 |
+
+**删了的** (历史/已被取代, 见 §10 版本历史):
+- ~~`extract-birefnet-apng.py`~~ — v5.1 BiRefNet alone, 放大镜玻璃治不到
+- ~~`extract-v52-apng.py`~~ — v5.2 已被 v10-final 取代
+- ~~`extract-chromakey-apng.py`~~ — 重命名为 `extract-v4-chromakey-cpu-fallback.py` (命名自解释)
+
+> **H3 必须提供什么**: 见 `docs/h3-capabilities.md`. 本文档专注 pipeline 实现细节.
+
 ---
 
 ## 一、完整工作流概览
@@ -118,7 +132,10 @@ V2.1 章鱼标准 3/4 跪坐姿态:
 PYENV_VERSION=3.12.3 python3 scripts/extract-v10-final.py
 ```
 
-(或更细粒度:`scripts/extract-v52-apng.py` 只跑 Stage 1-4, Stage 5-6 单独跑)
+GPU 不可用时:
+```bash
+python3 scripts/extract-v4-chromakey-cpu-fallback.py --input X.mp4 --output Y.png
+```
 
 ### 4.2 Stage 1: BiRefNet (软 alpha hint)
 
@@ -284,7 +301,8 @@ bash scripts/check-scenes-sync.sh         # 校验
 | `prompts/NN-name.md` | 各场景 prompt |
 | `art/octopus-frames/standard-char-1x1.png` | V2.1 标准图 (1920×1920, 绿幕) |
 | `docs/v2-NN-name/v2-NN-name-h3.mp4` | H3 输出 |
-| `scripts/extract-v10-final.py` | **唯一** v10-final 完整 pipeline (Stages 1-6) |
+| `scripts/extract-v10-final.py` | **唯一 default** v10-final 完整 pipeline (Stages 1-6) |
+| `scripts/extract-v4-chromakey-cpu-fallback.py` | CPU-only fallback (无 GPU 时) |
 | `scenes.json` | scene 单一源 (M4 之后) |
 | `app/public/assets/octopus/v2/NN-name.png` | 成品 APNG |
 | `bin/octopus-pet.bin` | 提交进 git 的 release 产物 |

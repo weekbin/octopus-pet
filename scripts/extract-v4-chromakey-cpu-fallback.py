@@ -1,11 +1,20 @@
 #!/usr/bin/env python3
 """
-extract-chromakey-apng.py — H3 / gen_videos 绿幕视频 → 桌宠透明 APNG.
+extract-v4-chromakey-cpu-fallback.py — CPU-only chroma-key fallback.
 
-Designed for octopus-pet V2 pipeline: 14 动作视频统一抽帧 + 绿幕抠像
-+ 透明 APNG 输出, 替换 V1 桌宠 sprite。
+USE THIS ONLY WHEN GPU IS UNAVAILABLE. Default pipeline is
+scripts/extract-v10-final.py (BiRefNet + CorridorKey + 6-stage fixup).
 
-Pipeline (7 步, v4.8):
+This script is the v4.x PIL color-mask lineage (25-step evolution, ending
+at v4.24). It works without GPU/CUDA/PyTorch — just PIL + opencv-python.
+Trade-off vs v10-final:
+  + No GPU needed, runs anywhere Python3 + opencv can run
+  - Source-video "green spill into body" artifacts not fixed (no
+    CorridorKey unmixing)
+  - H3 帽反光 / 放大镜玻璃反射 / 源视频物理光照缺陷 — partial fixes only
+  - 3-5% residual green compared to v10-final (verified on RED bg)
+
+Pipeline (7 步, v4.24):
   1. ffmpeg 抽帧 (mp4 → PNG 序列, 默认 15fps)
   2. PIL resize 到桌宠尺寸 (192×192)
   3. PIL chroma key v4.2: 相对绿度 + 严保护 (深色阴影 + 中绿) → 算 alpha
