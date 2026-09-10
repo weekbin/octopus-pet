@@ -6,6 +6,27 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **Pipeline cleanup (2026-09-10)**: Single source of truth for video production
+  pipeline. Removes 4 deprecated/obsolete extract scripts, 3 overlapping pipeline
+  docs, 1 obsolete assets audit, and 3 historical v2-{N}-*/verification directories.
+  - **Removed scripts** (superseded by `extract-v10-final.py`):
+    - `scripts/extract-birefnet-apng.py` (v5.1 BiRefNet alone, 放大镜玻璃治不到)
+    - `scripts/extract-v52-apng.py` (v5.2 缺 borrow+recolor 治不了 H3 prop 破渲染)
+  - **Renamed**: `scripts/extract-chromakey-apng.py` → `scripts/extract-v4-chromakey-cpu-fallback.py` (命名自解释: v4 末态 + CPU-only + fallback)
+  - **Removed docs** (历史/已废):
+    - `docs/v053-validation/` (v0.5-3 验证产物, 96.65% 相似度已记 CHANGELOG)
+    - `docs/refactor-plan-2026-08-18.md` (已完成, 决策已写 AGENTS.md)
+    - `docs/v2-01-detective-study/` + `docs/v2-02-worker-construction/` + `docs/v2-03-drink-coffee/` (H3 中间产物, 部署的 APNG 已替换)
+    - `docs/v2-pipeline.md` + `docs/v2-h3-to-pet-workflow.md` (内容并入 v10-pipeline.md)
+    - `docs/breath-pipeline.md` (V1 旧 idle 动画流程, V2.1 standard-char 已稳定)
+  - **New docs**:
+    - `docs/pipeline.md` (8.3KB) — 总入口, default + fallback + 完整演进史 (v1 → v10-final, 25+ 步) + 决策树
+    - `docs/h3-capabilities.md` (11.7KB) — H3 必须提供什么 (双图模式, 16 项通用前缀, 视频规格, 14 动作清单, 6 已知 H3 行为问题 + 治本方案)
+  - **Updated docs**:
+    - `docs/v10-pipeline.md` 顶部加 "v10-final 是唯一 default + v4 fallback" 表 + 修 §4.1 引用 (删了 v52, 加 v4 fallback 命令)
+    - `AGENTS.md` 精简 chroma key 演进段 (321 → 239 行, 删 82 行详细根因, 替换为 10 行精简指针指向 docs/pipeline.md) + 修默认脚本矛盾 (v52 → v10-final) + 修换桌宠 idle 素材指引 (breath-pipeline → v10-pipeline + standard-char)
+
 ### Fixed
 - **v5.3 BiRefNet + CorridorKey + green residual mask (2026-09-10 commit pending)**:
   Adds `post_green_residual_mask` to demote alpha=255 pixels with pure green-screen
