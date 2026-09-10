@@ -111,15 +111,32 @@ cargo tauri dev
 # 启动 vite dev server (http://127.0.0.1:1420) + cargo watch 增量编译 + 弹窗
 ```
 
-### 4.3 独立运行
+### 4.3 独立运行 (mcode plugin 模式)
 
 ```bash
-# Release 二进制
-./src-tauri/target/release/octopus-pet
+# 默认 = MCP stdio server (无 Tauri 窗口, 最轻量)
+./bin/octopus-pet
+# 等价于: ./bin/octopus-pet --mcp-stdio
 
-# 头部测试 (只跑 MCP stdio server, 不开窗)
-./src-tauri/target/release/octopus-pet --mcp-stdio
+# 显式开 Tauri 窗口 (116×116 透明, 桌面宠物可见)
+./bin/octopus-pet --gui
+
+# 头部测试 (无 wrapper, 直接跑 inner binary)
+./src-tauri/target/release/octopus-pet
 ```
+
+**Plugin 入口设计** (mcode 用):
+- `mcp.json` 指定 `command: ./bin/octopus-pet, args: []` (mcode 拉起时, stdio 自动 pipe)
+- `bin/octopus-pet` 是 bash wrapper (~2.6KB), 检测 OS, exec `bin/octopus-pet.${KERNEL}.bin`
+  (macos / linux / windows 各自的 release artifact, 提交进 git, **fresh clone 即可用**)
+- Wrapper 也找 `target/{debug,release}/octopus-pet` (本地 dev 优先)
+- mcode 用户无需自己 build, 只需把 plugin 目录加进 mcode 即可
+
+**为什么 default 是 MCP stdio 不是 GUI**:
+- mcode plugin 的本质是 MCP stdio server, GUI 窗口是 secondary
+- mcode 拉起时 stdin 是 pipe, 不是 TTY, 不适合开 GUI
+- 用户想要桌面宠物显形: `./bin/octopus-pet --gui` 显式
+- 单职责: 没有 arg → 干一件事 (MCP server); 显式 arg → 干另一件事 (GUI)
 
 ---
 

@@ -3,14 +3,19 @@
 #
 # mcode / other MCP-capable clients invoke this script as:
 #   command = "./bin/octopus-pet"
-#   args    = ["--mcp-stdio"]
+#   args    = []                       # default = MCP stdio server
+#   args    = ["--gui"]                # Tauri window + MCP stdio
 #
-# Binary resolution order:
-#   1. ${PLUGIN_ROOT}/src-tauri/target/debug/octopus-pet    (local dev build)
-#   2. ${PLUGIN_ROOT}/src-tauri/target/release/octopus-pet  (local release build)
-#   3. ${PLUGIN_ROOT}/bin/octopus-pet.bin                   (committed release
-#      artifact, ~14MB — so a fresh `git clone` works as a plugin with zero
-#      local build. Produce/refresh it via: scripts/release-plugin.sh)
+# Binary resolution order (first match wins):
+#   1. ${PLUGIN_ROOT}/src-tauri/target/debug/octopus-pet      (local dev build)
+#   2. ${PLUGIN_ROOT}/src-tauri/target/release/octopus-pet    (local release build)
+#   3. ${SCRIPT_DIR}/octopus-pet.${KERNEL}.bin                (committed release
+#      artifact for the current OS — macos / linux / windows. So a fresh
+#      `git clone` works as a plugin with zero local build, on any platform.)
+#   4. ${SCRIPT_DIR}/octopus-pet.bin                         (legacy macOS-only fallback)
+#
+# Produce / refresh the platform artifact via:
+#   scripts/release-plugin.sh           (auto-detects host kernel)
 #
 # The chosen binary replaces this shell via exec, so stdio and signals
 # flow through cleanly (JSON-RPC 2.0 over stdin/stdout per MCP 2024-11-05).
@@ -22,10 +27,19 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="${PLUGIN_ROOT:-$SCRIPT_DIR/..}"
 PLUGIN_ROOT="$(cd "$PLUGIN_ROOT" && pwd)"
 
+# Detect host kernel for the platform-specific release artifact.
+case "$(uname -s)" in
+  Darwin)  KERNEL="macos" ;;
+  Linux)   KERNEL="linux" ;;
+  MINGW*|MSYS*|CYGWIN*) KERNEL="windows" ;;
+  *)       KERNEL="$(uname -s | tr '[:upper:]' '[:lower:]')" ;;
+esac
+
 INNER_BIN=""
 for candidate in \
   "${PLUGIN_ROOT}/src-tauri/target/debug/octopus-pet" \
   "${PLUGIN_ROOT}/src-tauri/target/release/octopus-pet" \
+  "${SCRIPT_DIR}/octopus-pet.${KERNEL}.bin" \
   "${SCRIPT_DIR}/octopus-pet.bin"; do
   if [ -x "$candidate" ]; then
     INNER_BIN="$candidate"
@@ -34,12 +48,13 @@ for candidate in \
 done
 
 if [ -z "$INNER_BIN" ]; then
-  echo "ERROR: octopus-pet inner binary not found." >&2
+  echo "ERROR: octopus-pet inner binary not found for ${KERNEL}." >&2
   echo "Looked in:" >&2
   echo "  ${PLUGIN_ROOT}/src-tauri/target/{debug,release}/octopus-pet" >&2
-  echo "  ${SCRIPT_DIR}/octopus-pet.bin" >&2
+  echo "  ${SCRIPT_DIR}/octopus-pet.${KERNEL}.bin" >&2
+  echo "  ${SCRIPT_DIR}/octopus-pet.bin  (legacy macOS-only fallback)" >&2
   echo "Build with: (cd ${PLUGIN_ROOT}/src-tauri && cargo build)" >&2
-  echo "      or:   bash ${PLUGIN_ROOT}/scripts/release-plugin.sh  (produces bin/octopus-pet.bin)" >&2
+  echo "      or:   bash ${PLUGIN_ROOT}/scripts/release-plugin.sh  (produces platform-specific bin)" >&2
   exit 127
 fi
 

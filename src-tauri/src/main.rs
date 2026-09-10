@@ -3,14 +3,25 @@
 // React frontend served via Vite.
 //
 // CLI:
-//   octopus-pet                    → Tauri GUI window + MCP stdio server
-//   octopus-pet --mcp-stdio        → MCP stdio server only (no window, for headless / test)
+//   octopus-pet                  → MCP stdio server (default; for mcode plugin)
+//   octopus-pet --mcp-stdio      → MCP stdio server (alias of default)
+//   octopus-pet --gui            → Tauri GUI window + MCP stdio server (interactive)
+//   octopus-pet --mcp-stdio --http-fallback
+//                                → MCP stdio + HTTP fallback server (per AGENTS.md §1.6)
+//
+// mcode plugin launches this binary per `mcp.json` with stdio piped. The default
+// mode is the simplest "just run an MCP server" path, with no Tauri window
+// initialized. Interactive users wanting the desktop pet window add `--gui`.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    if args.iter().any(|a| a == "--mcp-stdio") {
+    let want_gui = args.iter().any(|a| a == "--gui" || a == "--window");
+    let want_mcp = args.iter().any(|a| a == "--mcp-stdio")
+        || !want_gui;  // default to MCP when neither --gui nor --mcp-stdio is passed
+
+    if want_mcp && !want_gui {
         use tracing_subscriber::EnvFilter;
         let filter = EnvFilter::try_from_default_env()
             .unwrap_or_else(|_| EnvFilter::new("info"));
