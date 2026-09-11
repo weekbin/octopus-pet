@@ -28,10 +28,20 @@ os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
 
 ROOT = "/home/weekbin/Works/repositories/octopus-pet"
 H3_VIDEOS = {
-    "detective-study": f"{ROOT}/docs/v2-01-detective-study/v2-01-detective-study-h3.mp4",
+    "detective-study":     f"{ROOT}/docs/v2-01-detective-study/v2-01-detective-study-h3.mp4",
     "worker-construction": f"{ROOT}/docs/v2-02-worker-construction/v2-02-worker-construction-h3.mp4",
-    "drink-coffee": f"{ROOT}/docs/v2-03-drink-coffee/v2-03-drink-coffee-h3.mp4",
+    "drink-coffee":        f"{ROOT}/docs/v2-03-drink-coffee/v2-03-drink-coffee-h3.mp4",
+    # 5 new scenes — 2026-09-10 H3 batch
+    "breakdown":           f"{ROOT}/docs/h3-source-2026-09-10/breakdown-h3.mp4",
+    "friday-5pm":          f"{ROOT}/docs/h3-source-2026-09-10/friday-5pm-h3.mp4",
+    "pretend-busy":        f"{ROOT}/docs/h3-source-2026-09-10/pretend-busy-h3.mp4",
+    "stay-late":           f"{ROOT}/docs/h3-source-2026-09-10/stay-late-h3.mp4",
+    "treat-milk-tea":      f"{ROOT}/docs/h3-source-2026-09-10/treat-milk-tea-h3.mp4",
 }
+# Default output goes into the v2 APNG folder the app actually loads
+OUTPUT_DIR = f"{ROOT}/app/public/assets/octopus/v2"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+# Also keep an archive copy for diff/rollback
 ARCHIVE = "/tmp/v10-final-archive"
 os.makedirs(ARCHIVE, exist_ok=True)
 
@@ -239,7 +249,10 @@ def main():
     corrkey = load_corridorkey(DEVICE)
     print("[v10-final] models loaded")
 
-    for scene in ["detective-study", "worker-construction", "drink-coffee"]:
+    for scene in [
+        "detective-study", "worker-construction", "drink-coffee",
+        "breakdown", "friday-5pm", "pretend-busy", "stay-late", "treat-milk-tea",
+    ]:
         print(f"\n=== {scene} ===")
         video = H3_VIDEOS[scene]
         paths = extract_video_frames(video, fps=15, count=99, size=192)
@@ -295,9 +308,11 @@ def main():
         elif scene == "worker-construction":
             out_frames = apply_roi_worker(out_frames, range(64, 73))
 
-        # Save
-        out_path = f"{ARCHIVE}/v10-final-{scene}.png"
+        # Save (primary → v2 APNG folder app loads from; archive copy for diff/rollback)
+        out_path = f"{OUTPUT_DIR}/{scene}.png"
         save_apng(out_frames, out_path)
+        archive_path = f"{ARCHIVE}/v10-final-{scene}.png"
+        save_apng(out_frames, archive_path)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 {
   "$schema": "./scenes.schema.json",
-  "_comment": "V2.1 scene 元数据单一源. 改完跑 `bash scripts/build-scene-registry.sh` 生成 TS + Rust, CI 强制. 加新场景: 1) 跑 H3 / gen_videos 2) extract-chromakey-apng.py 转 APNG 3) 放 app/public/assets/octopus/v2/<id>.png 4) 加这条 entry 5) 跑 build-scene-registry.sh 6) 跑 check-scenes-sync.sh. 详见 AGENTS.md V2.1 章节.",
+  "_comment": "V2.1 scene 元数据单一源. 改完跑 `bash scripts/build-scene-registry.sh` 生成 TS + Rust, CI 强制. 加新场景: 1) 跑 H3 / gen_videos 2) extract-v10-final.py 转 APNG 3) 放 app/public/assets/octopus/v2/<id>.png 4) 加这条 entry 5) 跑 build-scene-registry.sh 6) 跑 check-scenes-sync.sh. 详见 AGENTS.md V2.1 章节.",
   "scenes": [
     {
       "id": "detective-study",
@@ -16,6 +16,31 @@
       "id": "drink-coffee",
       "source": "H3 喝咖啡 (h3-dual-image-video-gen skill)",
       "bubbleLines": ["喝咖啡", "好香啊", "续杯吗", "今日份咖啡", "早八续命", "摸鱼时间", "让我清醒一下"]
+    },
+    {
+      "id": "breakdown",
+      "source": "H3 抱头沮丧 (h3-dual-image-video-gen skill)",
+      "bubbleLines": ["抱头", "撑不住", "我裂了", "不行了", "想下班", "累死了", "救救我"]
+    },
+    {
+      "id": "friday-5pm",
+      "source": "H3 周五下班 (h3-dual-image-video-gen skill)",
+      "bubbleLines": ["跑了", "起飞", "下班咯", "冲鸭", "周末啦", "自由了", "收工"]
+    },
+    {
+      "id": "pretend-busy",
+      "source": "H3 假装很忙 (h3-dual-image-video-gen skill)",
+      "bubbleLines": ["忙死了", "别烦", "敲键盘", "好累", "加班中", "努力搬砖", "假装"]
+    },
+    {
+      "id": "stay-late",
+      "source": "H3 加班叹气 (h3-dual-image-video-gen skill)",
+      "bubbleLines": ["叹气", "好累", "加班中", "想家", "撑住", "摸鱼", "躺平"]
+    },
+    {
+      "id": "treat-milk-tea",
+      "source": "H3 请奶茶 (h3-dual-image-video-gen skill)",
+      "bubbleLines": ["喝奶茶", "好喝", "续杯", "奶茶", "吨吨吨", "加糖", "放松"]
     }
   ]
 }

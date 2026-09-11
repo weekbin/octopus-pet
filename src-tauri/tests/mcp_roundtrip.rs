@@ -179,8 +179,14 @@ fn list_states_returns_2_v2_scenes() {
         .expect("list returns text");
     let arr: serde_json::Value = serde_json::from_str(text).expect("list is JSON array");
     let arr = arr.as_array().expect("must be array");
-    assert_eq!(arr.len(), 3, "V2.1: exactly 3 V2 scenes (default)");
-    assert!(arr.contains(&serde_json::Value::String("detective-study".into())));
-    assert!(arr.contains(&serde_json::Value::String("worker-construction".into())));
-    assert!(arr.contains(&serde_json::Value::String("drink-coffee".into())));
+    assert_eq!(arr.len(), 8, "V2.1: 8 V2 scenes (3 original + 5 new 2026-09-10 batch)");
+    for scene in [
+        "detective-study", "worker-construction", "drink-coffee",
+        "breakdown", "friday-5pm", "pretend-busy", "stay-late", "treat-milk-tea",
+    ] {
+        assert!(
+            arr.contains(&serde_json::Value::String(scene.into())),
+            "missing scene {scene}"
+        );
+    }
 }
