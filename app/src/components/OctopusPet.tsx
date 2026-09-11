@@ -37,7 +37,7 @@ function detectMacOS(): boolean {
 export function OctopusPet() {
   const [state, send, actor] = useMachine(octopusMachine);
   const dragRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animRef = useRef<HTMLDivElement>(null);
   const [isMac, setIsMac] = useState(false);
 
   useEffect(() => {
@@ -61,7 +61,7 @@ export function OctopusPet() {
   const onCycleEnd = useCallback(() => {
     send({ type: "SCENE_LOOPED" } as OctopusEvent);
   }, [send]);
-  useAnimation(canvasRef, currentScene, onCycleEnd);
+  useAnimation(animRef, currentScene, onCycleEnd);
 
   // Bubble 3s 计时: 单独 setTimeout, 不用全局 timer.
   useEffect(() => {
@@ -92,10 +92,13 @@ export function OctopusPet() {
         send({ type: "PET", now: Date.now() } as OctopusEvent);
       }}
     >
-      <canvas
-        ref={canvasRef}
-        width={currentScene.animation.type === "apng" ? 192 : 1280}
-        height={currentScene.animation.type === "apng" ? 192 : 720}
+      {/* Animation container. V1.5+ provider 内部 appendChild <img>/<canvas>/...,
+          scene 切时 useEffect 清空. 不用 <canvas> 是为了绕开 Tauri macOS WKWebView
+          canvas 0 像素 bug (2026-09-11). */}
+      <div
+        ref={animRef}
+        data-scene={state.context.scene}
+        data-anim-type={currentScene.animation.type}
         style={{
           position: "absolute",
           top: 0,
@@ -103,9 +106,7 @@ export function OctopusPet() {
           width: WINDOW_SIZE,
           height: WINDOW_SIZE,
           pointerEvents: "none",
-          imageRendering: "auto",
         }}
-        data-scene={state.context.scene}
       />
       {state.context.bubble && (
         <Bubble text={state.context.bubble} />

@@ -1,15 +1,15 @@
-// useAnimation — 通用动画 hook. 取代 useApngPlayer.
-// 接收 scene 描述 (含 animation 字段) + canvas ref, 查 animationRegistry
-// 拿 provider, 工厂方法构造 Animation 实例, 绑到 canvas context 上播放.
-// 监听 onCycleEnd → 调用方收到回调 (OctopusPet 把它转成 SCENE_LOOPED).
+// useAnimation — 通用动画 hook. 取代 useApngPlayer (V1 era) / useApngPlayer V2.1.
 //
-// ⚠️ 重要: 接 RefObject 而不是 ref.current. 原因是:
-//   - 如果接 `canvasRef.current`, 在 render 阶段 canvasRef.current 是 null
-//     (DOM 还没 commit), useEffect 早退, 永不再重跑
-//   - 接 ref 对象本身, 在 useEffect 体内读 ref.current, 此时 commit 已完成,
-//     canvas 已挂上, effect 正常运行
-//   - 这是 M5 refactor 引入的 bug, 之前 useApngPlayer 一样有问题, 但 V1.5 用
-//     `<img>` 渲染绕过, V2.1 后改 canvas 暴露出来
+// V1.5+ (2026-09-11) 跨平台兼容方案:
+//   - V1.5 era: 用 <img> 渲染, 浏览器原生循环. scene 切 = 改 src. 跨平台 work.
+//   - V2.1 (2026-08-27): 改 apng-js + canvas + RAF. 治 P1-P4 long-term bug.
+//     但 macOS WKWebView 浮窗 canvas 0 像素, 章鱼不可见.
+//   - V1.5+ 现在: 退回到 <img> 渲染 (跨平台兼容), onCycleEnd 用 setTimeout
+//     模拟 (替代 apng-js 'end' 事件). 接受 P1 调度精度回退, 换 P0 macOS 可见性.
+//
+// 接收 containerRef (HTMLDivElement) 替代 canvasRef (HTMLCanvasElement).
+// Provider 内部决定用 <img>/<canvas>/<video>/<svg>, 调用方不感知.
+// scene 切时清空 container, 防止旧 element 残留.
 
 import { useEffect, type RefObject } from "react";
 import { animationRegistry } from "../animation/registry";
@@ -22,44 +22,36 @@ export interface AnimationScene {
 }
 
 export function useAnimation(
-  canvasRef: RefObject<HTMLCanvasElement | null>,
+  containerRef: RefObject<HTMLDivElement | null>,
   scene: AnimationScene,
   onCycleEnd: () => void,
 ): void {
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) {
-      // canvas 还没挂上, 不应该发生 (ref 在 commit 后才用)
+    const target = containerRef.current;
+    if (!target) {
       console.error(
-        `[webview-diag] useAnimation: canvasRef.current is null on mount for scene=${scene.id}`,
+        `[useAnimation] containerRef.current is null on mount for scene=${scene.id}`,
       );
       return;
     }
-    const ctx = canvas.getContext("2d");
-    if (!ctx) {
-      console.error(
-        `[webview-diag] useAnimation: getContext('2d') returned null for scene=${scene.id}`,
-      );
-      return;
-    }
-    console.log(
-      `[webview-diag] useAnimation: scene=${scene.id} type=${scene.animation.type} source=${scene.animation.source} canvas=${canvas.width}x${canvas.height} ctx=${ctx ? "ok" : "null"}`,
-    );
 
     const provider = animationRegistry.get(scene.animation.type);
     if (!provider) {
       console.error(
-        `[webview-diag] useAnimation: no provider for type="${scene.animation.type}" (scene=${scene.id}). Available: ${animationRegistry.list().join(", ") || "(none)"}`,
+        `[useAnimation] no provider for type="${scene.animation.type}" (scene=${scene.id}). Available: ${animationRegistry.list().join(", ") || "(none)"}`,
       );
       return;
     }
+
+    // scene 切时清空 container 旧 element (防止上一个 scene 残留).
+    target.replaceChildren();
 
     let cancelled = false;
     let anim: Animation | null = null;
     let unsubCycle: (() => void) | null = null;
 
     provider
-      .create(ctx, scene.animation.source)
+      .create(target, scene.animation.source)
       .then((a) => {
         if (cancelled) {
           a.stop();
@@ -68,24 +60,10 @@ export function useAnimation(
         anim = a;
         a.start();
         unsubCycle = a.onCycleEnd(onCycleEnd);
-        console.log(
-          `[webview-diag] useAnimation: provider.create ok scene=${scene.id} cycleMs=${a.cycleMs} native=${a.nativeWidth}x${a.nativeHeight}`,
-        );
-        // 2026-09-11 二次诊断: 3 帧后检查 canvas 实际像素 (空 vs 有内容).
-        setTimeout(() => {
-          try {
-            const dataURL = canvas.toDataURL("image/png");
-            console.log(
-              `[webview-diag] canvas dataURL.length=${dataURL.length} prefix=${dataURL.slice(0, 50)} scene=${scene.id}`,
-            );
-          } catch (e) {
-            console.error(`[webview-diag] canvas toDataURL failed:`, e);
-          }
-        }, 500);
       })
       .catch((err) => {
         console.error(
-          `[webview-diag] useAnimation: provider.create failed scene=${scene.id}`,
+          `[useAnimation] provider.create failed scene=${scene.id} type=${scene.animation.type}`,
           err,
         );
       });
@@ -94,8 +72,12 @@ export function useAnimation(
       cancelled = true;
       if (unsubCycle) unsubCycle();
       if (anim) anim.stop();
+      // 保险: 卸载时也清空 container, 避免下一个 effect 启动前残留.
+      try {
+        target.replaceChildren();
+      } catch {
+        // ignore
+      }
     };
-    // scene 和 onCycleEnd 变化时重启 animation. canvasRef 对象稳定 (React 保证),
-    // 不需要在 deps 里. canvas 实际 DOM 元素在 React 生命周期内不会换.
   }, [scene, onCycleEnd]);
 }
