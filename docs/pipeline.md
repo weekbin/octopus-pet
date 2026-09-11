@@ -6,6 +6,7 @@
 > **详细实现**: `docs/v10-pipeline.md` (6 阶段 pipeline 完整)
 > **H3 必须提供什么**: `docs/h3-capabilities.md`
 > **prompt 方法论**: `docs/action-prompt-methodology.md`
+> **下游渲染管线**: `docs/v15plus-render-pipeline.md` (V1.5+ `<img>` 跨平台兼容, commit `120b993`)
 
 ---
 
