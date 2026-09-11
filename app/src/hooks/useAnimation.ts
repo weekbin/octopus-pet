@@ -31,17 +31,25 @@ export function useAnimation(
     if (!canvas) {
       // canvas 还没挂上, 不应该发生 (ref 在 commit 后才用)
       console.error(
-        `useAnimation: canvasRef.current is null on mount for scene=${scene.id}`,
+        `[webview-diag] useAnimation: canvasRef.current is null on mount for scene=${scene.id}`,
       );
       return;
     }
     const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    if (!ctx) {
+      console.error(
+        `[webview-diag] useAnimation: getContext('2d') returned null for scene=${scene.id}`,
+      );
+      return;
+    }
+    console.log(
+      `[webview-diag] useAnimation: scene=${scene.id} type=${scene.animation.type} source=${scene.animation.source} canvas=${canvas.width}x${canvas.height} ctx=${ctx ? "ok" : "null"}`,
+    );
 
     const provider = animationRegistry.get(scene.animation.type);
     if (!provider) {
       console.error(
-        `useAnimation: no provider registered for type="${scene.animation.type}" (scene=${scene.id}). Available: ${animationRegistry.list().join(", ") || "(none)"}`,
+        `[webview-diag] useAnimation: no provider for type="${scene.animation.type}" (scene=${scene.id}). Available: ${animationRegistry.list().join(", ") || "(none)"}`,
       );
       return;
     }
@@ -60,9 +68,15 @@ export function useAnimation(
         anim = a;
         a.start();
         unsubCycle = a.onCycleEnd(onCycleEnd);
+        console.log(
+          `[webview-diag] useAnimation: provider.create ok scene=${scene.id} cycleMs=${a.cycleMs} native=${a.nativeWidth}x${a.nativeHeight}`,
+        );
       })
       .catch((err) => {
-        console.error(`useAnimation: failed to create animation for scene=${scene.id}`, err);
+        console.error(
+          `[webview-diag] useAnimation: provider.create failed scene=${scene.id}`,
+          err,
+        );
       });
 
     return () => {

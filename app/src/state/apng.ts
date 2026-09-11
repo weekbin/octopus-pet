@@ -23,14 +23,28 @@ const parseAPNG: ParseAPNG =
  * @throws if fetch fails, response is not OK, or apng-js returns an Error instance.
  */
 export async function loadApng(url: string): Promise<APNG> {
+  // 2026-09-11 诊断 (B/D canvas 未绘制): 详细 log
+  console.log(`[webview-diag] loadApng: fetch start url=${url}`);
   const res = await fetch(url);
+  console.log(
+    `[webview-diag] loadApng: fetch done url=${url} status=${res.status} ok=${res.ok} contentType=${res.headers.get("content-type")} size=${res.headers.get("content-length")}`,
+  );
   if (!res.ok) {
     throw new Error(`loadApng: HTTP ${res.status} fetching ${url}`);
   }
   const buf = await res.arrayBuffer();
+  console.log(
+    `[webview-diag] loadApng: got ArrayBuffer url=${url} bytes=${buf.byteLength}`,
+  );
   const apng = parseAPNG(buf);
   if (apng instanceof Error) {
+    console.error(
+      `[webview-diag] loadApng: parseAPNG returned Error url=${url} message=${apng.message}`,
+    );
     throw new Error(`loadApng: parse failed for ${url}: ${apng.message}`);
   }
+  console.log(
+    `[webview-diag] loadApng: parse ok url=${url} width=${apng.width} height=${apng.height} frames=${(apng as { frames?: unknown[] }).frames?.length ?? "?"} playTime=${apng.playTime}`,
+  );
   return apng;
 }

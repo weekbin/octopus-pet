@@ -5,7 +5,7 @@
 // (webview / MCP / HTTP) see the same picture.
 
 use std::sync::{Arc, Mutex};
-use tauri::Manager;
+use tauri::{Listener, Manager};
 
 mod actions;
 mod http_fallback;
@@ -130,11 +130,24 @@ pub fn run() {
 
             // Spawn the MCP stdio server. Pass shared state for cross-component consistency.
             let mcp_state = shared.clone();
+            let mcp_handle = app_handle.clone();
             tauri::async_runtime::spawn(async move {
-                if let Err(e) = mcp_stdio::serve(Some(app_handle), mcp_state).await {
+                if let Err(e) = mcp_stdio::serve(Some(mcp_handle), mcp_state).await {
                     tracing::error!("MCP stdio server exited with error: {:?}", e);
                 }
             });
+
+            // 2026-09-11 诊断: webview console → Rust tracing 桥. 监听
+            // 'webview-log' 事件 (webview 端 emit), 把 webview console.log/error
+            // 转发到 Rust tracing, 写到 gui.log. 诊断 macOS B/D canvas 未绘制.
+            // 上游: app/src/main.tsx hook console.* → emit("webview-log", ...)
+            //       app/src/state/apng.ts fetch + parse 阶段
+            //       app/src/hooks/useAnimation.ts provider.create 阶段
+            let log_handle = app_handle.clone();
+            log_handle.listen("webview-log", move |event| {
+                tracing::info!("[webview] {}", event.payload());
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
