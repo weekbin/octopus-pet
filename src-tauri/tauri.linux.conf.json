@@ -1,0 +1,6 @@
+{
+  "build": {
+    "beforeDevCommand": "bash ../scripts/run-vite.sh dev",
+    "beforeBuildCommand": "bash ../scripts/run-vite.sh build"
+  }
+}
