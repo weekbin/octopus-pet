@@ -238,8 +238,12 @@ def extract_video_frames(video_path, fps=15, count=99, size=192):
 
 def save_apng(frames, out_path):
     pil_frames = [Image.fromarray(f, mode="RGBA") for f in frames]
+    # loop=1 (numPlays=1) so apng-js Player emits 'end' after one full cycle.
+    # With loop=0 (infinite), apng-js never fires 'end' (see app/node_modules/apng-js/lib/index.js:555)
+    # and the V2.1 event-driven scene rotation never happens.
+    # Cycle is at the scene level (FSM rotateScene on SCENE_LOOPED), not at the APNG level.
     pil_frames[0].save(out_path, format="PNG", save_all=True, append_images=pil_frames[1:],
-                       duration=66, loop=0, disposal=2)
+                       duration=66, loop=1, disposal=2)
     print(f"  saved {out_path}  {os.path.getsize(out_path)/1024:.0f} KB")
 
 
