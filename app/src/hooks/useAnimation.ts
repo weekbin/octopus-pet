@@ -71,6 +71,17 @@ export function useAnimation(
         console.log(
           `[webview-diag] useAnimation: provider.create ok scene=${scene.id} cycleMs=${a.cycleMs} native=${a.nativeWidth}x${a.nativeHeight}`,
         );
+        // 2026-09-11 二次诊断: 3 帧后检查 canvas 实际像素 (空 vs 有内容).
+        setTimeout(() => {
+          try {
+            const dataURL = canvas.toDataURL("image/png");
+            console.log(
+              `[webview-diag] canvas dataURL.length=${dataURL.length} prefix=${dataURL.slice(0, 50)} scene=${scene.id}`,
+            );
+          } catch (e) {
+            console.error(`[webview-diag] canvas toDataURL failed:`, e);
+          }
+        }, 500);
       })
       .catch((err) => {
         console.error(

@@ -84,7 +84,7 @@ export function OctopusPet() {
         userSelect: "none",
         WebkitUserSelect: "none",
         overflow: "hidden",
-        background: "#ff8298",
+        background: "transparent",
       }}
       onClick={() => send({ type: "CLICK", now: Date.now() } as OctopusEvent)}
       onContextMenu={(e) => {
