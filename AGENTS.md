@@ -13,14 +13,14 @@ Antigravity / Gemini CLI).
 
 | 项 | 值 |
 |---|---|
-| 状态 | **V2.3 (2026-09-11) v10-final 抠图 + 8 V2 场景 (3 原有 + 5 新: breakdown / friday-5pm / pretend-busy / stay-late / treat-milk-tea)**, Ubuntu release 33MB |
-| 栈 | Tauri 2 · React 19 · Vite 6 · XState 5 · apng-js 1.1.5 · Rust 1.77+ |
-| 窗口 | 116×116 透明, V2 APNG 192×192 在 `<canvas>` 内部 (CSS 缩放到 116×116) |
-| **8 V2 场景 (V2.1 默认)** | detective-study (H3 戴帽研究) · worker-construction (H3 工人施工) · drink-coffee (H3 喝咖啡) · **breakdown** (H3 抱头沮丧) · **friday-5pm** (H3 周五下班) · **pretend-busy** (H3 假装很忙) · **stay-late** (H3 加班叹气) · **treat-milk-tea** (H3 请奶茶) (2026-09-11 5 新) |
+| 状态 | **V2.3 (2026-09-11) v10-final 抠图 + 8 V2 场景 (3 原有 + 5 新: breakdown / friday-5pm / pretend-busy / stay-late / treat-milk-tea)**, **V1.5+ (2026-09-11) `<img>` 跨平台兼容渲染**, Ubuntu release 33MB |
+| 栈 | Tauri 2 · React 19 · Vite 6 · XState 5 · Rust 1.77+ |
+| 窗口 | 116×116 透明, V2 APNG 192×192 在 `<img>` 内部 (CSS 缩放到 116×116, 浏览器原生 APNG 循环) |
+| **8 V2 场景 (V1.5+ 默认)** | detective-study (H3 戴帽研究) · worker-construction (H3 工人施工) · drink-coffee (H3 喝咖啡) · **breakdown** (H3 抱头沮丧) · **friday-5pm** (H3 周五下班) · **pretend-busy** (H3 假装很忙) · **stay-late** (H3 加班叹气) · **treat-milk-tea** (H3 请奶茶) (2026-09-11 5 新) |
 | 6 MCP tools | pet_show · pet_ask · pet_get_state · pet_set_state · pet_pet · pet_list_states |
 | **8 V2 APNG** | **99 帧/张 × 66ms ≈ 6.5s 循环 (15fps)**, RGBA, 192×192, ~3.2-3.4MB 各, 走 **v10-final 6 阶段 pipeline** (BiRefNet 1024 fp16 alpha hint → CorridorKey GreenFormer 2048 内部 tiled fp16 linear alpha + straight FG + v10.3 strict gate + forehead_white_mask H3 源 ROI 缝补 + borrow+recolor+inpaint 道具治本 + ROI demote 放大镜/桌子) |
 | 14 V1 spritesheet (废弃) | 移到 `app/public/assets/octopus/_archive-v1-spritesheets/` 不再用 |
-| **scene 调度** | **事件驱动** (apng-js `end` 事件 → `SCENE_LOOPED` → FSM `rotateScene`), 0 累积延迟, 严格对齐 frame 0 |
+| **scene 调度** | **事件驱动** (`setTimeout(APNG_CYCLE_MS=6500)` 模拟 → `SCENE_LOOPED` → FSM `rotateScene`), 紧跟 APNG 末尾, 0 漂移 (新 setTimeout 替代累积 setInterval) |
 | Spec 依据 | [agent-plugins.org v1.0.0](https://agent-plugins.org/specification) + [MCP 2024-11-05](https://modelcontextprotocol.io/specification/2024-11-05) + [agentskills.io](https://agentskills.io/specification) |
 | HTTP fallback | `:9527` (V1 demo 用) |
 
@@ -39,7 +39,7 @@ Antigravity / Gemini CLI).
 | React 前端 | `app/src/` (components · state · hooks · data · styles) |
 | Rust 后端 | `src-tauri/src/` (lib · main · actions · mcp_stdio · state_bridge · http_fallback) |
 | 14 spritesheet (V1 废弃) | `app/public/assets/octopus/_archive-v1-spritesheets/spritesheet-*.webp` |
-| **8 V2 APNG (V2.1 默认)** | `app/public/assets/octopus/v2/{detective-study,worker-construction,drink-coffee,breakdown,friday-5pm,pretend-busy,stay-late,treat-milk-tea}.png` |
+| **8 V2 APNG (V1.5+ 默认)** | `app/public/assets/octopus/v2/{detective-study,worker-construction,drink-coffee,breakdown,friday-5pm,pretend-busy,stay-late,treat-milk-tea}.png` |
 | **V2 APNG 生产脚本 (default)** | **`scripts/extract-v10-final.py`** (BiRefNet 1024 + CorridorKey 2048 + 6 阶段 fixup, 2026-09-10 定稿). CPU-only fallback: `scripts/extract-v4-chromakey-cpu-fallback.py`. 完整演进史 + 决策树: `docs/pipeline.md`. 6 阶段实现: `docs/v10-pipeline.md`. |
 | 14 场景素材审计 | `docs/octopus-assets-audit.md` (W1 D1 产物) |
 | **H3 必须提供什么** | `docs/h3-capabilities.md` (双图模式, 视频规格, 16 项通用前缀约束, 14 动作清单) |
@@ -61,7 +61,37 @@ Antigravity / Gemini CLI).
   `recentScenes` (滚动窗口 N=5) 后等概率选. **FORCE_SCENE 不更新 recentScenes**
   (MCP 显式控制不影响自然轮转序列). `nextScene` (V1 顺序) 函数保留导出,
   仅供文档/测试. 14 步模拟 sim 14 次: 12/14 唯一场景, 0 个 5 步内重复.
-- **V2.1 (2026-08-27) 事件驱动 scene 调度, 替代 V1.5 setInterval 33Hz**:
+- **V1.5+ (2026-09-11) 跨平台兼容渲染, 替代 V2.1 canvas 路径**:
+  用户 2026-09-11 反馈 "macos ubuntu 都没构建出来啊? 我没看到章鱼" + 授权
+  "不管你用什么方案, 只要是跨平台兼容的方案都可以". V1.5+ 治本 1 个 P0 bug:
+  - **P0 Tauri 2 macOS WKWebView canvas 0 像素**: V2.1 走 `<canvas>` + apng-js,
+    在 chromium 浏览器 work, 但 Tauri 2 macOS WKWebView transparent 浮窗里
+    canvas 0 像素 (canvas.toDataURL 52674 字节 = canvas 真有内容, 但
+    `<canvas>` 标签不显示; 推测 WKWebView transparent 浮窗合成异常).
+    V1.5+ 改用 `<img>` + `img.src = url` 让浏览器原生循环 APNG, 跨
+    macOS WKWebView / Linux WebKitGTK / Windows WebView2 / 任何 chromium
+    浏览器都一致 work.
+  5 文件改动:
+  - `app/src/animation/types.ts`: `AnimationProvider.create(ctx, source)`
+    → `create(target: HTMLElement, source)`. provider 内部自治创建 element.
+  - `app/src/animation/providers/apng.ts`: 删 apng-js `getPlayer(ctx)`, 改用
+    `new Image()` + `img.src = url`. 浏览器原生循环 APNG, 不依赖 apng-js / canvas.
+  - `app/src/animation/providers/lottie.ts`: 跟 types 同步, 内部 `instanceof
+    HTMLCanvasElement` 验证 + rAF drawImage (lottie 仍走 canvas 路径).
+  - `app/src/hooks/useAnimation.ts`: `canvasRef: HTMLCanvasElement` →
+    `containerRef: HTMLDivElement`.
+  - `app/src/components/OctopusPet.tsx`: `<canvas>` → `<div ref={animRef}>`,
+    provider 内部 `appendChild` img/canvas.
+  onCycleEnd: 删 apng-js `'end'` 事件, 改用 `setTimeout(APNG_CYCLE_MS=6500)`
+  模拟 (跟 APNG 实际循环时长匹配, 99 帧 × 66ms ≈ 6.5s). 切 scene 紧跟
+  setTimeout 触发, 0 漂移 (新 setTimeout 替代累积 setInterval).
+  已知 trade-off (V1.5+ vs V2.1):
+  - **P1 切到中段**: cycleMs 写死 6500ms 估算, 切 scene 可能差 1~2 帧 (视觉无感).
+  - **后台 tab 节流**: 跟 V2.1 RAF 同样受 webview 节流, 差异不显著.
+  - **不再依赖 apng-js**: package 减少 ~50KB.
+  详细 production reference: `docs/v15plus-render-pipeline.md`. 完整
+  B/D 6 commit 失败根因分析: `docs/handoff-2026-09-11-v15plus-img-render.md`.
+- **V2.1 (2026-08-27) 事件驱动 scene 调度 (已 deprecated 2026-09-11)**:
   用户 2026-08-24 反馈 "其实最理想的还是如果能用事件逻辑来控制动画会比较好,
   定时器总是不太稳定的". V2.1 治本 4 个长期 bug:
   - **P1 APNG 中段剪切**: 8s setInterval 跟 6.6s APNG 循环不整除, 每次切都在
@@ -77,6 +107,9 @@ Antigravity / Gemini CLI).
   渲染: `<img>` → `<canvas>` + apng-js. 视觉跟 V1.5 一致 (APNG 解码出来
   直接 drawImage, 无 chroma key 二次处理). bubble 计时: 单独 setTimeout
   (BUBBLE_DURATION_MS), 不用全局 timer.
+  **2026-09-11 deprecated**: V1.5+ 取代 (Tauri 2 macOS WKWebView canvas 0 像素
+  bug 治本). 走 apng-js + canvas 路径在 chromium 浏览器 work, 但 Tauri macOS
+  fail. 不要在新代码里走这条.
 - **V1.5 渲染 + V2 调度 (TIMER_TICK 33Hz, 已废弃, 2026-08-27)**: V2.1 之前的
   状态. setInterval(33ms) → TIMER_TICK → shouldRotate (8s autoNextAt) → rotateScene.
   用户 2026-08-21 切回 V1 渲染 (`<img>` 浏览器原生循环) 是因为 V2.1 webm + canvas
@@ -107,22 +140,24 @@ Antigravity / Gemini CLI).
   4. `bash scripts/build-scene-registry.sh`
   5. `bash scripts/check-scenes-sync.sh` (也跑 `bash scripts/lint-octopus-plugin.sh` + 跑 test)
 
-  **V2.1 APNG numPlays 必须是 1** (PIL `loop=1`), 这样 apng-js Player 才会在
-  播完一轮后 emit `'end'` 事件. `numPlays=0` (无限循环) 不会触发 `'end'`,
-  scene 永远不切. `scripts/extract-chromakey-apng.py` 默认就是 loop=1.
-- **V2.1 scene 切流程 (事件链)**: `Animation.onCycleEnd() 回调` →
-  `OctopusPet` `useAnimation(canvas, scene, onCycleEnd)` →
+  **V1.5+ APNG 不需要 numPlays 限制** (浏览器原生 APNG 循环自动 loop, 不依赖
+  apng-js). 8 场景 APNG 都用 PIL `loop=0` (无限循环) 即可, 浏览器自动循环.
+  旧 V2.1 走 apng-js Player 需要 `loop=1` 才能 emit `'end'` 事件, V1.5+ 不适用.
+- **V1.5+ scene 切流程 (事件链)**: `Animation.onCycleEnd() 回调` →
+  `OctopusPet` `useAnimation(containerRef, scene, onCycleEnd)` →
   XState FSM `rotateScene` action → `context.scene` 变化 → `useAnimation`
-  触发 cleanup (旧 animation.stop) → 加载新 animation → 新 cycle 结束
+  触发 cleanup (旧 animation.stop: clearTimeout + img.remove + target.replaceChildren) →
+  加载新 animation (新 setTimeout 触发 onCycleEnd) → 新 cycle 结束
   再回调. 整条链路 ms 级响应, 无 setInterval 累计延迟.
-  Animation 实现细节对 FSM 透明 (APNG 走 'end' 事件, Lottie/Video 走各自的 onCycleEnd).
-- **动画扩展 (M5, 2026-08-27)**: scene 渲染不再绑死 APNG. 加新动画格式
-  (Lottie / WebM / GIF / SVG) 不需要改 FSM/OctopusPet/useAnimation.
-  **架构**:
-  - `app/src/animation/types.ts` — `Animation` 接口 (start/stop/onCycleEnd/nativeWidth/nativeHeight/cycleMs) + `AnimationProvider` 接口 (type + create(ctx, source))
+  Animation 实现细节对 FSM 透明 (V1.5+ APNG 走 setTimeout 模拟, Lottie/Video 走各自的 onCycleEnd).
+- **动画扩展 (M5, 2026-08-27; V1.5+ update 2026-09-11)**: scene 渲染不再绑死 APNG.
+  加新动画格式 (Lottie / WebM / GIF / SVG) 不需要改 FSM/OctopusPet/useAnimation.
+  **架构** (V1.5+ 2026-09-11 调整):
+  - `app/src/animation/types.ts` — `Animation` 接口 (start/stop/onCycleEnd/nativeWidth/nativeHeight/cycleMs) + `AnimationProvider` 接口 (type + **create(target: HTMLElement, source)** — V1.5+ 改 target 替代 ctx, provider 内部自治创建 element)
   - `app/src/animation/registry.ts` — `animationRegistry.register(type, provider)` / `.get(type)`
-  - `app/src/animation/providers/apng.ts` — 内置 APNG provider (包装 apng-js Player)
-  - `app/src/hooks/useAnimation.ts` — 通用 hook (查 registry → provider.create → 绑 onCycleEnd)
+  - `app/src/animation/providers/apng.ts` — 内置 APNG provider (V1.5+ 改用 `new Image()` 浏览器原生循环, 删 apng-js 依赖)
+  - `app/src/animation/providers/lottie.ts` — Lottie provider (V1.5+ 内部 `instanceof HTMLCanvasElement` 验证 + rAF drawImage)
+  - `app/src/hooks/useAnimation.ts` — 通用 hook (V1.5+ 改 `containerRef: HTMLDivElement`, scene 切时 `target.replaceChildren()`)
   - `app/src/main.tsx` — 启动时 `animationRegistry.register(apngProvider.type, apngProvider)`
   **加新动画类型 4 步** (例: lottie):
   1. 在 `app/src/animation/providers/lottie.ts` 实现 `LottieAnimation implements Animation` + `lottieProvider: AnimationProvider`
