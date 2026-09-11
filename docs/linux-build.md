@@ -263,3 +263,28 @@ transparent + decorations:false 的 116×116 窗口如果定位到没有任何 m
 2. 或在 `setup` 钩子里调 `window.set_position(LogicalPosition::new(x, y))` 且
    先 `monitor_size()` 校验
 3. 或 `--gui` 启动时从 stdin / env var 接受位置参数
+
+### 7.8 NUC Ubuntu 24.04 + WebKitGTK 4.1 + Tauri 2 透明表面渲染异常 (2026-09-11 实测)
+
+**症状**: `transparent: true` 的 116×116 窗口在 NUC (RTX 3060 / GNOME Wayland
+/ XWayland) 上 100% 渲染为纯黑方块. 切换 `GDK_BACKEND=x11` 也不解决.
+WebKit 子进程正常 spawn, 但 canvas 内容不可见.
+
+**根因**: WebKitGTK 4.1 + Tauri 2 + GNOME Wayland 的 transparent ARGB 表面
+合成有兼容性问题. compositing mode (默认) 在 Mutter Wayland 上无法把
+WebKit 的 RGBA buffer 正确合成到 transparent 窗口. `transparent: false`
+之后窗口能可见, 但 WebKit 仍然把页面渲染成默认浅灰 (250,250,250) 而
+不应用 `<style>` 或外部 CSS.
+
+**当前治标 (commit 待)**: `tauri.conf.json` 设 `transparent: false` +
+`app/index.html` 把核心背景色 `background: #ff8298 !important` 内联到
+`<style>`, 至少保证 116×116 浮窗可见. pet 内容 (canvas + APNG) 在
+NUC WebKit 下仍渲染失败, 需要后续换 transparent-OK 方案 (例: GTK
+native cairo / Python cairo + x11 / etc).
+
+**已知变通** (未在本机验证):
+- `WEBKIT_DISABLE_COMPOSITING_MODE=1` 强制 CPU 合成 (本机实测仍黑)
+- `WEBKIT_DISABLE_DMABUF_RENDERER=1` 关闭 DMA-BUF (本机实测仍黑)
+- 降级到 X11 session (GDM 选 GNOME on Xorg) — 透明可工作, 但用户已在 Wayland
+- 换用 [WebKitGTK 4.0](https://github.com/tauri-apps/tauri/issues/) 旧 Tauri
+- 等 Tauri 2.5+ / webkit2gtk 4.2 修复 (Ubuntu 24.04 apt 当前 4.1)

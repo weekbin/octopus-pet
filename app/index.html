@@ -4,6 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>🐙 Octopus Pet</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body, #root { width: 100%; height: 100%; overflow: hidden; }
+      body { -webkit-user-select: none; user-select: none; -webkit-app-region: no-drag; }
+      /* NUC Ubuntu 24.04 Wayland (2026-09-11): WebKitGTK 4.1 asset://
+         协议在 tauri.conf.json CSP 下可能加载外部 CSS 失败. 把核心背景色
+         内联到 <head>, 绕开 asset: 加载问题. 完整样式仍由 index-*.css 提供
+         (用于动画/bubble), 但 pet 卡片底色不依赖外部加载. */
+      html, body, #root, body > div { background: #ff8298 !important; }
+    </style>
   </head>
   <body>
     <div id="root"></div>
