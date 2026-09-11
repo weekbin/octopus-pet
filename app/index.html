@@ -8,11 +8,10 @@
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
       html, body, #root { width: 100%; height: 100%; overflow: hidden; }
       body { -webkit-user-select: none; user-select: none; -webkit-app-region: no-drag; }
-      /* NUC Ubuntu 24.04 Wayland (2026-09-11): WebKitGTK 4.1 asset://
-         协议在 tauri.conf.json CSP 下可能加载外部 CSS 失败. 把核心背景色
-         内联到 <head>, 绕开 asset: 加载问题. 完整样式仍由 index-*.css 提供
-         (用于动画/bubble), 但 pet 卡片底色不依赖外部加载. */
-      html, body, #root, body > div { background: #ff8298 !important; }
+      /* 2026-09-11 macOS 端: 删 f43780e NUC 端 WebKitGTK 兜底 #ff8298 !important.
+         改由 .octopus-pet 类 (L107-109) 兜底, NUC 端仍生效, macOS WKWebView
+         走 transparent 浮窗 + canvas 透明 PNG 透桌面. NUC 端用户可重新 cherry-pick
+         f43780e 的 4-selector 块恢复 XWayland 黑方块治标. */
     </style>
   </head>
   <body>
