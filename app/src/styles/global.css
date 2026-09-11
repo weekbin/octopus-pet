@@ -87,9 +87,7 @@ canvas {
   display: block;
 }
 
-/* NUC Ubuntu 24.04 XWayland (2026-09-11): WebKit 渲染 APNG 时偶尔 canvas
-   不会 draw. 加 coral-pink 兜底色, 用户至少看到色块而不是黑窗, 确认窗口存在.
-   2026-09-11 macOS 端: 改 solid (4-selector 已删). 跟 V1 macOS 浮窗观感一致. */
-.octopus-pet {
-  background: #ff8298;
-}
+/* 注: 4 次修复后 .octopus-pet { background: #ff8298 } 删了.
+   平台切换由 OctopusPet.tsx inline style 负责:
+   - macOS: background: transparent → 章鱼 alpha 透桌面
+   - NUC/Linux: background: #ff8298 → solid 珊瑚粉卡片兜底 (WebKit 死时浮窗至少可见) */
