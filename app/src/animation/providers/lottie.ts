@@ -1,9 +1,13 @@
 // Lottie animation provider. lottie-web 是 LottieFiles 出品的
 // After Effects → web 渲染器, 业界矢量动画标准 (Bodymovin).
-// 跟 apng-js 完全不同渲染管线: Lottie 自己画到内部 canvas, 我们用
-// drawImage 搬运到目标 ctx. 适合「循环矢量动画 / 复杂遮罩 / 表达式驱动」场景.
+// 跟 apng provider 完全不同渲染管线: lottie-web 自己画到内部 canvas,
+// 我们用 rAF drawImage 桥接到 target canvas.
 //
 // 这是 animation abstraction 的第 2 个 provider, 证明换格式不动 FSM / hook / 组件.
+//
+// V1.5+ (2026-09-11) target 改 HTMLElement: lottie 要求 target 是 HTMLCanvasElement
+// (用于 drawImage 桥接). apng 要求 target 是 HTMLDivElement (appendChild <img>).
+// 每个 provider 内部 `instanceof` 验证. 上层 useAnimation 透明, 不感知.
 
 import type { Animation, AnimationProvider } from "../types";
 
@@ -20,7 +24,7 @@ type LottieItem = {
   frameRate: number;
 };
 
-/** 把 lottie-web canvas 画到目标 ctx 的 bridge. 内部用 rAF 同步. */
+/** 把 lottie-web canvas 画到 target canvas 的 bridge. 内部用 rAF 同步. */
 class LottieCanvasBridge implements Animation {
   private cycleEndCallbacks: Array<() => void> = [];
   private rafId: number | null = null;
@@ -92,12 +96,24 @@ class LottieCanvasBridge implements Animation {
 /**
  * Lottie provider. source 接受 Lottie JSON 的 URL.
  * 用 canvas renderer (不是 svg): lottie-web 自己维护一个内部 canvas,
- * 我们用 rAF drawImage 同步到目标 ctx, 跟 apng provider 行为一致
- * (调用方拿 ctx, 不用管下面是位图还是矢量).
+ * 我们用 rAF drawImage 同步到 target canvas.
+ *
+ * V1.5+ 改动: target 必须是 HTMLCanvasElement. apng 走 target = div, lottie
+ * 走 target = canvas. useAnimation 给 lottie 创建专用 canvas, 给 apng 传 div.
  */
 export const lottieProvider: AnimationProvider = {
   type: "lottie",
-  async create(targetCtx, source) {
+  async create(target, source) {
+    if (!(target instanceof HTMLCanvasElement)) {
+      throw new Error(
+        `lottie provider requires HTMLCanvasElement target, got ${target?.constructor?.name ?? "unknown"}`,
+      );
+    }
+    const targetCtx = target.getContext("2d");
+    if (!targetCtx) {
+      throw new Error("lottie provider: target canvas getContext('2d') returned null");
+    }
+
     // 动态 import 避免 lottie-web 进 initial bundle (它 100KB+)
     const lottieMod = await import("lottie-web");
     const lottieLib: any = (lottieMod as any).default ?? lottieMod;
