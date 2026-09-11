@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "com.weekbin.octopus-pet",
   "build": {
-    "beforeDevCommand": "bash scripts/run-vite.sh dev",
+    "beforeDevCommand": "bash ../scripts/run-vite.sh dev",
     "devUrl": "http://127.0.0.1:1420",
-    "beforeBuildCommand": "bash scripts/run-vite.sh build",
+    "beforeBuildCommand": "bash ../scripts/run-vite.sh build",
     "frontendDist": "../app/dist"
   },
   "app": {
@@ -20,11 +20,11 @@
         "resizable": false,
         "fullscreen": false,
         "decorations": false,
-        "transparent": true,
+        "transparent": false,
         "alwaysOnTop": true,
         "skipTaskbar": true,
         "visible": true,
-        "center": false,
+        "center": true,
         "x": 100,
         "y": 100
       }
