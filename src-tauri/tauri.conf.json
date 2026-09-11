@@ -20,13 +20,13 @@
         "resizable": false,
         "fullscreen": false,
         "decorations": false,
-        "transparent": true,
+        "transparent": false,
         "alwaysOnTop": true,
         "skipTaskbar": true,
         "visible": true,
         "center": true,
-        "x": 100,
-        "y": 100
+        "x": 0,
+        "y": 0
       }
     ],
     "security": {
