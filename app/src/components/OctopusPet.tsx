@@ -20,11 +20,11 @@ import { useStateSync } from "../hooks/useStateSync";
 
 const WINDOW_SIZE = 116;
 
-// 2026-09-11 二次修复 (跟 cc9274e 反向): macOS GUI 模式 + mcode 客户端同进程下
-// transparent 浮窗实际不可见 (B/D fail), 对照实验验证 transparent: false 跟 true 一样.
-// 改回 f43780e 治标: transparent: false + .octopus-pet #ff8298 兜底, NUC 端验证
-// 浮窗至少可见为珊瑚色方块. 章鱼渲染问题留给 W3 真治本 (GTK cairo 换 webview 后端,
-// 1.5 天, 跟 V2.3 主线条件编译隔离).
+// 2026-09-11 第三次修复 (跟 b69f0a7 反向): b69f0a7 错把 NUC 端 f43780e 治标
+// (transparent: false + #ff8298 兜底) 套用到 macOS 端. 但 macOS 端 webview 是 work 的
+// (不是 NUC 端 webview 死问题), #ff8298 兜底会盖死章鱼 canvas 渲染.
+// 改回 transparent: true (跟 V2.3 旧 macOS 一致, cc9274e 状态), 让 alpha 通道透桌面.
+// 章鱼 canvas 仍可能 fail (WKWebView 行为), 但不会被兜底盖死. 真治本留给 W3.
 
 export function OctopusPet() {
   const [state, send, actor] = useMachine(octopusMachine);
@@ -71,7 +71,7 @@ export function OctopusPet() {
         userSelect: "none",
         WebkitUserSelect: "none",
         overflow: "hidden",
-        background: "#ff8298",
+        background: "transparent",
       }}
       onClick={() => send({ type: "CLICK", now: Date.now() } as OctopusEvent)}
       onContextMenu={(e) => {
