@@ -13,12 +13,12 @@ Antigravity / Gemini CLI).
 
 | 项 | 值 |
 |---|---|
-| 状态 | **V2.2 (2026-09-10) v5.2 BiRefNet + CorridorKey 默认抠图方案 (12× 绿残留 ↓, 放大镜真透明)**, 默认 2 个 V2 视频成品 |
+| 状态 | **V2.3 (2026-09-11) v10-final 抠图 + 8 V2 场景 (3 原有 + 5 新: breakdown / friday-5pm / pretend-busy / stay-late / treat-milk-tea)**, Ubuntu release 33MB |
 | 栈 | Tauri 2 · React 19 · Vite 6 · XState 5 · apng-js 1.1.5 · Rust 1.77+ |
 | 窗口 | 116×116 透明, V2 APNG 192×192 在 `<canvas>` 内部 (CSS 缩放到 116×116) |
-| **3 V2 场景 (V2.1 默认)** | detective-study (H3 戴帽研究) · worker-construction (H3 工人施工) · **drink-coffee** (H3 喝咖啡, 2026-09-09 fef8017) |
+| **8 V2 场景 (V2.1 默认)** | detective-study (H3 戴帽研究) · worker-construction (H3 工人施工) · drink-coffee (H3 喝咖啡) · **breakdown** (H3 抱头沮丧) · **friday-5pm** (H3 周五下班) · **pretend-busy** (H3 假装很忙) · **stay-late** (H3 加班叹气) · **treat-milk-tea** (H3 请奶茶) (2026-09-11 5 新) |
 | 6 MCP tools | pet_show · pet_ask · pet_get_state · pet_set_state · pet_pet · pet_list_states |
-| **3 V2 APNG** | **100 帧/张 × 66ms ≈ 6.6s 循环 (15fps, v4.20 流畅度优化)**, RGBA, 192×192, ~3.0-4.0MB 各, 走 **v5.2 BiRefNet + CorridorKey 物理级 unmixing** (BiRefNet 1024 fp16 alpha hint → CorridorKey GreenFormer 2048 内部 tiled fp16 linear alpha + straight FG + forehead_white_mask H3 源 ROI 缝补) |
+| **8 V2 APNG** | **99 帧/张 × 66ms ≈ 6.5s 循环 (15fps)**, RGBA, 192×192, ~3.2-3.4MB 各, 走 **v10-final 6 阶段 pipeline** (BiRefNet 1024 fp16 alpha hint → CorridorKey GreenFormer 2048 内部 tiled fp16 linear alpha + straight FG + v10.3 strict gate + forehead_white_mask H3 源 ROI 缝补 + borrow+recolor+inpaint 道具治本 + ROI demote 放大镜/桌子) |
 | 14 V1 spritesheet (废弃) | 移到 `app/public/assets/octopus/_archive-v1-spritesheets/` 不再用 |
 | **scene 调度** | **事件驱动** (apng-js `end` 事件 → `SCENE_LOOPED` → FSM `rotateScene`), 0 累积延迟, 严格对齐 frame 0 |
 | Spec 依据 | [agent-plugins.org v1.0.0](https://agent-plugins.org/specification) + [MCP 2024-11-05](https://modelcontextprotocol.io/specification/2024-11-05) + [agentskills.io](https://agentskills.io/specification) |
@@ -39,11 +39,11 @@ Antigravity / Gemini CLI).
 | React 前端 | `app/src/` (components · state · hooks · data · styles) |
 | Rust 后端 | `src-tauri/src/` (lib · main · actions · mcp_stdio · state_bridge · http_fallback) |
 | 14 spritesheet (V1 废弃) | `app/public/assets/octopus/_archive-v1-spritesheets/spritesheet-*.webp` |
-| **3 V2 APNG (V2.1 默认)** | `app/public/assets/octopus/v2/{detective-study,worker-construction,drink-coffee}.png` |
+| **8 V2 APNG (V2.1 默认)** | `app/public/assets/octopus/v2/{detective-study,worker-construction,drink-coffee,breakdown,friday-5pm,pretend-busy,stay-late,treat-milk-tea}.png` |
 | **V2 APNG 生产脚本 (default)** | **`scripts/extract-v10-final.py`** (BiRefNet 1024 + CorridorKey 2048 + 6 阶段 fixup, 2026-09-10 定稿). CPU-only fallback: `scripts/extract-v4-chromakey-cpu-fallback.py`. 完整演进史 + 决策树: `docs/pipeline.md`. 6 阶段实现: `docs/v10-pipeline.md`. |
 | 14 场景素材审计 | `docs/octopus-assets-audit.md` (W1 D1 产物) |
 | **H3 必须提供什么** | `docs/h3-capabilities.md` (双图模式, 视频规格, 16 项通用前缀约束, 14 动作清单) |
-| **V2 prompt 段落格式** | `prompts/00-format.md` + 3 真实范例 `prompts/01..03-name.md` |
+| **V2 prompt 段落格式** | `prompts/00-format.md` + 8 真实范例 `prompts/01..08-name.md` (4-12 是待做 / fail 重做备份) |
 | **V2 prompt 方法论** | `docs/action-prompt-methodology.md` (16 项约束 + 8 陷阱 + V1→V2 14 映射) |
 | 变更历史 | `CHANGELOG.md` (Keep a Changelog 1.1.0) |
 | CI | `.github/workflows/ci.yml` (spec lint · asset audit · spritesheet regen · Rust build · Vitest) |
@@ -89,7 +89,7 @@ Antigravity / Gemini CLI).
   这条思路对了 (事件驱动, 0 累积延迟), 但因为 webm 视觉差被一起回退. 现在 V2.1
   (2026-08-27) 重新接上事件驱动思路, 用 apng-js `end` 事件 (跟 onEnded 概念一致),
   但走 RGBA APNG 不用 webm.
-- **改场景清单 (V2.1 2 场景, 扩到 N+1 个流程不变)**:
+- **改场景清单 (V2.1 8 场景, 扩到 N+1 个流程不变)**:
   **M4 之后**: 单一源是 **`scenes.json`** (项目根). 改完跑
   ```bash
   bash scripts/build-scene-registry.sh           # 生成 TS + Rust
