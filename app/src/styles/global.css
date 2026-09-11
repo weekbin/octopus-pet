@@ -11,10 +11,11 @@
 
 html,
 body,
-#root {
+#root,
+body > div {
   width: 100%;
   height: 100%;
-  background: transparent;
+  background: #ff8298 !important;
   overflow: hidden;
   font-family:
     -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",

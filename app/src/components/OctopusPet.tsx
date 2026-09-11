@@ -4,7 +4,7 @@
 // bubble 3s 计时: 单独 useEffect setTimeout, 不用全局 timer.
 // 详见 AGENTS.md V2.1 + animation 章节.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useMachine } from "@xstate/react";
 import { octopusMachine } from "../state/octopus-fsm";
 import {
@@ -20,26 +20,16 @@ import { useStateSync } from "../hooks/useStateSync";
 
 const WINDOW_SIZE = 116;
 
-// 2026-09-11 macOS 端修复: NUC 端 f43780e 加的 .octopus-pet 兜底 #ff8298 在
-// macOS 透明浮窗下会盖死 canvas. 用 platform check 切换背景:
-// - macOS: transparent → canvas 透明 PNG 透桌面 + 章鱼
-// - NUC/Linux: #ff8298 → solid 珊瑚粉卡片兜底 (canvas 渲染失败时也能看到窗口)
-function detectMacOS(): boolean {
-  if (typeof navigator === "undefined") return false;
-  const ua = navigator.userAgent || "";
-  const platform = (navigator as Navigator).platform || "";
-  return /Mac|Darwin/i.test(platform) || /Mac OS X/.test(ua);
-}
+// 2026-09-11 二次修复 (跟 cc9274e 反向): macOS GUI 模式 + mcode 客户端同进程下
+// transparent 浮窗实际不可见 (B/D fail), 对照实验验证 transparent: false 跟 true 一样.
+// 改回 f43780e 治标: transparent: false + .octopus-pet #ff8298 兜底, NUC 端验证
+// 浮窗至少可见为珊瑚色方块. 章鱼渲染问题留给 W3 真治本 (GTK cairo 换 webview 后端,
+// 1.5 天, 跟 V2.3 主线条件编译隔离).
 
 export function OctopusPet() {
   const [state, send, actor] = useMachine(octopusMachine);
   const dragRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [isMac, setIsMac] = useState(false);
-
-  useEffect(() => {
-    setIsMac(detectMacOS());
-  }, []);
 
   useTauriWindowDrag(dragRef, (x, y) => {
     send({ type: "DRAG", x, y } as OctopusEvent);
@@ -72,7 +62,7 @@ export function OctopusPet() {
   return (
     <div
       ref={dragRef}
-      className={`octopus-pet ${isMac ? "platform-mac" : "platform-nuc"}`}
+      className="octopus-pet"
       style={{
         width: WINDOW_SIZE,
         height: WINDOW_SIZE,
@@ -81,7 +71,7 @@ export function OctopusPet() {
         userSelect: "none",
         WebkitUserSelect: "none",
         overflow: "hidden",
-        background: isMac ? "transparent" : "#ff8298",
+        background: "#ff8298",
       }}
       onClick={() => send({ type: "CLICK", now: Date.now() } as OctopusEvent)}
       onContextMenu={(e) => {
