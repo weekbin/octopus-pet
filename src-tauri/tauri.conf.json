@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "bash ../scripts/run-vite.sh dev",
     "devUrl": "http://127.0.0.1:1420",
-    "beforeBuildCommand": "bash ../scripts/run-vite.sh build",
+    "beforeBuildCommand": "bash scripts/run-vite.sh build",
     "frontendDist": "../app/dist"
   },
   "app": {
@@ -20,7 +20,7 @@
         "resizable": false,
         "fullscreen": false,
         "decorations": false,
-        "transparent": false,
+        "transparent": true,
         "alwaysOnTop": true,
         "skipTaskbar": true,
         "visible": true,

@@ -23,21 +23,6 @@ body,
   -moz-osx-font-smoothing: grayscale;
 }
 
-html,
-body,
-#root,
-body > div {
-  /* NUC Ubuntu 24.04 Wayland 实测 (2026-09-11): WebKitGTK 4.1 + Tauri 2 的
-     transparent 表面在 GNOME Wayland 上 100% 渲染为纯黑 (即使 CSS 是
-     transparent). tauri.conf.json 已改 transparent: false, 改用
-     solid coral pink 当 pet 卡片底色, canvas 画章鱼透明 PNG 在上面.
-     视觉: 116x116 珊瑚粉卡片 + 珊瑚粉章鱼, 跟 V1 macOS 浮窗观感一致.
-
-     关键: 必须用 `html, body, #root, body > div` 4 个 selectors (1,0,3)
-     才能胜出上面 `html, body, #root` (1,0,2) 的 transparent 规则. */
-  background: #ff8298;
-}
-
 /* Disable text selection and drag defaults in the pet window. */
 body {
   -webkit-user-select: none;
@@ -103,7 +88,8 @@ canvas {
 }
 
 /* NUC Ubuntu 24.04 XWayland (2026-09-11): WebKit 渲染 APNG 时偶尔 canvas
-   不会 draw. 加 coral-pink 兜底色, 用户至少看到色块而不是黑窗, 确认窗口存在. */
+   不会 draw. 加 coral-pink 兜底色, 用户至少看到色块而不是黑窗, 确认窗口存在.
+   2026-09-11 macOS 端: 改 solid (4-selector 已删). 跟 V1 macOS 浮窗观感一致. */
 .octopus-pet {
-  background: rgba(255, 130, 152, 0.4);
+  background: #ff8298;
 }

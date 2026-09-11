@@ -4,7 +4,7 @@
 // bubble 3s 计时: 单独 useEffect setTimeout, 不用全局 timer.
 // 详见 AGENTS.md V2.1 + animation 章节.
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMachine } from "@xstate/react";
 import { octopusMachine } from "../state/octopus-fsm";
 import {
@@ -20,10 +20,26 @@ import { useStateSync } from "../hooks/useStateSync";
 
 const WINDOW_SIZE = 116;
 
+// 2026-09-11 macOS 端修复: NUC 端 f43780e 加的 .octopus-pet 兜底 #ff8298 在
+// macOS 透明浮窗下会盖死 canvas. 用 platform check 切换背景:
+// - macOS: transparent → canvas 透明 PNG 透桌面 + 章鱼
+// - NUC/Linux: #ff8298 → solid 珊瑚粉卡片兜底 (canvas 渲染失败时也能看到窗口)
+function detectMacOS(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  const platform = (navigator as Navigator).platform || "";
+  return /Mac|Darwin/i.test(platform) || /Mac OS X/.test(ua);
+}
+
 export function OctopusPet() {
   const [state, send, actor] = useMachine(octopusMachine);
   const dragRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isMac, setIsMac] = useState(false);
+
+  useEffect(() => {
+    setIsMac(detectMacOS());
+  }, []);
 
   useTauriWindowDrag(dragRef, (x, y) => {
     send({ type: "DRAG", x, y } as OctopusEvent);
@@ -56,7 +72,7 @@ export function OctopusPet() {
   return (
     <div
       ref={dragRef}
-      className="octopus-pet"
+      className={`octopus-pet ${isMac ? "platform-mac" : "platform-nuc"}`}
       style={{
         width: WINDOW_SIZE,
         height: WINDOW_SIZE,
@@ -65,7 +81,7 @@ export function OctopusPet() {
         userSelect: "none",
         WebkitUserSelect: "none",
         overflow: "hidden",
-        background: "transparent",
+        background: isMac ? "transparent" : "#ff8298",
       }}
       onClick={() => send({ type: "CLICK", now: Date.now() } as OctopusEvent)}
       onContextMenu={(e) => {
