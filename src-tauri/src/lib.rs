@@ -87,9 +87,12 @@ pub fn run() {
                     // 显式 set_size 兜底, 防 tauri.conf.json 116x116 在 Wayland
                     // DPI 缩放下被 WebKitGTK 4.1 错误缩放成 222x300 之类
                     // (本机 3x DPI 实测 222/116=1.91x, 300/116=2.59x, 非
-                    // 等比 → 文档 viewport 渲染异常). 强制 inner_size 物理
-                    // 像素等于逻辑像素, 跟 tauri.conf.json 一致.
-                    let _ = window.set_size(tauri::PhysicalSize::new(116, 116));
+                    // 等比 → 文档 viewport 渲染异常). 用 LogicalSize 而不是
+                    // PhysicalSize — tauri.conf.json 配的是 logical, WebKitGTK
+                    // 4.1 在 Wayland 接受 LogicalSize 时能正确换算, PhysicalSize
+                    // 它按 1:1 当 buffer 尺寸处理, 跟 cairo / GPU compositor
+                    // 期望的 logical 不一致.
+                    let _ = window.set_size(tauri::LogicalSize::new(116, 116));
                     tracing::info!(
                         "pet window anchored at absolute ({}, {}) on monitor {}x{} at ({}, {})",
                         cx, cy, mon_size.width, mon_size.height, mon_pos.x, mon_pos.y
@@ -97,7 +100,7 @@ pub fn run() {
                 } else {
                     tracing::warn!("no monitor detected at all, falling back to (50, 50)");
                     let _ = window.set_position(tauri::PhysicalPosition::new(50, 50));
-                    let _ = window.set_size(tauri::PhysicalSize::new(116, 116));
+                    let _ = window.set_size(tauri::LogicalSize::new(116, 116));
                 }
                 // 显式 show + unminimize + focus 兜底, 防止某些 DE 启动时窗口被 hide
                 let _ = window.unminimize();
