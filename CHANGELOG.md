@@ -27,6 +27,31 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
     - `docs/v10-pipeline.md` 顶部加 "v10-final 是唯一 default + v4 fallback" 表 + 修 §4.1 引用 (删了 v52, 加 v4 fallback 命令)
     - `AGENTS.md` 精简 chroma key 演进段 (321 → 239 行, 删 82 行详细根因, 替换为 10 行精简指针指向 docs/pipeline.md) + 修默认脚本矛盾 (v52 → v10-final) + 修换桌宠 idle 素材指引 (breath-pipeline → v10-pipeline + standard-char)
 
+### Removed
+- **Project structure cleanup (2026-09-15)**: 跟 CHANGELOG 2026-09-10 段保持一致 + 清历史遗留.
+  - **Deleted scripts** (跟 2026-09-10 cleanup 段一致, 该段当时说删但忘删):
+    - `scripts/extract-v52-apng.py` (跟 2026-09-10 已 commit 段对齐, 实际删除 2026-09-15)
+    - `scripts/remove-hat-greenscreen.py` (一次性 hat 修复, 早已用完)
+    - `scripts/run-h3-batch.sh` / `run-h3-batch-09-12.sh` / `run-h3-batch-remaining.sh` (3 个一次性 H3 批量脚本, 产物已落 `_h3-source/`)
+  - **Archived prompts** (移到 `prompts/_archive/`, 4 个 prompt 没产出对应 V2 scene, 留作重做备份):
+    - `prompts/05-payday.md` / `07-soul-leaving.md` / `08-lying-flat.md` / `12-touch-fish.md`
+  - **Archived handoff docs** (移到 `docs/_archive/2026-09-11-handoff/`, 6 篇 2026-09-11 当天密集工作的脉络记录, V1.5+ 已定稿后这些是历史档案):
+    - `docs/handoff-2026-09-11.md` + 5 篇专题 (linux-display / macos-b-d-rootcause / macos-nuc-build-sim / macos-verify / v15plus-img-render)
+  - **Deleted legacy binary** (13MB 老 debug build, 缺 assets, 不再兼容 .linux.bin / .macos.bin 走法):
+    - `bin/octopus-pet.bin` (历史 13MB macOS debug build, wrapper fallback 4 删, 现在只走 `bin/octopus-pet.${KERNEL}.bin`)
+  - **Deleted local-only dirs** (1GB+ 本地噪音):
+    - `.venv-birefnet/` (v5.x BiRefNet+CorridorKey venv, v10-final 不依赖, 1GB)
+    - `models/birefnet/` (空目录)
+    - `scripts/__pycache__/` (Python 缓存)
+  - **Git removed from tracking** (源在 git, 但应该 ignore):
+    - `docs/h3-source-2026-09-10/*.mp4` (5 个 H3 源 mp4, 3.2MB 中间产物, APNG 才是 deployed)
+
+### Changed
+- **Gitignore + doc consistency (2026-09-15)**:
+  - `.gitignore` 加 `docs/h3-source-*/` + `docs/*.mp4` (防 H3 源 mp4 再入 git) + `.venv*/` + 给 `.venv-birefnet/` 加注释 (1GB 历史 venv 已删)
+  - `bin/octopus-pet` wrapper: 删 fallback 4 (legacy .bin), 只走 `bin/octopus-pet.${KERNEL}.bin`
+  - `AGENTS.md` / `README.md`: 全部 `bin/octopus-pet.bin` 引用改为 `bin/octopus-pet.${KERNEL}.bin` (KERNEL=macos/linux/windows)
+
 ### Fixed
 - **v5.3 BiRefNet + CorridorKey + green residual mask (2026-09-10 commit pending)**:
   Adds `post_green_residual_mask` to demote alpha=255 pixels with pure green-screen

@@ -32,8 +32,8 @@ Antigravity / Gemini CLI).
 | Plugin manifest | `plugin.json` (spec §5) |
 | MCP server manifest | `mcp.json` (spec §7, type=stdio) |
 | Skill frontmatter | `skills/octopus-pet/SKILL.md` (agentskills.io) |
-| Plugin entrypoint | `bin/octopus-pet` (spec §9.2; dev=本地构建优先, 发布=bin/octopus-pet.bin 兜底) |
-| **提交的 release 产物** | `bin/octopus-pet.bin` (~13MB, 内嵌 spritesheet; `release-plugin.sh` 生成, **commit 时一起提交**) |
+| Plugin entrypoint | `bin/octopus-pet` (spec §9.2; dev=本地构建优先, 发布=平台特定 `.bin` 兜底) |
+| **提交的 release 产物** | `bin/octopus-pet.{macos,linux}.bin` (各 ~32MB, 内嵌 8 APNG; `release-plugin.sh` 生成, **commit 时一起提交**) |
 | 状态逻辑单点 | `src-tauri/src/actions.rs` (MCP/HTTP 唯一的 apply_* 实现) |
 | 状态镜像回写 | `src-tauri/src/state_bridge.rs::sync_state` (webview→Rust, 只写不 emit) |
 | React 前端 | `app/src/` (components · state · hooks · data · styles) |
@@ -189,9 +189,10 @@ Antigravity / Gemini CLI).
   HEVC videotoolbox alpha 完全不可行 (Apple `VTCompressionSession` 架构限制),
   永远别走这条. 验证 alpha 真的进了 webm 必须用 `ffprobe -show_streams`
   看 `TAG:alpha_mode=1`, 默认 `ffprobe` 不展示这个 tag.
-- **发布产物 `bin/octopus-pet.bin` 提交进 git**: 跑 `release-plugin.sh` 后 `git add bin/octopus-pet.bin`
-  随 commit 提交 (repo 本身即插件, clone 零构建可加载). 产物必须走
-  `cargo tauri build --no-bundle` — 裸 `cargo build` 增量会跳过 asset 嵌入 (binary < 5MB = 缺 assets).
+- **发布产物 `bin/octopus-pet.${KERNEL}.bin` 提交进 git**: 跑 `release-plugin.sh` 后
+  `git add bin/octopus-pet.${KERNEL}.bin` (macos / linux / windows) 随 commit 提交
+  (repo 本身即插件, clone 零构建可加载). 产物必须走 `cargo tauri build --no-bundle`
+  — 裸 `cargo build` 增量会跳过 asset 嵌入 (binary < 5MB = 缺 assets).
 - **WebP 硬上限 16383px**: 141 帧单行 27072px 超限, 所以 2 行 71 列布局是硬约束,
   不要试图改回单行.
 - **macOS BSD `find` symlink 穿透 bug**: 6/14 场景的 `frames-final/` 是 symlink.

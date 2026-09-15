@@ -12,10 +12,10 @@
 #   3. ${SCRIPT_DIR}/octopus-pet.${KERNEL}.bin                (committed release
 #      artifact for the current OS — macos / linux / windows. So a fresh
 #      `git clone` works as a plugin with zero local build, on any platform.)
-#   4. ${SCRIPT_DIR}/octopus-pet.bin                         (legacy macOS-only fallback)
 #
 # Produce / refresh the platform artifact via:
-#   scripts/release-plugin.sh           (auto-detects host kernel)
+#   scripts/release-plugin.sh           (auto-detects host kernel, writes
+#                                        bin/octopus-pet.${KERNEL}.bin)
 #
 # The chosen binary replaces this shell via exec, so stdio and signals
 # flow through cleanly (JSON-RPC 2.0 over stdin/stdout per MCP 2024-11-05).
@@ -39,8 +39,7 @@ INNER_BIN=""
 for candidate in \
   "${PLUGIN_ROOT}/src-tauri/target/debug/octopus-pet" \
   "${PLUGIN_ROOT}/src-tauri/target/release/octopus-pet" \
-  "${SCRIPT_DIR}/octopus-pet.${KERNEL}.bin" \
-  "${SCRIPT_DIR}/octopus-pet.bin"; do
+  "${SCRIPT_DIR}/octopus-pet.${KERNEL}.bin"; do
   if [ -x "$candidate" ]; then
     INNER_BIN="$candidate"
     break
@@ -51,10 +50,9 @@ if [ -z "$INNER_BIN" ]; then
   echo "ERROR: octopus-pet inner binary not found for ${KERNEL}." >&2
   echo "Looked in:" >&2
   echo "  ${PLUGIN_ROOT}/src-tauri/target/{debug,release}/octopus-pet" >&2
-  echo "  ${SCRIPT_DIR}/octopus-pet.${KERNEL}.bin" >&2
-  echo "  ${SCRIPT_DIR}/octopus-pet.bin  (legacy macOS-only fallback)" >&2
+  echo "  ${SCRIPT_DIR}/octopus-pet.${KERNEL}.bin  (committed platform-specific release artifact)" >&2
   echo "Build with: (cd ${PLUGIN_ROOT}/src-tauri && cargo build)" >&2
-  echo "      or:   bash ${PLUGIN_ROOT}/scripts/release-plugin.sh  (produces platform-specific bin)" >&2
+  echo "      or:   bash ${PLUGIN_ROOT}/scripts/release-plugin.sh  (produces bin/octopus-pet.${KERNEL}.bin)" >&2
   exit 127
 fi
 

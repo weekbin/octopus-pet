@@ -3,7 +3,7 @@
 > A coral-pink octopus desktop pet for **mcode** (MiniMax Code / Mavis) — built as an
 > [agent-plugins.org v1.0.0](https://agent-plugins.org/specification) plugin.
 
-mcode 启动时自动 spawn 章鱼 .app, **2 个 V2 视频成品** (detective-study 戴帽研究 + worker-construction 工人施工) 事件驱动轮转 (apng-js `'end'` 事件 → FSM `rotateScene`, 0 累积延迟), 单击弹气泡、右键摸头 (+亲密度)、拖动换位置, 6 个 MCP tools 让 mcode Agent 远程控制. 跨 8 客户端 portable (mcode / Cursor / Claude Code / VS Code / Codex / Kiro / Antigravity / Gemini CLI). repo 本身即插件: `bin/octopus-pet.bin` 提交进 git, clone 零构建即可加载.
+mcode 启动时自动 spawn 章鱼 .app, **2 个 V2 视频成品** (detective-study 戴帽研究 + worker-construction 工人施工) 事件驱动轮转 (apng-js `'end'` 事件 → FSM `rotateScene`, 0 累积延迟), 单击弹气泡、右键摸头 (+亲密度)、拖动换位置, 6 个 MCP tools 让 mcode Agent 远程控制. 跨 8 客户端 portable (mcode / Cursor / Claude Code / VS Code / Codex / Kiro / Antigravity / Gemini CLI). repo 本身即插件: `bin/octopus-pet.{macos,linux}.bin` 提交进 git, clone 零构建即可加载.
 
 **V2.1 (2026-08-27) + M5b (2026-08-27)**: 事件驱动 scene 调度治本 4 个 V1.5 timer bug (中段剪切 / wall-clock 漂移 / 高频 IPC 压力 / 镜像乱序). M5b 加 lottie-web 作为第二个 animation provider, 业务代码零修改可换动画格式. 加新场景: 跑 H3/gen_videos → `scripts/extract-chromakey-apng.py` → `app/public/assets/octopus/v2/<scene>.png` + 改 `scenes.json` + 跑 `build-scene-registry.sh`.
 
@@ -116,7 +116,7 @@ mcode 启动时自动 spawn 章鱼 .app, **2 个 V2 视频成品** (detective-st
 | 分类 | 目录/文件 | 说明 |
 |------|----------|------|
 | 组件面 | `plugin.json` / `mcp.json` / `skills/` / `bin/octopus-pet` | spec 固定位置 (§4.2 §6.1 §7.2) |
-| 产物面 | `bin/octopus-pet.bin` | release 二进制 (~13MB, 内嵌 spritesheet), **提交进 git**, clone 即插件可加载 |
+| 产物面 | `bin/octopus-pet.{macos,linux}.bin` | release 二进制 (各 ~32MB, 内嵌 8 APNG), **提交进 git**, clone 即插件可加载 |
 | 开发面 | `app/` | Tauri webview 前端 (React 19 + XState 5) |
 | 开发面 | `src-tauri/` | Rust 后端 (actions.rs = 状态逻辑单点; state_bridge = 镜像回写) |
 | 开发面 | `scripts/` / `docs/` | 构建/校验/发布脚本 + 文档 |
@@ -135,7 +135,7 @@ octopus-pet/
 │       └── SKILL.md               # agentskills.io
 ├── bin/
 │   ├── octopus-pet                # entrypoint 桥 (spec §9.2): 本地构建优先, .bin 兜底
-│   └── octopus-pet.bin            # release 二进制 (提交, clone 即用)
+│   └── octopus-pet.{macos,linux}.bin  # release 二进制 (提交, clone 即用)
 ├── scenes.json                    # 场景元数据单一源 (改完跑 build-scene-registry.sh)
 ├── scripts/
 │   ├── audit-octopus-assets.sh    # 14 场景盘点 (历史, V2.1 不用)
@@ -219,9 +219,9 @@ cd src-tauri && cargo tauri build
 # 插件发布物 (给 mcode 等 agent 客户端) — 推荐
 bash scripts/release-plugin.sh
 # 产物:
-#   bin/octopus-pet.bin       ← release 二进制 (~13MB, 提交进 git)
+#   bin/octopus-pet.${KERNEL}.bin  ← release 二进制 (~32MB, 提交进 git, KERNEL=macos/linux/windows)
 #   dist/octopus-pet-plugin/  ← 可独立加载的插件目录 (可选分发)
-# 注意: 发布后 git add bin/octopus-pet.bin 随 commit 提交 (repo 即插件)
+# 注意: 发布后 git add bin/octopus-pet.${KERNEL}.bin 随 commit 提交 (repo 即插件)
 ```
 
 ### 作为插件加载 (两种方式)
@@ -230,13 +230,13 @@ bash scripts/release-plugin.sh
 1. mcode 设置 → Plugins → "Add local plugin" → 选 `~/Documents/cute/`
 2. mcode 重启 → 章鱼 .app 自动 spawn
 3. 在 mcode Agent 里: `mcp__octopus-pet__pet_list_states` 应返回 14 场景
-4. 二进制解析: 本地 `cargo build` 产物优先, 无本地构建时用提交的 `bin/octopus-pet.bin`(clone 零构建可加载)
+4. 二进制解析: 本地 `cargo build` 产物优先, 无本地构建时用提交的 `bin/octopus-pet.${KERNEL}.bin`(clone 零构建可加载)
 
 **方式 B: 加载发布包(干净分发)**
 1. `bash scripts/release-plugin.sh` → 指向 `dist/octopus-pet-plugin/`
 2. 该目录是 spec 合规插件根(plugin.json + mcp.json + skills/ + bin/ 二进制), 可拷贝分发
 
-> `bin/octopus-pet.bin` 是 author 机器编译的 **macOS arm64** 产物。其他架构 /
+> `bin/octopus-pet.${KERNEL}.bin` 是 release-plugin.sh 在 author 机器上按当前 OS 编译的产物。其他架构 /
 > 想用最新代码: 本地 `cargo build --release` 后覆盖, 或直接依赖本地构建优先逻辑。
 
 ---

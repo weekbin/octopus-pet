@@ -1,6 +1,6 @@
 # Octopus Pet — gitignore
 # 四分类: 组件面/开发面 提交; 中间产物/本地噪音 忽略。
-# 可分发产物 (bin/octopus-pet.bin, spritesheet webp, manifest) 提交 — repo 即插件。
+# 可分发产物 (bin/octopus-pet.${KERNEL}.bin, spritesheet webp, manifest) 提交 — repo 即插件。
 # 注意: gitignore 不支持行内注释, 所有 # 必须单独成行。
 
 # ── 中间产物 (可重建, 不提交) ──────────────────────────────
@@ -14,6 +14,10 @@ app/.vite/
 app/tsconfig.tsbuildinfo
 dist/
 app/public/assets/octopus/spritesheet-*.miff
+
+# H3 源视频 (mp4) — 中间产物, APNG 才是 deployed
+docs/h3-source-*/
+docs/*.mp4
 
 # ── 本地构建/审计缓存 ─────────────────────────────────────
 .local-audit/
@@ -41,6 +45,12 @@ pnpm-debug.log*
 *.local
 secrets/
 secrets.json
+
+# ── 历史 venv (可删) ─────────────────────────────────────
+# v5.x 期间 BiRefNet + CorridorKey 用的 Python venv, v10-final 改 PIL + 6 阶段
+# pipeline 后已不依赖, 1GB 历史噪音. 删了重建: `python3 -m venv .venv-birefnet`
+.venv-birefnet/
+.venv*/
 
 # ── Backup / temp ──────────────────────────────────────────
 *.bak
