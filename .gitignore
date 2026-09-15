@@ -18,6 +18,8 @@ app/public/assets/octopus/spritesheet-*.miff
 # H3 源视频 (mp4) — 中间产物, APNG 才是 deployed
 docs/h3-source-*/
 docs/*.mp4
+# 例外: README.md 可入 git (项目文档)
+!docs/h3-source-*/README.md
 
 # ── 本地构建/审计缓存 ─────────────────────────────────────
 .local-audit/
