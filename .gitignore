@@ -25,6 +25,9 @@ docs/*.mp4
 OCTOPUS_DATA/
 
 # ── Editor / OS ────────────────────────────────────────────
+# macOS Finder 自动生成, ** 显式递归匹配所有层级 (不带路径前缀的 .DS_Store
+# 默认也匹配所有层级, 加 ** 是 explicit 防误改).
+**/.DS_Store
 .DS_Store
 .idea/
 .vscode/
