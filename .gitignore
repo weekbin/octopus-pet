@@ -46,11 +46,14 @@ pnpm-debug.log*
 secrets/
 secrets.json
 
-# ── 历史 venv (可删) ─────────────────────────────────────
-# v5.x 期间 BiRefNet + CorridorKey 用的 Python venv, v10-final 改 PIL + 6 阶段
-# pipeline 后已不依赖, 1GB 历史噪音. 删了重建: `python3 -m venv .venv-birefnet`
+# ── 历史 venv / model weights (可删) ──────────────────────
+# v5.x 期间 BiRefNet + CorridorKey 用的 Python venv + model weights, v10-final
+# 改 PIL + 6 阶段 pipeline 后已不依赖, 历史噪音. 删了重建:
+#   `python3 -m venv .venv-birefnet` (venv, 1GB)
+#   `huggingface-cli download ZhengPeng7/BiRefNet` (model weights, 444MB)
 .venv-birefnet/
 .venv*/
+models/
 
 # ── Backup / temp ──────────────────────────────────────────
 *.bak
