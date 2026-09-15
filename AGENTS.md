@@ -239,9 +239,9 @@ bash scripts/encode-webm-alpha.sh \
   --input <frame_dir> --output <file.webm> \
   --framerate 12 --bitrate 300k --pattern "f_%04d.png"
 
-# 发布 (产出 bin/octopus-pet.bin 提交物 + dist/octopus-pet-plugin/ 分发)
+# 发布 (产出 bin/octopus-pet.${KERNEL}.bin 提交物 + dist/octopus-pet-plugin/ 分发)
 bash scripts/release-plugin.sh                 # cargo tauri build --no-bundle + 冒烟
-# 注意: 发布后 git add bin/octopus-pet.bin 随 commit 提交
+# 注意: 发布后 git add bin/octopus-pet.${KERNEL}.bin (macos/linux/windows) 随 commit 提交
 
 # 素材重建 (W1 D1 已完成, 平时不重跑)
 OCTOPUS_SOURCE_ROOT=~/Works/octopus-worker-meme \

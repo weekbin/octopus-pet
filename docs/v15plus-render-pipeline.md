@@ -143,8 +143,8 @@ if want_mcp && !want_gui {
 ```bash
 # 标准发布流
 bash scripts/release-plugin.sh
-# 产物: bin/octopus-pet.bin (32.78MB, 内嵌 8 APNG)
-# 必须: git add bin/octopus-pet.bin 随 commit 提交 (repo 本身即插件, clone 零构建可加载)
+# 产物: bin/octopus-pet.${KERNEL}.bin (~32MB, 内嵌 8 APNG, KERNEL=macos/linux/windows)
+# 必须: git add bin/octopus-pet.${KERNEL}.bin 随 commit 提交 (repo 本身即插件, clone 零构建可加载)
 ```
 
 ---

@@ -305,7 +305,7 @@ bash scripts/check-scenes-sync.sh         # 校验
 | `scripts/extract-v4-chromakey-cpu-fallback.py` | CPU-only fallback (无 GPU 时) |
 | `scenes.json` | scene 单一源 (M4 之后) |
 | `app/public/assets/octopus/v2/NN-name.png` | 成品 APNG |
-| `bin/octopus-pet.bin` | 提交进 git 的 release 产物 |
+| `bin/octopus-pet.${KERNEL}.bin` | 提交进 git 的 release 产物 (KERNEL=macos/linux/windows) |
 
 ---
 

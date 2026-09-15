@@ -174,7 +174,7 @@
 | H3 绿幕反射进眼镜片 | V2.1 待修 (V0.5-3 验证已知) | H3 戴眼镜的动作 | 改 prompt 加 "no green tint reflection in eyes"; 当前 01-detective-study 接受 |
 | scenes.json 跟 TS/Rust 不一致 | check-scenes-sync.sh 防御 | 改 scenes.json 忘跑 build_scene_registry.py | CI 挂载 (已就位); lint 错就 fail PR |
 | M5b 类似的 provider 重构回归 | 暂无防御 | 加新 provider 时改 animation/types.ts 破坏 ABI | types.ts 改前 grep 全 project 引用, commit message 必列迁移步骤 |
-| bin/octopus-pet.bin 提交遗漏 | 文档有规则, 手动操作 | release-plugin.sh 跑完忘 git add bin/octopus-pet.bin | CI 校验 bin 存在 + 跟 main commit hash 对得上 |
+| bin/octopus-pet.${KERNEL}.bin 提交遗漏 | 文档有规则, 手动操作 | release-plugin.sh 跑完忘 git add bin/octopus-pet.${KERNEL}.bin | CI 校验 bin 存在 + 跟 main commit hash 对得上 |
 
 ---
 
