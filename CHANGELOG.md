@@ -255,6 +255,47 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
     取结果最优: 眼白纯度 + 锐利度 + 边界 3 维度同时达标.
   - 配套: 3 个 v4.8 APNG 重建 (current), 桌宠 116×116 透明窗口视觉 OK: 完全无
     绿色描边/阴影/反射, 眼白纯白 + 锐利, 帽色/杯身/放大镜干净, 切换时无绿残影.
+- **post-fix v2 + v3 修复 v4 fallback 输出 18 新 H3 场景眼睛错杀 (2026-09-16)**:
+  V3.0 H3 视频首批 18 场景走 `extract-v4-chromakey-cpu-fallback.py` 输出后, 用户反馈
+  "眼睛被处理成透明的了有一部分, 不是纯白". v4 chroma key 共性错杀两类 RGB:
+  (a) **纯黑瞳孔 RGB (19, 43, 10)** — v4.6 `harden_alpha_edges` 把章鱼眼睛黑色瞳孔
+  RGB 当成"低置信度绿幕"误 transparent; (b) **深绿眼线/眼眶 RGB (60-100)** — v4.4 dark
+  保护 (`max<80 AND g_max_rb<20`) 漏掉 RGB 在 [60, 100) 区间的眼线像素. v2 算法
+  (`60 ≤ max < 100 AND 8 邻居中 ≥6 个 alpha > 128`) 治 (b), 2123 像素总修复. 部署后
+  用户二次反馈"眼睛还有问题", v3 算法加**连通小簇填充** (≤30 px 簇 + 簇均 RGB<130 +
+  bbox 周围 2 px 环不透明比例 ≥50%) 清理眼白绿斑, 5160 像素额外修复. 总 5468 像素
+  修复 (v2=308 重叠去除 + v3=5160 = 5468) 在 18 场景 × 99 帧 = 1782 帧.
+  - **条件 ROI 而非全图** (y=40-60%, x=20-80%): 避免误保绿幕边缘黑色阴影.
+  - **三层条件**:
+    - v1: `alpha=0 AND max(R,G,B) < 60` (纯黑瞳孔)
+    - v2: `alpha=0 AND 60 ≤ max < 100 AND 8 邻居中 ≥6 个 alpha > 128` (深绿眼线)
+    - v3: 连通小簇 ≤30 px + 簇均 RGB<130 + bbox 周围 2 px 环不透明比例 ≥50% (眼白绿斑)
+  - **执行位置**: `scripts/extract-v4-postfix-eyes.py` (84 行), 任何走 v4 fallback 输出
+    的 APNG 上桌前必跑一次. v10-final GPU 路径无此问题 (BiRefNet/CorridorKey 不会把
+    眼睛 RGB 当绿幕反射).
+  - **视觉验证**: 18 场景 × 4 帧 on-gray contact sheet (`/tmp/v3-contact/_contact-all.png`),
+    31-apologize/33-magic/23-dancing/24-surprised 重点看, 眼白从"绿斑/半透"→"clean + 锐利".
+  - **数字 v2 vs v3 dry-run** (18 场景 × 5 采样帧 = 90 帧 ROI 内 alpha=0 + max<100 像素):
+    | scene | v2 | v3 | total |
+    | 13-debug-snack | 23 | 159 | 182 |
+    | 16-deadline-sprint | 12 | 114 | 126 |
+    | 17-celebrate | 8 | 79 | 87 |
+    | 18-monday-morning | 17 | 213 | 230 |
+    | 19-thumbs-up | 35 | 97 | 132 |
+    | 20-thinking | 16 | 190 | 206 |
+    | 22-yay-friday | 15 | 258 | 273 |
+    | 23-dancing | 31 | 281 | 312 |
+    | 24-surprised | 24 | 683 | 707 |
+    | 29-shy | 13 | 59 | 72 |
+    | 30-wave | 16 | 114 | 130 |
+    | 31-apologize | 46 | 1039 | 1085 |
+    | 32-laugh | 22 | 108 | 130 |
+    | 33-magic | 8 | 855 | 863 |
+    | 34-meditation | 8 | 148 | 156 |
+    | 35-blink | 6 | 335 | 341 |
+    | 36-cheer | 4 | 144 | 148 |
+    | payday | 4 | 284 | 288 |
+    | **TOTAL** | **308** | **5160** | **5468** |
 - **cargo test 预期值同步 2 → 3 V2 场景 (drink-coffee 加项遗漏)**:
   修 `src-tauri/tests/mcp_roundtrip.rs::list_states_returns_2_v2_scenes` 期望值
   2→3 + 加 drink-coffee assertion, 8/8 cargo tests 重新绿.

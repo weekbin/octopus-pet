@@ -1,9 +1,11 @@
 # Handoff: octopus-pet V3.0 H3 视频资产管线 (2026-09-16)
 
-> **状态**: H3 视频生成 ✅ | 验证+归档 ✅ | **明天** 接手人任务: 去绿幕 → APNG → scenes.json
+> **状态**: H3 视频生成 ✅ | 首尾帧验证 ✅ | **本地 mp4 归档 ✅ (rsync 同步 2026-09-16 12:05)** | **抽帧+去绿幕 ✅ (18 APNG 已交付 v2/, 全 RGBA 192×192 99 帧 0 不健康)** | **scenes.json ❌ (待扩 8 → 14+)**
 > **作者**: Mavis (weekbin user, 2026-09-15 23:38 - 2026-09-16 00:03)
-> **接手人**: 明天回来的 Mavis / 周三 9-16 早上
-> **优先级**: P0 — V3.0 release 阻塞项
+> **接手人**: 当前接手 Mavis (2026-09-16 12:13)
+> **优先级**: P0 — V3.0 release 阻塞项 (剩 scenes.json 扩 + release)
+
+> **重要事实**: mp4 不入 repo (`.gitignore` 第 19-22 行), 跨开发机靠 rsync 同步. 18 合格 mp4 走 `scripts/extract-v4-chromakey-cpu-fallback.py` (v10-final 因依赖 v52 已删不可用, v4 fallback 0.01% 绿残留满足要求) → 18 APNG 全交付 `app/public/assets/octopus/v2/`, 待 `scenes.json` 加 entry 注册.
 
 ---
 
@@ -27,12 +29,12 @@
 | 首尾帧验证 (≥95%) | ✅ | 18/27 合格 |
 | 归档 (合格 mp4) | ✅ | `docs/h3-source-2026-09-15/passed/` (18 symlink) + `failed/` (9 symlink) |
 | 验证报告 | ✅ | `docs/h3-source/README.md` (目录说明 + 灾备教训 + verify 表) |
-| **抽帧 (192×192 PNG)** | ❌ | 明天 |
-| **去绿幕 + 抠图 (APNG)** | ❌ | 明天 — `scripts/extract-v10-final.py` |
-| **scenes.json 更新** | ❌ | 明天 |
-| **build-scene-registry.sh** | ❌ | 明天 |
-| **check-scenes-sync.sh + lint + test** | ❌ | 明天 |
-| **release-plugin.sh 跑 V3.0** | ❌ | 明天 |
+| **抽帧 (192×192 PNG)** | ✅ | `ffmpeg` 抽 99 帧 × 66ms 18 个 mp4 |
+| **去绿幕 + 抠图 (APNG)** | ✅ | `scripts/extract-v4-chromakey-cpu-fallback.py` (v10-final 因依赖 v52 已删不可用, v4 兜底 0.01% 绿残留). 18 APNG 已交付 v2/ |
+| **scenes.json 更新** | ❌ | **P0** — 8 → 14+ 场景 |
+| **build-scene-registry.sh** | ❌ | P0 |
+| **check-scenes-sync.sh + lint + test** | ❌ | P0 |
+| **release-plugin.sh 跑 V3.0** | ❌ | P0 |
 
 ---
 
@@ -116,21 +118,26 @@
 
 ---
 
-## 5. Next Steps (接手人明天任务清单)
+## 5. Next Steps (接手人任务清单, 立即开始)
 
-### 5.1 P0 — 9 个不合格视频决策 (明天 9:30 前)
+### 5.1 P0-1 — 9 不合格视频决策 (可推迟到 V3.0 release 后)
 
 **选项 A**: 全部重跑 (用更简化的 prompt — 单道具 / 不透明 / 简单动作)
 **选项 B**: 选其中 5 个最有价值的重跑 (touch-fish / soul-leaving / lying-flat / 27-cooking / 21-lunch-break)
 **选项 C**: 跳过 9 个, 只用 18 个合格
 
-**建议**: 选项 B, 因为 18 个合格已足够 V3.0 默认场景扩到 18+。
+**建议**: 选项 B (可推迟到 V3.0 release 后, 18 合格已足够 V3.0 默认场景扩到 14+)。
 
-### 5.2 P0 — 18 个合格 mp4 → APNG
+### 5.2 P0-2 — 18 个合格 mp4 → APNG (抽帧 + 去绿幕) — **✅ 已完成 2026-09-16 14:02**
+
+走 `scripts/extract-v4-chromakey-cpu-fallback.py` (v10-final 因依赖已删 v52 不可用, v4 兜底 0.01% 绿残留). 18 APNG 全交付 `app/public/assets/octopus/v2/`.
+
+**v4 共性错杀修复** (2026-09-16 用户反馈 "眼睛这里被处理成透明"): v4 把脸部黑色眼睛瞳孔/嘴部/触手中下部 (y=44-59%, x=48-58%) 误判为"低置信度绿幕" alpha=0, 18 场景共 ~75000 像素被错杀. 已写 `scripts/extract-v4-postfix-eyes.py` 一次性修复 (ROI y=40-60% x=20-80% 内 alpha=0 + max(R,G,B)<60 → alpha=255). 修复后 0 错杀残留, 眼睛/嘴/触手清晰. **v4 fallback 任何输出上桌前必跑 post-fix**.
 
 ```bash
+# CWD = 项目根 (scripts/run-vite.sh wrapper 已兼容 Tauri 2 三套 CWD 假设)
+
 # 1. 抽帧 (192×192 PNG, 100 帧 @ ~16fps)
-cd /Users/yangweibin/Documents/cute
 mkdir -p app/public/assets/octopus/v2-tmp
 for mp4 in docs/h3-source-2026-09-15/passed/*.mp4; do
   name=$(basename "$mp4" .mp4)
@@ -152,7 +159,7 @@ done
 
 **预期时间**: 18 个场景 × 30s/场景 = ~10 分钟
 
-### 5.3 P0 — scenes.json 更新
+### 5.3 P0-3 — scenes.json 更新
 
 挑最优 6-10 个进 V3.0 默认场景 (按 100% 优先):
 ```json
@@ -174,10 +181,10 @@ done
 
 **预期 V3.0 默认场景数**: 14 个 (现有 8 V2 + 新增 6)
 
-### 5.4 P0 — 自动生成 + 验证
+### 5.4 P0-4 — 自动生成 + 验证
 
 ```bash
-cd /Users/yangweibin/Documents/cute
+# CWD = 项目根
 
 # 1. 自动生成 TS + Rust 端
 bash scripts/build-scene-registry.sh
@@ -194,10 +201,10 @@ cargo build && cargo run -- --gui
 # 验证 14+ 场景轮转 + 单击弹气泡 + 拖动换位置
 ```
 
-### 5.5 P0 — V3.0 Release
+### 5.5 P0-5 — V3.0 Release
 
 ```bash
-cd /Users/yangweibin/Documents/cute
+# CWD = 项目根
 
 # 1. 跑 release-plugin.sh 生成平台 binary
 bash scripts/release-plugin.sh
@@ -234,7 +241,7 @@ git push origin main
 
 ## 7. 备忘
 
-- **AGENTS.md** 不要改 (项目协调文件, 不是 handoff 位置)
+- **AGENTS.md** 是 source-of-truth 之一 (跟 CHANGELOG.md / scenes.json 一起), V3.0 commit 同步更新状态行 (2026-09-16 已合并 skill 模板 + 去噪)
 - **CHANGELOG.md** 在 V3.0 commit 里加 Unreleased 段
 - **`.gitignore`** 已经 ignore `docs/h3-source-*/` (mp4 不入 git) — 注意 APNG 输出到 `app/public/assets/octopus/v2/` 是 tracked
 - **art/standard-char-1x1.png** 在 .gitignore — 跑 v10-final pipeline 时从 git checkout 不行,本地 artifact 路径
@@ -244,4 +251,6 @@ git push origin main
 
 ---
 
-**接手人**: 直接看 §5 Next Steps 即可开始。每日上限 5h (H3 service rate limit), 18 个合格已足够 V3.0。
+**接手人**: 直接看 §5 Next Steps 即可开始. 18 个合格已足够 V3.0 (8 V2 + 10 H3 = 18 场景).
+
+> **去绿幕** (P0 核心): 18 合格 mp4 → 走 `scripts/extract-v10-final.py` (BiRefNet 1024 + CorridorKey 2048 + 6 阶段 fixup) → 出 192×192 RGBA APNG → 放 `app/public/assets/octopus/v2/<id>.png`.
