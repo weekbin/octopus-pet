@@ -225,7 +225,7 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
   - **`bin/octopus-pet` wrapper 自动从 release URL 下载兜底**: 第一次 `git clone` 后 wrapper 在找不到本地/缓存 binary 时, curl/wget 从 `https://github.com/weekbin/octopus-pet/releases/download/v3.0/octopus-pet.${KERNEL}.bin` 下载并缓存到 `bin/octopus-pet.${KERNEL}.bin`. 设 `OCTOPUS_PET_SKIP_DOWNLOAD=1` 抑制兜底下载.
   - **历史 commit 中的 binary 用 `git filter-repo --path bin/octopus-pet.linux.bin --invert-paths` 从 history 删除**: 强制 force-push 后 repo 不再含 116MB object, 后续 commits 可正常 push.
 
-### Out of scope (方案 G 实证失败, 下版续战, 2026-09-16)
+### Out of scope (方案 G 实证失败, 续战 G1 — 见下 "方案 G1 实证成功")
 - **用户反馈**: "17/22/23/32 的抠图效果还是不是很好, 感觉动画有残影, 别的效果反倒不错. 方案 G: 基于 mp4 层 `ffmpeg -vf 'tmix=frames=3:weights=1 1 1'` 3 帧 temporal mix 让动画更流畅无残影". 用户硬约束: 原视频不丢 + 先备份 + 改动在备份副本.
 - **执行回顾**:
   1. ✅ 完整备份 27 个 mp4 到 `docs/h3-source-2026-09-15/raw-backup-2026-09-16/` (sha256 27/27 与 raw/ 一致)
@@ -239,11 +239,32 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
   - CorridorKey alpha 解算看到"几乎全绿"→ 返回 α=0 (transparent)
   - Pass 2 silhouette median 看到邻居帧 α=0 → silhouette 收缩 → 即使 fill 回来, RGB 用前一帧 (也是大笑帧) → 颜色变深红 (因为前一帧身体边缘被绿幕反射污染)
   - 17/22/23 动作相对温和 + 道具独立, v9 v3 与 v9 v2 等价 (此 3 场景无改善, 也未变差)
-- **Out of scope 下一版继续**:
-  - 方案 G1 (小气一点): tmix=`frames=2:weights=1 1` 仅帧 i + i-1 平滑, motion blur 减轻少但 α 解算稳定
+- **续战 G1 路径** (G1 已成功, 见下条):
+  - 方案 G1 (小气一点): tmix=`frames=2:weights=1 1` 仅帧 i + i-1 平滑, motion blur 减轻少但 α 解算稳定 ✅ **已采纳, 实证成功**
   - 方案 G2 (保守): 仅对 32-laugh 试 `mpdecimate` + 12fps 提取 + 跳过"BLANK"raw 帧 + 改用 Pass 1 跨帧 median (而非 Pass 2 silhouette fill)
   - 方案 G3: 接受 v9 v2 是合理水平, 用户"残影感"实际是 H3 原始 motion blur + 192×192 缩放锐化造成的视觉感, 通过 tauri 窗口设 transparency 阴影 + 调整 APNG 缩放比例缓解 (无需重抠图)
-  - v3.0.1 / V4 release 第一个 P0
+
+### Added
+- **方案 G1 实证成功 (V3.0.1 准备, 2026-09-16 19:13)** — `ffmpeg -vf "tmix=frames=2:weights=1 1"` 仅帧 i + i-1 平均:
+  - **mp4 层验证**: MAD 下降 9.5% (温和 vs G3 21%), 中心像素 luma diff <3, 绿幕背景 (2,243,0) 完全保留. 4 场景全跑通, 帧间差异下降但内容不丢失
+  - **raw v10-final BLANK 帧对比**: 32-laugh G1 = 24 (vs G3 41, vs 原 0), Pass 2 fill 救回后 0 bad/0 half/99 full. 17/22/23 0 BLANK (动作相对温和)
+  - **G1 saved final 4 场景对比 (vs v9 v2)**:
+
+    | scene | v9-v2 bad | G1 bad | v9-v2 very_dark | G1 very_dark | 改善 |
+    |---|---|---|---|---|---|
+    | 17-celebrate | 0 | 0 | 71221 | 76875 | +7.9% (略增, 可接受) |
+    | 22-yay-friday | 0 | 0 | 49331 | 50610 | +2.6% (略增, 可接受) |
+    | 23-dancing | 0 | 0 | 56823 | 51178 | -9.9% ✅ |
+    | 32-laugh | 0 | 0 | 71762 | 62541 | -12.9% ✅ |
+
+  - **postfix G1 修像素数**:
+    - 17-celebrate: pass1=95k + pass2=100k + pass3=9k + pass4=176k
+    - 22-yay-friday: pass1=66k + pass2=59k + pass3=14k + pass4=20k
+    - 23-dancing: pass1=61k + pass2=21k + pass3=11k + pass4=43k
+    - 32-laugh: pass1=137k + pass2=164k + pass3=21k + pass4=149k
+  - **可视化 4 场景 v9 v2 vs G1**: 32-laugh f030/f032/f042 G1 视觉粉色大笑完整 (vs G3 之前深红/泪印), 23-dancing G1 道具+身体干净, 17/22 G1 道具保留+身体干净
+  - **结论**: G1 (tmix=frames=2:weights=1 1) 是 mp4 层残影修复的合适上限. 比 G3 (frames=3) 温和很多, raw v10-final BLANK 帧数从 41 降到 24 (32-laugh), Pass 2 fill 完全救回, 视觉粉色大笑. **G1 当前 = 4 场景最佳 baseline**. 22 场景保持 v9 v2 不动 (无残影感). 26 场景** V3.0.1 baseline = 4 v9 v4 (G1) + 22 v9 v2**
+  - **下一版 release 准备**: V3.0.1 = release-plugin.sh 跑出新 116M linux bin (含 4 G1 APNG) + `gh release upload v3.0.1` 覆盖 v3.0.0 asset
 
 ### Added
 - **18 个 V3 H3 场景注册到 scenes.json (8 → 26, 2026-09-16)**:
