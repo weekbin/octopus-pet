@@ -253,6 +253,24 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
   - **方向 H4** (UI 层): 接受 artifacts, 通过 tauri 窗口设 transparency + 阴影模糊, 让用户视觉感受减轻. 不重抠图, ~30 分钟代码改动
 
 ### Added
+- **方案 H1 治拖影实证成功 (V3.0.1 重新准备, 2026-09-16 19:56)** — 用户接续方向 H1 → H2 → H4 (由简到难), H3 重生成不考虑. 加 v10-final Stage 3.5 `post_faint_decoration_cleanup_h1(alpha_lo=5, alpha_hi=100)`:
+  - **策略**: alpha 5-100 partial alpha 像素 (装饰拖影) 且 RGB 非体色粉 (R>200, G<150, B<150) → α=0. 保留 body 边缘 alpha 100-200 anti-aliasing 让身体渐变不被打断
+  - **覆盖范围**: v10-final main + CLI 两个代码路径都加 (commit 时 v10-final.py + postfix-flicker.py 同 commit)
+  - **执行**: 完整 backup 27 mp4 完整性复检 ✅ (27/27 sha256 一致) + 4 场景 APNG baseline 备份到 /tmp/v9v2-baseline-archive/ (作为对照). 重跑 v10-final 17-celebrate / 22-yay-friday / 23-dancing / 32-laugh + postfix v9 v2
+  - **像素统计**:
+
+    | scene | partial alpha 5-100 (v9-v2 → H1) | very_dark opaque | opaque ≥200 (体色保护) |
+    |---|---|---|---|
+    | 17-celebrate | 105,096 → 7,855 (**-93%**) | 71,221 不变 | 1,405,689 不变 |
+    | 22-yay-friday | 134,669 → 13,739 (**-90%**) | 49,331 不变 | 1,429,467 不变 |
+    | 23-dancing | 111,734 → 6,049 (**-95%**) | 56,823 不变 | 1,399,610 不变 |
+    | 32-laugh | 163,175 → 16,403 (**-90%**) | 71,762 不变 | 1,365,354 不变 |
+
+  - **可视化**: 全 99 帧 contact sheet v9-v2 vs H1 并排, 32-laugh f15-f54 上方 dark spike artifacts 几乎完全消失, 17/22/23 装饰保留 + 道具边缘 partial alpha 拖影消失, 体色粉色身体不变
+  - **结论**: H1 治本 v10-final "decorations partial alpha 拖影" artifact, 不影响 body 边缘 anti-aliasing. 当前 4 场景 v9 v5 = H1 + 22 场景 v9 v2 = **26 场景 V3.0.1 baseline 待发布**
+  - **强约束 (用户原话)**: "不要急着打包, 你现在做的效果里, 拖影比较严重, 还出现了绿幕没处理干净的情况. 切忌, 在没处理好 apng 的效果之前不要忙着打包". 接手人务必先**全 99 帧 contact sheet 视觉复查**再 release, 不要只看像素统计
+
+### Added
 - **18 个 V3 H3 场景注册到 scenes.json (8 → 26, 2026-09-16)**:
   13-debug-snack / 16-deadline-sprint / 17-celebrate / 18-monday-morning /
   19-thumbs-up / 20-thinking / 22-yay-friday / 23-dancing / 24-surprised /

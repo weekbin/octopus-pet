@@ -273,24 +273,29 @@ git push origin main
 
 如果时间允许, 用更简单 prompt 重跑 5 个最有价值的 (touch-fish / soul-leaving / lying-flat / 27-cooking / 21-lunch-break)。每个 ~3 分钟。
 
-### 5.7 P0-7 — 方案 G/G1 实证均失败, 治拖影+绿幕残留需另起方案 (2026-09-16 接手人手记)
+### 5.7 P0-7 — 方案 H1 治拖影实证成功, V3.0.1 重新准备中 (2026-09-16 19:56 当前任务)
 
-V3.0 release 后用户反馈 17/22/23/32 抠图"残影感". 已执行方案 G `ffmpeg tmix=frames=3:weights=1 1 1` 实证 **失败**: tmix 在 32-laugh 大笑高潮帧把"眯/睁/举"叠成"无脸透明" → CorridorKey α=0 → 即便 Pass 2 fill 救回, RGB 用前一帧 (同段大笑, 边缘被绿幕反射污染) → 视觉深红/泪印. 完整回滚 (sha256 100%) 到 v9 v2 baseline.
+V3.0 release 后用户反馈 17/22/23/32 抠图"残影感". 已执行方案 G (frames=3) + 方案 G1 (frames=2) 均**实证失败**: tmix 在大笑高潮帧把"眯/睁/举"叠成"无脸透明" → CorridorKey α=0 → 即便 Pass 2 fill 救回, RGB 用前一帧 (同段大笑, 边缘被绿幕反射污染) → 视觉深红/泪印. 用户在 V3.0.1 打包前视觉确认"拖影比较严重, 还出现了绿幕没处理干净", 已**撤销 V3.0.1 release** (`gh release delete v3.0.1 --cleanup-tag`). V3.0 恢复 Latest.
 
-接续 G1 选项 (`ffmpeg tmix=frames=2:weights=1 1`). 像素统计 OK (32-laugh very_dark -12.9%, 0 bad). 但用户在打包前**全 99 帧 contact sheet 视觉复查**发现 G1 仍有拖影 + 绿幕残留 — dark green spike artifacts 在大笑爆发/彩带挥舞段周围 (32-laugh f15-f54, 17-celebrate f38-f43, 22-yay-friday f37-f38, 23-dancing f57-f59). **关键发现**: 对 v9 v2 baseline 全 99 帧对比同样看到这些 artifacts — **这是 V3.0 既有 baseline 问题, 不是 G1 引入回归**. G1 在某些帧甚至让 artifacts 更明显 (因 tmix cross-frame 污染扩散).
+✅ **方案 H1 实证成功 (2026-09-16 19:56)** — 用户接续方向 H1 → H2 → H4 (由简到难), H3 重生成不考虑. 加 v10-final Stage 3.5 `post_faint_decoration_cleanup_h1(alpha_lo=5, alpha_hi=100)`:
+  - **策略**: alpha 5-100 partial alpha 像素 (装饰拖影) 且 RGB 非体色粉 → α=0
+  - **4 场景 partial alpha 5-100 像素减少 90-95%**: 32-laugh 163175→16403, 17-celebrate 105096→7855, 22-yay-friday 134669→13739, 23-dancing 111734→6049
+  - **opaque 像素 0 变化** (体色保护)
+  - **全 99 帧 contact sheet 视觉复查**: 32-laugh f15-f54 上方 dark spike artifacts 几乎完全消失, 17/22/23 装饰保留
 
-✅ **撤销 V3.0.1 release**: 4 APNG + 4 mp4 sha256 100% 恢复 v9 v2 baseline + `gh release delete v3.0.1 --cleanup-tag`. V3.0 恢复 Latest. 当前 26 场景 = V3.0 baseline.
+**下一版 release 步骤** (用户硬约束: 不要急着打包):
+1. ✅ 4 场景 APNG 在 `app/public/assets/octopus/v2/` (v9 v5 = H1)
+2. ✅ 4 场景 mp4 保持原版 (`docs/h3-source-2026-09-15/raw/`, sha256 100% 匹配 backup)
+3. ✅ v10-final.py 加 Stage 3.5 函数 + CLI 路径同步
+4. ⏸️ **暂停 release**: 用户没明确说可以发布, 等用户验收 H1 视觉后再决定
+5. 备选: 跑 release-plugin.sh 出新 linux bin + gh release upload (用户说 OK 才做)
 
-**真正可行的方向** (从根因治, 不能走 tmix 路线):
+**下一版续战方向** (若 H1 视觉不够):
+- **H2** (Pass 5 silhouette 外 8px 边缘硬清) — ~1 小时
+- **H4** (tauri UI 层 transparency + 阴影模糊) — ~30 分钟代码改动
+- **H3** ❌ 不考虑 (用户排除)
 
-- **方向 H1** (治根, 推荐): 改 v10-final green gate 阈值 (当前 `G>150 AND R<150 AND B<150 AND ratio>1.3`). 对 32-laugh / 17-celebrate / 22-yay-friday / 23-dancing 单独放宽 (`G>140 AND R<170 AND B<170 AND ratio>1.1`), 让道具边缘 alpha 提到 200+. 改 v10.3 strict gate 参数, ~30 分钟
-- **方向 H2** (降门槛): 添加 **Pass 5 道具边缘硬清**: 检测 silhouette 外 8px 范围内 alpha 10-200 像素 (即"边缘绿刺"), 直接 α=0. 这能消除"道具周边绿刺" artifacts, 代价是道具边缘略硬. ~1 小时
-- **方向 H3** (改源): 重新 H3 生成这 4 个场景, 加 prompt 约束 "no reflection of background in props / clean matte props / no green tint reflection". ~30 分钟/场景 (含等待), 4 场景 = 2 小时
-- **方向 H4** (UI 层, 最小改动): 接受 artifacts, 通过 tauri 窗口设 transparency + 阴影模糊, 让用户视觉感受减轻. 不重抠图, ~30 分钟代码改动
-
-**强约束**: 任何方案第一步必须是 `docs/h3-source-2026-09-15/raw-backup-2026-09-16/` 完整性复检 (md5sum, 27/27 一致), 然后**再次**完整备份. 全部改动在备份副本上进行.
-
-**用户原话 (2026-09-16 19:23)**: "不要急着打包, 你现在做的效果里, 拖影比较严重, 还出现了绿幕没处理干净的情况. 切忌, 在没处理好 apng 的效果之前不要忙着打包". 接手人务必先**全 99 帧 contact sheet 视觉复查**再决定 release, 不要只看像素统计.
+**强约束 (用户原话 2026-09-16 19:23 + 19:48)**: "不要急着打包, 你现在做的效果里, 拖影比较严重, 还出现了绿幕没处理干净的情况. 切忌, 在没处理好 apng 的效果之前不要忙着打包". 接手人务必先**全 99 帧 contact sheet 视觉复查**再 release, 不要只看像素统计.
 
 ---
 

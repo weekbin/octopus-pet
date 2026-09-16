@@ -91,6 +91,26 @@ def post_green_residual_mask_v103(rgba):
     return out
 
 
+def post_faint_decoration_cleanup_h1(rgba, alpha_lo=5, alpha_hi=100):
+    """H1 治拖影: 清理装饰 (哈哈/彩带/音符) 留下的浅拖影像素.
+
+    v10-final 在道具装饰 (高亮 RGB 接近 cream/orange/white, partial alpha 10-50)
+    因 CorridorKey 对运动模糊帧提取不全, 留下 partial alpha "残影" 像素.
+    这些像素不是 body 粉色 (R>200, G<150, B<150), 也不是真正透明 (alpha>5).
+
+    策略: alpha 在 5-100 且 RGB 非体色 → α=0.
+    保留 body 边缘 anti-aliasing (alpha 100-200) 让身体渐变不被打断.
+    """
+    out = rgba.copy()
+    a = out[..., 3]
+    rgb = out[..., :3]
+    R = rgb[..., 0]; G = rgb[..., 1]; B = rgb[..., 2]
+    body_pink = (R > 200) & (G < 150) & (B < 150)  # 体色粉 — 保留
+    faint = (a >= alpha_lo) & (a < alpha_hi) & ~body_pink
+    out[faint, 3] = 0
+    return out
+
+
 # === Stage 5: borrow+recolor+inpaint ===
 def find_shift(ref_gray, cur_gray, max_shift=10):
     ref = ref_gray.astype(np.float32) / 255.0 if ref_gray.max() > 1.0 else ref_gray.astype(np.float32)
@@ -300,6 +320,8 @@ def main():
             rgba_u8 = np.dstack([rgb_u8, alpha_u8])
             # Stage 3: strict gate
             rgba_u8 = post_green_residual_mask_v103(rgba_u8)
+            # Stage 3.5 (2026-09-16): H1 治拖影 - 清理道具装饰浅拖影 partial alpha 像素
+            rgba_u8 = post_faint_decoration_cleanup_h1(rgba_u8)
             # Stage 4: forehead white mask
             rgba_u8, _ = post_forehead_white_mask(rgba_u8)
             out_frames.append(rgba_u8)
@@ -382,6 +404,8 @@ if __name__ == "__main__":
                 alpha_u8 = (alpha * 255).astype(np.uint8)
                 rgba_u8 = np.dstack([rgb_u8, alpha_u8])
                 rgba_u8 = post_green_residual_mask_v103(rgba_u8)
+                # Stage 3.5 (2026-09-16): H1 治拖影 - 清理道具装饰浅拖影 partial alpha 像素
+                rgba_u8 = post_faint_decoration_cleanup_h1(rgba_u8)
                 rgba_u8, _ = post_forehead_white_mask(rgba_u8)
                 out_frames.append(rgba_u8)
                 if (i + 1) % 20 == 0 or i == len(paths) - 1:
