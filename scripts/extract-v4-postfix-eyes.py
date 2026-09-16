@@ -4,15 +4,21 @@
 修复 `extract-v4-chromakey-cpu-fallback.py` 的共性错杀: 章鱼脸部 ROI (y=40-60%, x=20-80%) 内的
 眼睛瞳孔/眼线/眼白被 chroma key 当成"低置信度绿幕"误 transparent (alpha=0).
 
-三层修复算法:
+四层修复算法:
   条件 1 (v1): alpha=0 + max(R,G,B) < 60 + 在 ROI 内 → alpha=255 (纯黑瞳孔)
   条件 2 (v2): alpha=0 + 60 ≤ max(R,G,B) < 100 + 在 ROI 内 + 8 邻居中至少 6 个
                 alpha > 128 (被身体包围) → alpha=255 (深绿眼线/眼眶轮廓)
   条件 3 (v3): 在 ROI 内连通小簇 ≤ 30 像素 + 簇平均 RGB < 130 + bbox 周围 2px 环
                 不透明比例 ≥ 50% → alpha=255 (清理眼白绿色斑点)
+  条件 4 (v4): 在 ROI 内连通簇 ≤ 100 像素 + bbox 周围 4px 环不透明比例 ≥ 70%
+                → alpha=255 + cv2.inpaint(radius=3) 修复 RGB 颜色 (填充身体 silhouette
+                边缘被 chroma key 误 transparent 的皮肤色块, 这些块 ≤100 px 且周围
+                仍以 opaque 身体包围, 与大面积身体 silhouette 接触背景的 gap 不同)
 
-约束 ROI 而非全图: 避免误保绿幕边缘黑色阴影 (RGB_max 130+ 区间不修, 防止误保背景).
-约束 8 邻居 (v2) / bbox 不透明比例 (v3): 确保是身体内部孔洞而非边缘接触背景.
+约束 ROI 而非全图: 避免误保绿幕边缘黑色阴影.
+约束 8 邻居 (v2) / bbox 不透明比例 (v3, v4): 确保是身体内部孔洞而非边缘接触背景.
+v4 加 cv2.inpaint (TELEA radius=3) 是关键 — 仅设 alpha=255 不修 RGB 会留下深色斑块
+(原 RGB 是 chroma key 之前的深棕色眼阴影/虹膜边, 视觉上仍是"灰块").
 
 用法:
     # 单文件
@@ -48,8 +54,13 @@ import sys
 
 
 def fix_apng(path: str) -> dict:
-    """修复单 APNG, 返回 {frames, fixed_v1, fixed_v2, fixed_v3}."""
+    """修复单 APNG, 返回 {n_frames, fixed_v1, fixed_v2, fixed_v3, fixed_v4}."""
     from scipy.ndimage import convolve, label
+    try:
+        import cv2
+        has_cv2 = True
+    except ImportError:
+        has_cv2 = False
     img = Image.open(path)
     n_frames = getattr(img, 'n_frames', 1)
     h, w = img.size
@@ -59,10 +70,11 @@ def fix_apng(path: str) -> dict:
     fixed_v1_total = 0
     fixed_v2_total = 0
     fixed_v3_total = 0
+    fixed_v4_total = 0
     for fi in range(n_frames):
         img.seek(fi)
         rgba = np.array(img.convert('RGBA'))
-        roi = rgba[y0:y1, x0:x1]
+        roi = rgba[y0:y1, x0:x1].copy()
         alpha = roi[:, :, 3]
         max_rgb = roi[:, :, :3].max(axis=2)
         rgb = roi[:, :, :3]
@@ -87,7 +99,6 @@ def fix_apng(path: str) -> dict:
         # v3: ROI 内小簇 (≤30 px) + 簇平均 RGB < 130 + bbox 周围 2px 环不透明 ≥ 50%
         #   → 清理眼白绿斑 (chroma key 误把眼白局部当成绿幕)
         v3 = np.zeros_like(alpha, dtype=bool)
-        # 排除 v1/v2 已填的像素, 只在剩余 alpha=0 中找簇
         remaining = (alpha == 0) & ~v1 & ~v2
         if remaining.any():
             labeled, n_comp = label(remaining)
@@ -100,7 +111,6 @@ def fix_apng(path: str) -> dict:
                 avg_max = comp_rgb.max(axis=-1).mean()
                 if avg_max >= 130:
                     continue
-                # bbox 2px 环不透明比例
                 ys, xs = np.where(comp)
                 cy0, cy1 = ys.min(), ys.max()
                 cx0, cx1 = xs.min(), xs.max()
@@ -115,6 +125,33 @@ def fix_apng(path: str) -> dict:
                     v3 |= comp
         n_v3 = int(v3.sum())
 
+        # v4: ROI 内中簇 (≤100 px) + bbox 周围 4px 环不透明比例 ≥ 70%
+        #   → 填充身体 silhouette 边缘被 chroma key 误 transparent 的皮肤色块
+        #   (e.g. 章鱼左眼外角 56 px 深棕色眼阴影 RGB(153,94,63) + cv2.inpaint 修 RGB)
+        #   与 body silhouette 接触背景的大 gap 不同: 大 gap bbox 4px 环不透明 < 70%
+        v4 = np.zeros_like(alpha, dtype=bool)
+        remaining_v4 = (alpha == 0) & ~v1 & ~v2 & ~v3
+        if remaining_v4.any():
+            labeled, n_comp = label(remaining_v4)
+            for c in range(1, n_comp + 1):
+                comp = labeled == c
+                sz = int(comp.sum())
+                if sz > 100:
+                    continue
+                ys, xs = np.where(comp)
+                cy0, cy1 = ys.min(), ys.max()
+                cx0, cx1 = xs.min(), xs.max()
+                pad = 4
+                by0 = max(0, cy0 - pad)
+                by1 = min(alpha.shape[0], cy1 + pad + 1)
+                bx0 = max(0, cx0 - pad)
+                bx1 = min(alpha.shape[1], cx1 + pad + 1)
+                box = alpha[by0:by1, bx0:bx1]
+                opaque_ratio = float((box > 128).mean())
+                if opaque_ratio >= 0.70:
+                    v4 |= comp
+        n_v4 = int(v4.sum())
+
         if n_v1 > 0:
             roi[v1, 3] = 255
             fixed_v1_total += n_v1
@@ -124,6 +161,16 @@ def fix_apng(path: str) -> dict:
         if n_v3 > 0:
             roi[v3, 3] = 255
             fixed_v3_total += n_v3
+        if n_v4 > 0:
+            roi[v4, 3] = 255
+            fixed_v4_total += n_v4
+            # cv2.inpaint 修复 RGB 颜色 (关键: 仅设 alpha=255 不修 RGB 会留深色斑块)
+            if has_cv2:
+                rgb_roi = roi[..., :3].copy()
+                mask_uint8 = v4.astype(np.uint8) * 255
+                if mask_uint8.sum() > 0:
+                    inpainted = cv2.inpaint(rgb_roi, mask_uint8, inpaintRadius=3, flags=cv2.INPAINT_TELEA)
+                    roi[..., :3] = inpainted
 
         rgba[y0:y1, x0:x1] = roi
         frames.append(rgba)
@@ -133,7 +180,8 @@ def fix_apng(path: str) -> dict:
                        append_images=pil_frames[1:],
                        duration=66, loop=1, disposal=2)
     return {'n_frames': n_frames, 'fixed_v1': fixed_v1_total,
-            'fixed_v2': fixed_v2_total, 'fixed_v3': fixed_v3_total}
+            'fixed_v2': fixed_v2_total, 'fixed_v3': fixed_v3_total,
+            'fixed_v4': fixed_v4_total}
 
 
 if __name__ == '__main__':
@@ -143,16 +191,18 @@ if __name__ == '__main__':
     total_v1 = 0
     total_v2 = 0
     total_v3 = 0
+    total_v4 = 0
     for arg in sys.argv[1:]:
         if not os.path.exists(arg):
             print(f'❌ not found: {arg}')
             continue
         result = fix_apng(arg)
         name = os.path.basename(arg)
-        n = result['fixed_v1'] + result['fixed_v2'] + result['fixed_v3']
+        n = result['fixed_v1'] + result['fixed_v2'] + result['fixed_v3'] + result['fixed_v4']
         marker = '✅' if n > 0 else '✓'
-        print(f'{marker} {name}: v1={result["fixed_v1"]} v2={result["fixed_v2"]} v3={result["fixed_v3"]} ({result["n_frames"]} 帧)')
+        print(f'{marker} {name}: v1={result["fixed_v1"]} v2={result["fixed_v2"]} v3={result["fixed_v3"]} v4={result["fixed_v4"]} ({result["n_frames"]} 帧)')
         total_v1 += result['fixed_v1']
         total_v2 += result['fixed_v2']
         total_v3 += result['fixed_v3']
-    print(f'\n=== 总修复: v1={total_v1} (纯黑瞳孔) + v2={total_v2} (深绿眼线) + v3={total_v3} (小簇眼斑) = {total_v1+total_v2+total_v3} 像素 ===')
+        total_v4 += result['fixed_v4']
+    print(f'\n=== 总修复: v1={total_v1} + v2={total_v2} + v3={total_v3} + v4={total_v4} = {total_v1+total_v2+total_v3+total_v4} 像素 ===')

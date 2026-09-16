@@ -255,47 +255,64 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
     取结果最优: 眼白纯度 + 锐利度 + 边界 3 维度同时达标.
   - 配套: 3 个 v4.8 APNG 重建 (current), 桌宠 116×116 透明窗口视觉 OK: 完全无
     绿色描边/阴影/反射, 眼白纯白 + 锐利, 帽色/杯身/放大镜干净, 切换时无绿残影.
-- **post-fix v2 + v3 修复 v4 fallback 输出 18 新 H3 场景眼睛错杀 (2026-09-16)**:
+- **post-fix v2 + v3 + v4 修复 v4 fallback 输出 18 新 H3 场景眼睛错杀 (2026-09-16)**:
   V3.0 H3 视频首批 18 场景走 `extract-v4-chromakey-cpu-fallback.py` 输出后, 用户反馈
   "眼睛被处理成透明的了有一部分, 不是纯白". v4 chroma key 共性错杀两类 RGB:
   (a) **纯黑瞳孔 RGB (19, 43, 10)** — v4.6 `harden_alpha_edges` 把章鱼眼睛黑色瞳孔
   RGB 当成"低置信度绿幕"误 transparent; (b) **深绿眼线/眼眶 RGB (60-100)** — v4.4 dark
   保护 (`max<80 AND g_max_rb<20`) 漏掉 RGB 在 [60, 100) 区间的眼线像素. v2 算法
-  (`60 ≤ max < 100 AND 8 邻居中 ≥6 个 alpha > 128`) 治 (b), 2123 像素总修复. 部署后
+  (`60 ≤ max < 100 AND 8 邻居中 ≥6 个 alpha > 128`) 治 (b), 308 像素修复. 部署后
   用户二次反馈"眼睛还有问题", v3 算法加**连通小簇填充** (≤30 px 簇 + 簇均 RGB<130 +
-  bbox 周围 2 px 环不透明比例 ≥50%) 清理眼白绿斑, 5160 像素额外修复. 总 5468 像素
-  修复 (v2=308 重叠去除 + v3=5160 = 5468) 在 18 场景 × 99 帧 = 1782 帧.
+  bbox 周围 2 px 环不透明比例 ≥50%) 清理眼白绿斑, 5160 像素额外修复.
+  部署后用户**三次反馈"章鱼左眼 (用户视角右) 还有问题, 比刚刚好点"**. 排查发现:
+  v3 漏了大簇 (e.g. 31-apologize f50 章鱼左眼外角 56 像素簇 RGB(153,94,63) 棕色眼阴影).
+  这些大簇**3 边被 opaque sclera 包围, 1 边接触身体轮廓**, bbox 4px 环不透明比例 0.746
+  (够高). 单纯 alpha=255 会留深色斑块, 必须 cv2.inpaint 修 RGB 颜色. **v4 算法**:
+  连通簇 ≤100 px + bbox 周围 4 px 环不透明比例 ≥70% → alpha=255 + cv2.inpaint(TELEA,
+  radius=3) 修复 RGB. 18 场景共 **32736 像素 v4 修复**.
   - **条件 ROI 而非全图** (y=40-60%, x=20-80%): 避免误保绿幕边缘黑色阴影.
-  - **三层条件**:
+  - **四层条件**:
     - v1: `alpha=0 AND max(R,G,B) < 60` (纯黑瞳孔)
     - v2: `alpha=0 AND 60 ≤ max < 100 AND 8 邻居中 ≥6 个 alpha > 128` (深绿眼线)
     - v3: 连通小簇 ≤30 px + 簇均 RGB<130 + bbox 周围 2 px 环不透明比例 ≥50% (眼白绿斑)
-  - **执行位置**: `scripts/extract-v4-postfix-eyes.py` (84 行), 任何走 v4 fallback 输出
-    的 APNG 上桌前必跑一次. v10-final GPU 路径无此问题 (BiRefNet/CorridorKey 不会把
-    眼睛 RGB 当绿幕反射).
-  - **视觉验证**: 18 场景 × 4 帧 on-gray contact sheet (`/tmp/v3-contact/_contact-all.png`),
-    31-apologize/33-magic/23-dancing/24-surprised 重点看, 眼白从"绿斑/半透"→"clean + 锐利".
-  - **数字 v2 vs v3 dry-run** (18 场景 × 5 采样帧 = 90 帧 ROI 内 alpha=0 + max<100 像素):
-    | scene | v2 | v3 | total |
-    | 13-debug-snack | 23 | 159 | 182 |
-    | 16-deadline-sprint | 12 | 114 | 126 |
-    | 17-celebrate | 8 | 79 | 87 |
-    | 18-monday-morning | 17 | 213 | 230 |
-    | 19-thumbs-up | 35 | 97 | 132 |
-    | 20-thinking | 16 | 190 | 206 |
-    | 22-yay-friday | 15 | 258 | 273 |
-    | 23-dancing | 31 | 281 | 312 |
-    | 24-surprised | 24 | 683 | 707 |
-    | 29-shy | 13 | 59 | 72 |
-    | 30-wave | 16 | 114 | 130 |
-    | 31-apologize | 46 | 1039 | 1085 |
-    | 32-laugh | 22 | 108 | 130 |
-    | 33-magic | 8 | 855 | 863 |
-    | 34-meditation | 8 | 148 | 156 |
-    | 35-blink | 6 | 335 | 341 |
-    | 36-cheer | 4 | 144 | 148 |
-    | payday | 4 | 284 | 288 |
-    | **TOTAL** | **308** | **5160** | **5468** |
+    - v4: 连通簇 ≤100 px + bbox 周围 4 px 环不透明比例 ≥70% + cv2.inpaint(r=3) 修 RGB
+      (填充身体 silhouette 边缘被 chroma key 误 transparent 的皮肤色块, 区别于大面积
+      身体 silhouette 接触背景 — 大簇 bbox 4px 环不透明 < 70% 不填, 避免矩形凸起)
+  - **v4 关键**: 仅 alpha=255 不修 RGB 会留深色斑块 (原 RGB 是 chroma key 之前的
+    深棕色眼阴影/虹膜边). cv2.inpaint(TELEA, r=3) 用 PDE 从远处 opaque 像素扩散
+    身体色覆盖.
+  - **执行位置**: `scripts/extract-v4-postfix-eyes.py` (~150 行, 4 层条件),
+    任何走 v4 fallback 输出的 APNG 上桌前必跑一次.
+    v10-final GPU 路径无此问题 (BiRefNet/CorridorKey 不会把眼睛 RGB 当绿幕反射).
+  - **决策路径**: v5 (4-side pad all ≥0.5) 拒绝太多 (49/44/20 等大簇 1 边到 body silhouette)
+    → v6 (bbox pad=4 ≥0.7 不 inpaint) 修了 alpha 但 RGB 深色, 视觉仍像黑斑 → v7 (v6 + cv2.inpaint)
+    显著改善, 集成到 `extract-v4-postfix-eyes.py` 名为 v4.
+  - **视觉验证**: 18 场景 × 4 帧 on-gray contact sheet (`/tmp/visual-on-gray/`),
+    31-apologize/24-surprised/16-deadline-sprint/payday 重点看, 章鱼左眼外角深棕色斑块
+    → 干净. 4 帧各 ROI 内 alpha=0 像素数 (e.g. 31-apologize f50 175 → 112).
+  - **数字 v2 + v3 + v4 实跑 (18 场景 × 99 帧 = 1782 帧)**:
+    | scene | v2 | v3 | v4 | total |
+    | 13-debug-snack | 0 | 0 | 744 | 744 |
+    | 16-deadline-sprint | 0 | 0 | 2542 | 2542 |
+    | 17-celebrate | 0 | 0 | 3423 | 3423 |
+    | 18-monday-morning | 0 | 0 | 3127 | 3127 |
+    | 19-thumbs-up | 0 | 0 | 125 | 125 |
+    | 20-thinking | 0 | 0 | 18 | 18 |
+    | 22-yay-friday | 0 | 0 | 90 | 90 |
+    | 23-dancing | 0 | 0 | 1982 | 1982 |
+    | 24-surprised | 0 | 0 | 1268 | 1268 |
+    | 29-shy | 0 | 0 | 85 | 85 |
+    | 30-wave | 0 | 0 | 5261 | 5261 |
+    | 31-apologize | 1 | 0 | 2348 | 2349 |
+    | 32-laugh | 0 | 0 | 2529 | 2529 |
+    | 33-magic | 0 | 0 | 4661 | 4661 |
+    | 34-meditation | 0 | 0 | 0 | 0 |
+    | 35-blink | 0 | 0 | 81 | 81 |
+    | 36-cheer | 0 | 0 | 178 | 178 |
+    | payday | 0 | 0 | 4274 | 4274 |
+    | **TOTAL** | **1** | **0** | **32736** | **32737** |
+    注: v2/v3 数字是 v4 实跑计数 (含 v1/v2/v3 残留). 第一轮 v2+v3 跑后 alpha=0 几乎全部
+    由 v4 算法覆盖 (大簇), 所以 v2/v3 这轮几乎 0.
 - **cargo test 预期值同步 2 → 3 V2 场景 (drink-coffee 加项遗漏)**:
   修 `src-tauri/tests/mcp_roundtrip.rs::list_states_returns_2_v2_scenes` 期望值
   2→3 + 加 drink-coffee assertion, 8/8 cargo tests 重新绿.
