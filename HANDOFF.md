@@ -1,6 +1,6 @@
 # Handoff: octopus-pet V3.0 H3 视频资产管线 (2026-09-16)
 
-> **状态 (2026-09-16 19:30)**: H3 视频生成 ✅ | 首尾帧验证 ✅ | mp4 归档 ✅ | v10-final 重生成 18 APNG ✅ (BiRefNet+CorridorKey 治本白方块) | flicker post-fix **v8 three-pass** ✅ (Pass 2 取消治标不治本方向错了, Pass 4 跨帧 median RGB fill stable_mask 治本 32-laugh 19 transparent 帧撕裂; 26 场景全套 1042647 majority-voting 像素修复) | scenes.json 8→26 ✅ | check-scenes-sync + lint + test ✅. **待**: `release-plugin.sh` 跑 V3.0 release.
+> **状态 (2026-09-16 20:00)**: H3 视频生成 ✅ | 首尾帧验证 ✅ | mp4 归档 ✅ | v10-final 重生成 18 APNG ✅ (BiRefNet+CorridorKey 治本白方块) | flicker post-fix **v9 v2 four-pass** ✅ (Pass 2 silhouette 内 transparent fill 治 PIL APNG encoder cascading bug — `frames[i]=frames[i-1].copy()` 在 disposal=2 下被错编码成 raw transparent; 改为保留 raw 背景 + 仅 fill silhouette; Pass 4 改为前一帧 RGB 治 v8 跨帧 median 姿势鬼影; 26 场景全套 777390 flicker + 379592 silhouette + 163021 sub-silhouette + 698274 majority-voting 像素修复) | scenes.json 8→26 ✅ | check-scenes-sync + lint + test ✅. **待**: `release-plugin.sh` 跑 V3.0 release.
 > **作者**: Mavis (weekbin user, 2026-09-15 23:38 - 2026-09-16 00:03)
 > **接手人**: 当前接手 Mavis (2026-09-16 12:13 → 15:00 切换模型方案)
 > **优先级**: P0 — V3.0 release 阻塞项
@@ -159,6 +159,25 @@
     - **Pass 2 直接模板替换整个 silhouette** (full_sil = template_a>200, RGB + alpha 同步覆盖): 治本半脸. 32-laugh f030/f042/f044 大笑姿势一致, 无左右撕裂.
     - **Pass 4 NEW — global per-pixel majority voting**: 跨 99 帧计算每像素 alpha>=200 帧数 ≥ 70% → stable_mask (5 场景 stable body 11000-13000 像素). fill stable_mask 内 alpha<200 + RGB sum>300 像素到 alpha=255. RGB sum>300 守卫避免 fill 腐蚀黑色背景. 70% 阈值平衡: 60% fill 姿势切换帧 (嘴张开/合拢时嘴内/嘴外切换), 80% 覆盖不足. 5 场景共 13749 majority-voting 像素修复; 26 场景全套 85723.
 - **v7 抽帧视觉验证通过** (17-celebrate f0/f14/f28/f42/f68/f84 / 32-laugh f0/f30/f42/f44 / 22-yay-friday f68 / 23-dancing f60 / 36-cheer f68): 章鱼完整粉色 + 姿势自然 + 道具保留 + **无半脸** + **无 flicker**. stable_mask & alpha<200 像素 = 0 跨所有抽帧 — Pass 4 完全 fill 残留 body 透明像素.
+- **v8 three-pass 治本 32-laugh 19 transparent 帧撕裂** (commit `2a20c33`, 2026-09-16 19:30):
+  - **v7 部署后用户第二轮反馈 "32-laugh 19 个 transparent 帧仍有撕裂 (挖洞/半脸)"**, 根因: Pass 2 模板帧 silhouette ≠ 当前帧 silhouette (大笑爆发帧姿势 mismatch) — 治标不治本.
+  - **v8 关键变更**:
+    - **Pass 2 模板替换取消**: 跨帧 median RGB 在 stable_mask (70%+ visible) 内对头部/触手等稳定 body 区域无撕裂 (RGB median 稳定), 对嘴/眼姿势变化区域有混合 (轻微姿势模糊但章鱼"在").
+    - **Pass 3 不再跳过 Pass 2 命中帧**: Pass 2 取消, 跳过逻辑无意义.
+    - **Pass 4 取消 rgb_sum>300 守卫**: transparent 帧 (RGB sum<300 被腐蚀) 无法 fill. v8 不管 RGB sum 直接 fill stable_mask 内 alpha<200 像素 alpha=255 + RGB = 跨 99 帧 median RGB.
+  - **v8 抽帧验证** (3 关键场景): 章鱼完整粉色 + 姿势自然 + 道具保留 + **无挖洞/无半脸/无撕裂**. 姿势变化区域 (嘴/眼) 轻微混合但比 v7 撕裂好.
+- **v8 部署后用户第三次反馈 "v8 比 v7 还差, 重新来"** (2026-09-16 19:30): 跨帧 median RGB fill stable_mask 在姿势剧烈变化帧 (32-laugh 大笑爆发 / 17-celebrate 举手欢呼) 上把"眯眼/睁眼"RGB 混合成"鬼影"折中态 (眯眼 → 半闭), 用户判断"姿势模糊比撕裂更糟".
+- **v9 v1 整帧替换前一帧 RGBA (commit 待 push)**: Pass 2 改 `frames[i] = frames[i-1].copy()` (cascading 整帧替换); Pass 4 fill 改用前一帧 (i-1) RGB 而非跨帧 median. 抽帧 in-memory 完美 (saved f012=17558 opaque) — 但实际 saved file 视觉错误 (PIL APNG encoder cascading bug).
+- **v9 v2 治本 PIL APNG encoder cascading bug (commit 待 push, 2026-09-16 20:00)**:
+  - **v9 v1 抽帧验证诡异发现**: in-memory frames[12] (Pass 2 整帧替换后) opaque=17558, 但 PIL saved file seek(12) opaque=538 + saved file 报 "APNG contains frame sequence errors" + n_frames 99→88-90. 排查根因: PIL APNG encoder 在 disposal=2 模式下处理 `frames[i] == frames[i-1]` (cascading) 时, 把后续帧错编码为 raw transparent frame (PNG fcTL 序列错位 + 帧数据覆盖 raw transparent 帧).
+  - **v9 v2 修复**: 取消整帧 cascading 替换 (`frames[i] = frames[i-1].copy()` 触发 encoder cascading 错编码), 改为 **silhouette 内 transparent 像素 fill**:
+    - silhouette mask = ±5 帧 alpha median >= 200 (跟 Pass 3 同算法)
+    - 当前 transparent (alpha<100) + silhouette 内 → fill alpha=255 + RGB = prev_frame (i-1) RGB
+    - 保留 raw transparent 背景 (alpha=0)
+  - **v9 v2 关键洞察**: encoder 看到帧 pixel 跟 raw transparent 不同 (有 silhouette 内 fill), 不触发 cascading 优化 → saved file n_frames=99 + 视觉正确. ffmpeg 渲染 saved f011 opaque=17529 + RGB=(215,86,77) 粉色 ✓. fill RGB 用前一帧 = 同 cycle 相邻帧 (时间连续 + 姿势清晰), 无撕裂无鬼影.
+  - **v9 v2 实跑全套 26 场景**: total pass1=777390 flicker + pass2=379592 silhouette + pass3=163021 sub-silhouette + pass4=698274 majority-voting 像素修复. 5 场景触发 Pass 2: 17-celebrate 82849 / 22-yay-friday 59758 / 23-dancing 21572 / 32-laugh 178515 / 36-cheer 36898. 其他 21 场景 pass2=0.
+  - **v9 v2 抽帧验证全套 26 场景**: 全部 n_frames=99 + bad-frames=0 + min% 范围 30.6%-36.5% (无 transparent 塌陷帧). 5 关键场景抽帧 (17-celebrate f16-f21 / 22-yay-friday 5 帧 / 32-laugh f42-f48 / 36-cheer 5 帧 / 23-dancing 5 帧) opaque 全部 13000-17000 + RGB 全部粉色 (R>210, G<100, B<100). **章鱼完整粉色 + 姿势自然过渡 + 道具保留 + 无挖洞/无撕裂/无鬼影**. Pass 2 命中帧姿势"暂停" 6×66ms=396ms (cascading fill = 前一完整帧姿势重复), 用户接受 trade-off (比 v7 撕裂/v8 鬼影好).
+  - **执行位置**: `scripts/extract-v10-final-postfix-flicker.py` (~210 行), Pass 1 + Pass 2 (silhouette fill) + Pass 3 + Pass 4 (prev RGB fill). 任何走 v10-final 输出的 APNG 上桌前必跑一次 (idempotent).
 
 **v4 fallback + 4 层 post-fix 留作 CPU-only fallback** (无 GPU 时的最终保底). 已 commit `4d02292` 4d02292 (v4 inpaint 32736 像素). 任何走 v4 fallback 输出的 APNG 上桌前必跑 `scripts/extract-v4-postfix-eyes.py` (4 层条件).
 

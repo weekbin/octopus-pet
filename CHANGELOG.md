@@ -7,38 +7,51 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
-- **5 V3 H3 场景 flicker 治本 v8 (Pass 2 取消, Pass 4 跨帧 median RGB fill) (2026-09-16)**:
-  v7 部署后用户反馈"32-laugh 19 个 transparent 帧仍有撕裂 (挖洞/半脸)". 根因:
-  Pass 2 模板帧 silhouette ≠ 当前帧 silhouette (大笑爆发帧姿势 mismatch) — 治
-  标不治本. 重新审视: Pass 2 应该取消, transparent 帧完全交给 Pass 4 跨帧
-  median RGB fill stable_mask.
-  - **v8 关键变更**:
-    - **Pass 2 模板替换取消** (v7 治标不治本): 模板帧 silhouette ≠ 当前帧
-      silhouette 导致撕裂章鱼. 跨帧 median RGB 在 stable_mask (70%+ visible)
-      内对头部/触手等稳定 body 区域无撕裂 (RGB median 稳定), 对嘴/眼姿势变
-      化区域有混合 (轻微姿势模糊但章鱼"在").
-    - **Pass 3 不再跳过 Pass 2 命中帧**: Pass 2 取消, 跳过逻辑无意义.
-    - **Pass 4 取消 rgb_sum>300 守卫**: 该守卫让 transparent 帧 (RGB sum<300
-      被腐蚀) 无法 fill. v8 不管 RGB sum 直接 fill stable_mask 内 alpha<200
-      像素 alpha=255 + RGB = 跨 99 帧 median RGB.
-  - **v8 实跑** (3 关键场景):
-    | scene | pass1 | pass3 | pass4 |
-    |---|---|---|---|
-    | 17-celebrate | 73231 | 10221 | 217324 |
-    | 22-yay-friday | 52034 | 11707 | 68341 |
-    | 32-laugh | 103880 | 16111 | 200327 |
-    | **3 场景合计** | **229145** | **38039** | **485992** |
-    | 26 场景全套 | 777390 | 160400 | 1042647 |
-  - **v8 抽帧视觉验证** (32-laugh 19 transparent 帧 / 17-celebrate 16 关键帧 /
-    22-yay-friday 5 关键帧): 章鱼完整粉色 + 姿势自然过渡 + 道具保留 + **无挖
-    洞/无半脸/无撕裂**. 姿势变化区域 (嘴/眼) 轻微混合但比 v7 撕裂好 10x.
-  - **算法权衡**: cross-frame median RGB 在姿势剧烈变化帧上 (32-laugh 大笑
-    爆发) 嘴/眼区域 RGB 混合成"模糊过渡" — 但章鱼始终完整 + 透明帧不再
-    "消失". v8 是 post-fix 能做到的最佳; 治本只能改进 v10-final (BiRefNet/
-    CorridorKey 在大笑姿势上 unmixing 失败).
-  - **执行位置**: `scripts/extract-v10-final-postfix-flicker.py` (~200 行),
-    Pass 1 + Pass 3 + Pass 4. 任何走 v10-final 输出的 APNG 上桌前必跑一次
-    (idempotent). 升级自 v7 (commit `cabf44b`).
+- **26 场景 flicker 治本 v9 v2 (PIL APNG encoder cascading bug 修复, Pass 2 保留 raw 背景 + 仅 fill silhouette) (2026-09-16)**:
+  v8 部署后用户反馈"v8 比 v7 还差, 重新来" — 跨帧 median RGB fill stable_mask
+  在姿势剧烈变化帧 (32-laugh 大笑爆发 / 17-celebrate 举手欢呼) 上把"眯眼/睁眼"
+  RGB 混合成"鬼影"折中态 (眯眼 → 半闭), 用户判断"姿势模糊比撕裂更糟".
+  v9 v1 改 Pass 2 = 整帧替换前一帧 RGBA (cascading), Pass 4 fill 用前一帧 RGB.
+  v9 v1 抽帧 in-memory 完美 (saved f012=17558 opaque) — 但实际 saved file 视觉错
+  误 (PIL APNG encoder cascading 帧错编码, saved f012=538 opaque = 挖洞). 排查
+  发现 PIL APNG encoder 在 disposal=2 + cascading 帧 (`frames[i] == frames[i-1]`)
+  场景把后续帧错编码为 raw transparent, saved file 报 "APNG contains frame sequence
+  errors", ffmpeg 渲染 saved f012=538 (transparent) — **视觉挖洞**. 修复 v9 v2:
+  Pass 2 保留 raw transparent 背景, 仅 fill silhouette 内 transparent 像素
+  (alpha=255 + RGB=prev_frame), encoder 看到帧 pixel 跟 raw 不同不触发 cascading bug.
+  - **v9 v2 关键变更** (相对 v9 v1):
+    - **Pass 2 取消 cascading 整帧替换**: `frames[i] = frames[i-1].copy()` 触发
+      PIL APNG encoder cascading 错编码 (saved f012=538 vs in-memory f012=17558,
+      n_frames 99→88-90, "APNG contains frame sequence errors").
+    - **Pass 2 改为 silhouette 内 fill (in-place)**: silhouette mask = ±5 帧
+      alpha median >= 200 (跟 Pass 3 同算法), 当前 transparent + silhouette 内
+      → alpha=255 + RGB=prev_frame RGB. 保留 raw transparent 背景 (alpha=0),
+      encoder 看到帧内容跟 raw 不同 → 不触发 cascading 优化 → saved file
+      n_frames=99 + 视觉正确 (ffmpeg f011 opaque=17529, RGB=(215,86,77) 粉色).
+    - **Pass 3 / Pass 4 沿用 v9 v1**: 跨帧 median 替换为前帧 RGB fill, 姿势
+      清晰. Pass 3 不跳过 Pass 2 命中帧 (Pass 2 改成 in-place fill 后, Pass 3
+      不会冲突).
+  - **v9 v2 实跑** (26 场景全套, 总修 ~1.22M 像素):
+    | pass | 26 场景合计 |
+    |---|---|
+    | pass1 (1-frame flicker) | 777390 |
+    | **pass2 (silhouette fill)** | **379592** |
+    | pass3 (sub-silhouette median) | 163021 |
+    | pass4 (stable_mask + prev RGB) | 698274 |
+    - 5 场景触发 Pass 2 (有 transparent 帧): 17-celebrate 82849 / 22-yay-friday
+      59758 / 23-dancing 21572 / 32-laugh 178515 / 36-cheer 36898. 其他 21 场景
+      pass2=0 (无 transparent 帧).
+  - **v9 v2 抽帧验证全套 26 场景** (ffmpeg + PIL seek): 全部 n_frames=99, bad-frames=0,
+    min% 范围 30.6%-36.5% (无 transparent 塌陷帧). 5 关键场景抽帧 (17-celebrate
+    f16-f21 / 22-yay-friday 5 帧 / 32-laugh f42-f48 / 36-cheer 5 帧 / 23-dancing 5
+    帧) opaque 全部 13000-17000, RGB mean 全部粉色 (R>210, G<100, B<100). **章
+    鱼完整粉色 + 姿势自然过渡 + 道具保留 + 无挖洞/无撕裂/无鬼影**. Pass 2 命
+    中帧姿势"暂停" 6×66ms=396ms (cascading fill = 前一完整帧姿势重复), 用户接
+    受 trade-off (比 v7 撕裂/v8 鬼影好).
+  - **执行位置**: `scripts/extract-v10-final-postfix-flicker.py` (~210 行),
+    Pass 1 + Pass 2 (silhouette fill) + Pass 3 + Pass 4 (prev RGB fill).
+    任何走 v10-final 输出的 APNG 上桌前必跑一次 (idempotent). 升级自 v9 v1
+    (在 v8 commit `2a20c33` 基础上重写 Pass 2).
 - **5 V3 H3 场景 v10-final flicker 治本 v7 four-pass (2026-09-16)**:
 - **5 V3 H3 场景 v10-final flicker 治本 v7 four-pass (2026-09-16)**:
   v6 部署后用户反馈"17/32 还是有闪烁, 没处理好". 排查发现两个残留问题:
