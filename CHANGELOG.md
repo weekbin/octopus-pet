@@ -7,7 +7,42 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
-- **5 V3 H3 场景 v10-final 输出 1-frame flicker 修复 (2026-09-16)**:
+- **5 V3 H3 场景 v10-final 整章鱼空白帧模板替换修复 v5 (2026-09-16)**:
+  v3 5-frame window 部署后用户反馈"还是有问题, 有几帧章鱼变成空白的只有
+  轮廓了". 排查: 17-celebrate 8 帧连续 alpha_mean<10 (CorridorKey 跨帧
+  unmixing 完全失败, 整段 alpha=0 不止边界), 32-laugh f29-f33 连续 5 帧
+  空白 (大笑爆发帧), 22-yay-friday f38-f40 + f47-f48 酒杯遮挡, 23-dancing
+  f54-f55 音符遮挡, 36-cheer f63-f65 彩旗遮挡. 单看 per-pixel flicker fix
+  抓不到 — 整章鱼 silhouette 几乎全透明, alpha<150 守卫失效 (像素根本不是
+  <150 是直接 0).
+  - **v5 two-pass 修复方案**:
+    - **Pass 1** — per-pixel temporal fill (修 1-frame flicker, v3 升级):
+      滚动窗口 ±7 (vs v3 的 ±2), 检测 curr_a<150 + RGB sum>300 + 近邻
+      max alpha≥200 → fill alpha=255.
+    - **Pass 2** — bad-frame template replace (新增, 治整章鱼空白):
+      检测 alpha_mean<30 异常帧 → 在 ±15 帧范围内找最近模板帧
+      (alpha_mean>80 = 章鱼完整可见) → 复制模板帧 silhouette 区域 (alpha>100)
+      的 RGB+alpha 覆盖当前帧空白 silhouette. RGB 必须一起复制 (空白帧
+      silhouette 像素 RGB 被腐蚀成黑色背景, 只复制 alpha mask 出来章鱼变
+      暗红黑色 — 验证失败).
+  - **算法权衡**: 模板帧替换会让章鱼"轻微卡顿 1 帧" (姿势差异大时),
+    比"完全空白"好. ±15 范围限制章鱼姿势变化不致太大. alpha_mean>80 守卫
+    保证模板帧是完整章鱼而非半章鱼.
+  - **5 场景实跑** (raw → v5):
+    | scene | bad frames (raw alpha_mean<30) | v5 bad frames | pass1 pixels | pass2 frames |
+    | 17-celebrate | 17 (f11,12,16-21,26,42,45-46,48-52) | **0** | 73231 | 17 |
+    | 22-yay-friday | 5 (f38-40,47,48) | **0** | 52034 | 5 |
+    | 23-dancing | 2 (f54,55) | **0** | 45245 | 2 |
+    | 32-laugh | 17 (f25,29-33,42-45,51-53,61-63,68) | **0** | 103880 | 15 |
+    | 36-cheer | 3 (f63,64,65) | **0** | 59459 | 3 |
+    | **TOTAL** | **44 frames** | **0** | **333849** | **42** |
+    pass2 替换 42 帧模板帧 = 5 场景坏帧 100% 修复. 抽帧验证 17/22/23/32/36
+    关键帧 (f11/f12/f17/f21/f26 / f39 / f54 / f30/f32 / f64/f65) 章鱼完整
+    粉色 + 姿势自然 + 道具保留.
+  - **执行位置**: `scripts/extract-v10-final-postfix-flicker.py` (~156 行),
+    Pass 1 + Pass 2. 任何走 v10-final 输出的 APNG 上桌前必跑一次
+    (idempotent). 升级自 v3 (commit `749051d`).
+- **5 V3 H3 场景 v10-final 输出 1-frame flicker 修复 v3 (2026-09-16)**:
   18 V3 场景部署后用户反馈"17/22/23/32/36 处理完成的 apng 有闪烁的效果,
   其他效果都还不错". 排查: 5 场景共同特征 = 含大量飞舞道具 (彩带/酒杯/音符/
   哈哈字/彩旗). v10-final (CorridorKey) 在这种帧上 alpha mask 偶发掉到

@@ -128,15 +128,24 @@
 
 **建议**: 选项 B (可推迟到 V3.0 release 后, 18 合格已足够 V3.0 默认场景扩到 14+)。
 
-### 5.2 P0-2 — 18 个合格 mp4 → APNG (抽帧 + 去绿幕) — **🔄 v10-final 重生成中 2026-09-16 15:06 (BiRefNet+CorridorKey 治本白方块)**
+### 5.2 P0-2 — 18 个合格 mp4 → APNG (抽帧 + 去绿幕) — **✅ 完成 2026-09-16 18:30 (v10-final 重生成 + v5 two-pass post-fix)**
 
 **v4 fallback 物理上限被用户戳穿** (2026-09-16 14:54 "眼睛这里有很明显的像正方形的白色区域"): v4 chroma key 把皮肤误判为绿 → alpha=0 → post-fix 用肤色 inpaint ≠ 黑色眼白 → 仍有白方块残留. 颜色阈值路线极限 ~95%, 剩余 5% 必须换 unmixing 模型.
 
-**v10-final 重生成 (2026-09-16 15:00 启动)**:
+**v10-final 重生成 (2026-09-16 15:00 启动, 18:30 完成)**:
 1. 从 git 历史 `922b642~1` 恢复 `scripts/extract-v52-apng.py` (v10-final 依赖)
 2. `scripts/extract-v10-final.py` 加 `H3_VIDEOS_V3` 字典 (18 新场景 mp4) + CLI 模式 `python3 scripts/extract-v10-final.py scene1 scene2 ...`
 3. BiRefNet 1024 fp16 alpha hint → CorridorKey GreenFormer 2048 tiled fp16 linear alpha + straight FG → v10.3 strict gate → forehead_white_mask H3 源 ROI 缝补 → borrow+recolor+inpaint 道具治本 → ROI demote 放大镜/桌子
-4. 已完成: 31-apologize (验证零白方块) / 13-debug-snack / 16-deadline-sprint / 17-celebrate (4/18). 其余 14 场景后台跑 (~25 分钟, 单场景 ~84s)
+4. **全部 18 场景完成** (commit `194f5c9`), 验证零白方块 (f50 contact sheet)
+
+**v3 5-frame window flicker post-fix 部署后用户第二轮反馈**: "还是有问题, 有几帧章鱼变成空白的只有轮廓了".
+- 排查: v3 修 1-frame 像素级抖动 OK, 但 5 场景有 44 帧 (raw alpha_mean<30) 是整章鱼 silhouette 完全透明, 像素级检测抓不到.
+- **v5 two-pass 修复** (commit 本次):
+  - **Pass 1** — per-pixel temporal fill, ±7 窗口, 333849 flicker 像素修复
+  - **Pass 2** — bad-frame template replace, alpha_mean<30 异常帧用 ±15 范围最近模板帧 (alpha_mean>80) silhouette RGB+alpha 替换, 42 frames 修完
+- **5 场景 bad-frames 100% 清零**: 17-celebrate 17 → 0 / 22-yay-friday 5 → 0 / 23-dancing 2 → 0 / 32-laugh 17 → 0 / 36-cheer 3 → 0
+- **抽帧视觉验证通过** (f11/f12/f17/f21/f26 / f39 / f54 / f30/f32 / f64/f65): 章鱼完整粉色 + 姿势自然 + 道具保留
+- **算法权衡**: 模板帧替换让章鱼"轻微卡顿 1 帧" (姿势差异大时), 比完全空白好. ±15 范围限制 + alpha_mean>80 守卫保证模板帧是完整章鱼.
 
 **v4 fallback + 4 层 post-fix 留作 CPU-only fallback** (无 GPU 时的最终保底). 已 commit `4d02292` 4d02292 (v4 inpaint 32736 像素). 任何走 v4 fallback 输出的 APNG 上桌前必跑 `scripts/extract-v4-postfix-eyes.py` (4 层条件).
 
