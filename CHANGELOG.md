@@ -218,6 +218,13 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
   - v4 fallback + 4 层 post-fix (`scripts/extract-v4-postfix-eyes.py`) 仍保留
     作 CPU-only fallback. 任何走 v4 fallback 输出的 APNG 上桌前必跑 post-fix.
 
+### Release (2026-09-16)
+- **V3.0 GitHub Release published**: <https://github.com/weekbin/octopus-pet/releases/tag/v3.0>
+  - 资产 `octopus-pet.linux.bin` (116MB) — 26 V2 APNG 内嵌 91MB + Rust binary 25MB.
+  - **V3.0+ binary 走 release asset, 不再 commit 进 git**: 之前 V2.0 8 V2 场景 ~30MB commit OK, V3.0 26 场景 116MB 超 GitHub 100MB 单文件 commit 限制 (`GH001: Large files detected`).
+  - **`bin/octopus-pet` wrapper 自动从 release URL 下载兜底**: 第一次 `git clone` 后 wrapper 在找不到本地/缓存 binary 时, curl/wget 从 `https://github.com/weekbin/octopus-pet/releases/download/v3.0/octopus-pet.${KERNEL}.bin` 下载并缓存到 `bin/octopus-pet.${KERNEL}.bin`. 设 `OCTOPUS_PET_SKIP_DOWNLOAD=1` 抑制兜底下载.
+  - **历史 commit 中的 binary 用 `git filter-repo --path bin/octopus-pet.linux.bin --invert-paths` 从 history 删除**: 强制 force-push 后 repo 不再含 116MB object, 后续 commits 可正常 push.
+
 ### Added
 - **18 个 V3 H3 场景注册到 scenes.json (8 → 26, 2026-09-16)**:
   13-debug-snack / 16-deadline-sprint / 17-celebrate / 18-monday-morning /
@@ -783,5 +790,6 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 - 4.2MB ARM64 binary (`src-tauri/target/release/octopus-pet`)
 - Verified via `printf '{...}' | octopus-pet --mcp-stdio` (initialize + tools/list + tools/call)
 
-[Unreleased]: https://github.com/weekbin/octopus-pet/compare/HEAD
+[Unreleased]: https://github.com/weekbin/octopus-pet/compare/v3.0...HEAD
+[3.0.0]: https://github.com/weekbin/octopus-pet/releases/tag/v3.0
 [0.1.0]: https://github.com/weekbin/octopus-pet/releases/tag/v0.1.0

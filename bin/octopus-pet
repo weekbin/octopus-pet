@@ -9,13 +9,10 @@
 # Binary resolution order (first match wins):
 #   1. ${PLUGIN_ROOT}/src-tauri/target/debug/octopus-pet      (local dev build)
 #   2. ${PLUGIN_ROOT}/src-tauri/target/release/octopus-pet    (local release build)
-#   3. ${SCRIPT_DIR}/octopus-pet.${KERNEL}.bin                (committed release
-#      artifact for the current OS — macos / linux / windows. So a fresh
-#      `git clone` works as a plugin with zero local build, on any platform.)
-#
-# Produce / refresh the platform artifact via:
-#   scripts/release-plugin.sh           (auto-detects host kernel, writes
-#                                        bin/octopus-pet.${KERNEL}.bin)
+#   3. ${SCRIPT_DIR}/octopus-pet.${KERNEL}.bin                (locally cached release
+#      artifact, may have been downloaded by this wrapper or copied from a build)
+#   4. Download from GitHub Release v3.0                    (auto-fallback for
+#      fresh `git clone`; cached at step 3 path for subsequent runs)
 #
 # The chosen binary replaces this shell via exec, so stdio and signals
 # flow through cleanly (JSON-RPC 2.0 over stdin/stdout per MCP 2024-11-05).
@@ -46,13 +43,45 @@ for candidate in \
   fi
 done
 
+# Fallback: download from GitHub Release (V3.0+ 不 commit bin/*.bin, 走 release asset).
+# 26 V2 APNG 内嵌 91MB + Rust binary 25MB = 116MB > GitHub 100MB 单文件 commit 限制.
+if [ -z "$INNER_BIN" ] && [ "${OCTOPUS_PET_SKIP_DOWNLOAD:-0}" != "1" ]; then
+  RELEASE_BIN="${SCRIPT_DIR}/octopus-pet.${KERNEL}.bin"
+  REPO_URL="https://github.com/weekbin/octopus-pet"
+  echo "octopus-pet: binary not found locally, downloading from GitHub Release v3.0 ..." >&2
+  echo "  (set OCTOPUS_PET_SKIP_DOWNLOAD=1 to suppress this fallback)" >&2
+  # Pick a downloader that's actually installed; macOS ships curl, Linux typically curl/wget.
+  if command -v curl >/dev/null 2>&1; then
+    if ! curl -fL --retry 3 --connect-timeout 10 -o "$RELEASE_BIN.tmp" \
+         "${REPO_URL}/releases/download/v3.0/octopus-pet.${KERNEL}.bin"; then
+      rm -f "$RELEASE_BIN.tmp"
+      echo "ERROR: download from ${REPO_URL}/releases/download/v3.0/ failed." >&2
+    fi
+  elif command -v wget >/dev/null 2>&1; then
+    if ! wget -q --tries=3 --timeout=10 -O "$RELEASE_BIN.tmp" \
+         "${REPO_URL}/releases/download/v3.0/octopus-pet.${KERNEL}.bin"; then
+      rm -f "$RELEASE_BIN.tmp"
+      echo "ERROR: download from ${REPO_URL}/releases/download/v3.0/ failed." >&2
+    fi
+  else
+    echo "ERROR: neither curl nor wget available for download." >&2
+  fi
+  if [ -f "$RELEASE_BIN.tmp" ]; then
+    mv "$RELEASE_BIN.tmp" "$RELEASE_BIN"
+    chmod +x "$RELEASE_BIN"
+    INNER_BIN="$RELEASE_BIN"
+    echo "  downloaded ${RELEASE_BIN} ($(du -h "$RELEASE_BIN" | cut -f1))" >&2
+  fi
+fi
+
 if [ -z "$INNER_BIN" ]; then
   echo "ERROR: octopus-pet inner binary not found for ${KERNEL}." >&2
   echo "Looked in:" >&2
   echo "  ${PLUGIN_ROOT}/src-tauri/target/{debug,release}/octopus-pet" >&2
-  echo "  ${SCRIPT_DIR}/octopus-pet.${KERNEL}.bin  (committed platform-specific release artifact)" >&2
+  echo "  ${SCRIPT_DIR}/octopus-pet.${KERNEL}.bin  (release artifact, auto-downloaded)" >&2
   echo "Build with: (cd ${PLUGIN_ROOT}/src-tauri && cargo build)" >&2
   echo "      or:   bash ${PLUGIN_ROOT}/scripts/release-plugin.sh  (produces bin/octopus-pet.${KERNEL}.bin)" >&2
+  echo "      or:   curl -L -o ${SCRIPT_DIR}/octopus-pet.${KERNEL}.bin ${REPO_URL:-https://github.com/weekbin/octopus-pet}/releases/download/v3.0/octopus-pet.${KERNEL}.bin" >&2
   exit 127
 fi
 

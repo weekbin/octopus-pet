@@ -10,7 +10,7 @@ Coral-pink 章鱼桌宠 — Tauri 2 + React 19 + XState 5 + MCP stdio, 作为 [a
 
 | 项 | 值 |
 |---|---|
-| 状态 | **V3.0 (2026-09-16) P0 解除**: H3 视频生成 ✅ / 验证 ✅ (18 合格) / mp4 rsync ✅ / v10-final 重生成 18 APNG ✅ (BiRefNet+CorridorKey 治本白方块) / flicker post-fix **v9 v2 four-pass** ✅ (Pass 2 保留 raw 背景 + 仅 fill silhouette 内 transparent 像素 治 PIL APNG encoder cascading bug; Pass 4 fill 改为前一帧 RGB 治 v8 跨帧 median 姿势鬼影; 26 场景全套 777390 flicker + 379592 silhouette + 163021 sub-silhouette + 698274 majority-voting 像素修复; 章鱼完整粉色 + 姿势自然过渡 + 无挖洞/无撕裂/无鬼影; n_frames=99 全场景) / scenes.json 8→26 ✅ / check-scenes-sync + lint + test ✅. 待 `release-plugin.sh` 跑 V3.0 release. 接手任务见 `HANDOFF.md` |
+| 状态 | **V3.0 (2026-09-16) released**: H3 视频生成 ✅ / 验证 ✅ (18 合格) / mp4 rsync ✅ / v10-final 重生成 18 APNG ✅ (BiRefNet+CorridorKey 治本白方块) / flicker post-fix **v9 v2 four-pass** ✅ (Pass 2 保留 raw 背景 + 仅 fill silhouette 内 transparent 像素 治 PIL APNG encoder cascading bug; Pass 4 fill 改为前一帧 RGB 治 v8 跨帧 median 姿势鬼影; 26 场景全套 777390 flicker + 379592 silhouette + 163021 sub-silhouette + 698274 majority-voting 像素修复; 章鱼完整粉色 + 姿势自然过渡 + 无挖洞/无撕裂/无鬼影; n_frames=99 全场景) / scenes.json 8→26 ✅ / check-scenes-sync + lint + test ✅ / **`gh release v3.0`** ✅ (`octopus-pet.linux.bin` 116MB 上传 GitHub Release asset, 超 100MB 单文件 commit 限制 走 release 不入 git). 接手任务见 `HANDOFF.md` |
 | 栈 | Tauri 2 · React 19 · Vite 6 · XState 5 · Rust 1.77+ |
 | 窗口 | 116×116 透明, V2 APNG 192×192 在 `<img>` 内部 (CSS 缩放到 116×116, 浏览器原生 APNG 循环) |
 | 8 V2 场景 (V1.5+ 默认) | detective-study · worker-construction · drink-coffee · breakdown · friday-5pm · pretend-busy · stay-late · treat-milk-tea |
@@ -28,7 +28,7 @@ Coral-pink 章鱼桌宠 — Tauri 2 + React 19 + XState 5 + MCP stdio, 作为 [a
 | Install (backend) | `cd src-tauri && cargo build` | 拉 Rust crates |
 | Dev | `npm run tauri:dev` | Vite dev server + Tauri 窗口 (走 `scripts/run-vite.sh`) |
 | Release build | `npm run tauri:build` | 产物 `src-tauri/target/release/bundle/<platform>/` |
-| Plugin release | `bash scripts/release-plugin.sh` | 产出 `bin/octopus-pet.${KERNEL}.bin` (随 commit 提交) |
+| Plugin release | `bash scripts/release-plugin.sh` + `gh release upload v3.0 bin/octopus-pet.${KERNEL}.bin` | 产物走 [GitHub Release](https://github.com/weekbin/octopus-pet/releases/tag/v3.0) (V3.0+ 不入 git, 因 26 APNG + binary > 100MB) |
 | Test (frontend) | `cd app && npm test` | Vitest |
 | Test (backend) | `cd src-tauri && cargo test` | MCP stdio roundtrip |
 | Lint | `bash scripts/lint-octopus-plugin.sh` | 16/16 spec schema |
@@ -45,8 +45,8 @@ Coral-pink 章鱼桌宠 — Tauri 2 + React 19 + XState 5 + MCP stdio, 作为 [a
 | Plugin manifest | `plugin.json` (spec §5) |
 | MCP server manifest | `mcp.json` (spec §7, type=stdio) |
 | Skill frontmatter | `skills/octopus-pet/SKILL.md` (agentskills.io) |
-| Plugin entrypoint | `bin/octopus-pet` (spec §9.2; dev=本地构建优先, 发布=平台特定 `.bin` 兜底) |
-| Release artifact | `bin/octopus-pet.{macos,linux}.bin` (各 ~32MB, 内嵌 8 APNG, commit 时一起提交) |
+| Plugin entrypoint | `bin/octopus-pet` (spec §9.2; dev=本地构建优先, 发布=从 [GitHub Release v3.0](https://github.com/weekbin/octopus-pet/releases/tag/v3.0) 自动下载兜底) |
+| Release artifact | [`octopus-pet.linux.bin` (116MB)](https://github.com/weekbin/octopus-pet/releases/download/v3.0/octopus-pet.linux.bin) 走 GitHub Release asset (V3.0+ 不入 git, 因 26 V2 APNG 内嵌 91MB + Rust binary 25MB > GitHub 100MB 单文件 commit 限制) |
 | 状态逻辑单点 | `src-tauri/src/actions.rs` (MCP/HTTP 唯一的 `apply_*` 实现) |
 | 状态镜像回写 | `src-tauri/src/state_bridge.rs::sync_state` (webview→Rust, 只写不 emit) |
 | React 前端 | `app/src/` (animation · components · hooks · state · styles) |
@@ -131,10 +131,15 @@ Coral-pink 章鱼桌宠 — Tauri 2 + React 19 + XState 5 + MCP stdio, 作为 [a
 - 验证 alpha 真的进了 webm 必须用 `ffprobe -show_streams` 看 `TAG:alpha_mode=1`, 默认 `ffprobe` 不展示这个 tag.
 - **HEVC videotoolbox alpha 完全不可行** (Apple `VTCompressionSession` 架构限制), 永远别走这条.
 
-### 发布产物
+### 发布产物 (V3.0+ 走 GitHub Release, 不入 git)
 
-- 跑 `scripts/release-plugin.sh` 后 **`git add bin/octopus-pet.${KERNEL}.bin` (macos / linux / windows) 随 commit 提交** (repo 本身即插件, clone 零构建可加载).
+- **产物走 [GitHub Release v3.0](https://github.com/weekbin/octopus-pet/releases/tag/v3.0)** (asset `octopus-pet.${KERNEL}.bin`):
+  - 跑 `scripts/release-plugin.sh` (本地 build + 冒烟)
+  - **`gh release upload v3.0 bin/octopus-pet.${KERNEL}.bin` (V3.0+ 改走 release asset, 不再 commit 进 git)**
+  - `bin/octopus-pet` wrapper 第 4 兜底自动从 release URL 下载 (curl/wget, 见 `bin/octopus-pet` 头部注释)
+- **V3.0+ 改走 release 原因**: 26 V2 APNG 内嵌 91MB + Rust binary 25MB = 116MB > GitHub 100MB 单文件 commit 限制 (`GH001: Large files detected`). 之前 V2.0 8 V2 场景 ~30MB commit OK, V3.0 26 场景超限.
 - 产物必须走 `cargo tauri build --no-bundle` — 裸 `cargo build` 增量会跳过 asset 嵌入 (binary < 5MB = 缺 assets).
+- 历史 binary commit (commit `2dd7804` 之前) 用 `git filter-repo --path bin/octopus-pet.linux.bin --invert-paths` 从 history 删除 (见 [PR](docs/_archive/) 待归档).
 
 ### 仓库工程纪律
 
@@ -194,9 +199,9 @@ bash scripts/smoke-test-linux-gui.sh
 # Vite dev/build 统一 wrapper (Tauri 2 CWD 兼容)
 bash scripts/run-vite.sh dev|build             # 不要写 --prefix app / cd app &&
 
-# 发布 (产出 bin/octopus-pet.${KERNEL}.bin 提交物)
+# 发布 (V3.0+ 产物走 GitHub Release, 不入 git)
 bash scripts/release-plugin.sh                 # cargo tauri build --no-bundle + 冒烟
-# 注意: 发布后 git add bin/octopus-pet.${KERNEL}.bin (macos/linux/windows) 随 commit 提交
+gh release upload v3.0 bin/octopus-pet.${KERNEL}.bin  # 上传 binary 到 GitHub Release asset
 ```
 
 ## PR & 提交约定
@@ -210,7 +215,7 @@ bash scripts/release-plugin.sh                 # cargo tauri build --no-bundle +
 ## 安全
 
 - **不要 commit secrets**: `.env*` 在 `.gitignore`. 配置走 `~/.minimax/` 或 env vars.
-- **Release artifact `bin/octopus-pet.${KERNEL}.bin`**: 内嵌 8 APNG (RGBA) + MCP server + Tauri binary, 无敏感数据, 可放心提交.
+- **Release artifact `octopus-pet.${KERNEL}.bin`** ([GitHub Release](https://github.com/weekbin/octopus-pet/releases/tag/v3.0)): 内嵌 26 V2 APNG (RGBA) + MCP server + Tauri binary, 无敏感数据. V3.0+ 走 release asset (因 >100MB commit 限制).
 - **Tauri 2 icon 必须 RGBA**: `generate_context!` 编译时读, RGB 模式会让 build fail. 改 icon 后跑 `python3 -c "from PIL import Image; Image.open('icon.png').convert('RGBA').save('icon.png')"` 确认.
 - **依赖升级前看 CHANGELOG**: Tauri 2 minor 升级常有 breaking (CWD 假设 / config schema / icon 要求), major 升级 (1.x→2.x) 必重跑 `bash scripts/lint-octopus-plugin.sh` + `bash scripts/release-plugin.sh` 冒烟.
 
