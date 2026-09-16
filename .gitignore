@@ -89,3 +89,9 @@ __pycache__/
 
 # Deprecated matting pipeline outputs (replaced by current default)
 *.v*-deprecated
+
+# APNG → GIF fallback (临时 dev 产物, 26 张 ~23MB, 未被代码引用)
+app/public/assets/octopus/v2-gif/
+
+# Release binary (V3.0+ 走 GitHub Release asset, 不入 git, 因 116MB > 100MB commit 限制)
+bin/octopus-pet.*.bin
