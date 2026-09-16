@@ -7,6 +7,55 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **5 V3 H3 场景 v10-final flicker 治本 v7 four-pass (2026-09-16)**:
+  v6 部署后用户反馈"17/32 还是有闪烁, 没处理好". 排查发现两个残留问题:
+  (a) v10-final 在某些稳定身体像素 consistently 给低 alpha (不是 flicker 是
+  模型 uncertain — Pass 3 ±5 median 抓不到因为 median 也不够 ≥200), v6 残
+  留 ~38000-44000 per-scene "stable body 但 alpha<200" 像素在 f015-f098.
+  (b) Pass 2 阈值 alpha_mean<60 命中半透明章鱼帧 (32-laugh f42 raw=37.5),
+  但模板替换用 sil_mask=(template_a>200)&(curr_a<200) — Pass 1 已经修了 f42
+  一些边缘像素让 curr_a=255, 边缘像素不在 sil_mask 内保持 curr_a=255 但 RGB
+  是 raw 黑色 → 视觉上 silhouette 边缘 alpha 不对称 (左笑姿势 + 右大笑姿势
+  半脸, 32-laugh f030 验证).
+  - **v7 关键变更**:
+    - **Pass 2 阈值改硬指标 alpha<100 像素数 > 28000** (v6 alpha_mean<60 退
+  出):
+      alpha_mean 会被 Pass 1 ±7 帧修边拉高 (32-laugh f042 raw=8.7 经 Pass 1
+      后 mean=41.3 逃过阈值). alpha<100 像素数是"完全空白帧"硬指标 (raw≈36023,
+      Pass 1 后 ≈31085, 正常帧 ≈5000). 32-laugh pass2 frames 从 v6 的 17 维持 17
+      (f042 重新命中).
+    - **Pass 2 直接模板替换整个 silhouette** (v6 sil_mask 退出):
+      sil_mask = (template_a>200) & (curr_a<200). Pass 1 已经修了 f042 边缘
+      curr_a=255, 边缘像素不在 sil_mask 内 → silhouette 边缘 alpha 不对称.
+      v7 直接 `frames[i][full_sil] = template[full_sil]`, full_sil = template_a>200,
+      RGB + alpha 同步覆盖. 32-laugh f030/f042/f044 全部大笑姿势一致, 无半脸.
+    - **Pass 4 NEW — global per-pixel majority voting (v7 全新)**:
+      跨 99 帧 (loop cycle) 计算每像素 alpha>=200 帧数 ≥ 70% → stable_mask
+      (跨 26 场景 stable body 像素数 11000-13000). 跑每帧 fill stable_mask
+      内 alpha<200 + RGB sum>300 像素到 alpha=255. 守卫 RGB sum>300 避免 fill
+      腐蚀成黑色背景 (Pass 2 模板已覆盖完全空白帧, RGB sum<300 是模型无法判断
+      的像素, transparent 比 fill 出黑色身体好).
+      70% 阈值平衡: 60% 会 fill 姿势切换帧 (32-laugh 大笑爆发嘴张开/合拢时
+      嘴内/嘴外像素切换), 80% 覆盖不足. 5 场景实测 Pass 4 fill 像素从 v6
+      残留 ~40000 per-scene 降到 0 (stable_mask 内 alpha<200 像素全部清零).
+  - **v7 实跑** (5 关键场景):
+    | scene | pass1 | pass2 | pass3 | pass4 | stable body |
+    | 17-celebrate | 73231 | 17 | 17108 | 3092 | 12074 |
+    | 22-yay-friday | 52034 | 5 | 11079 | 4472 | 12610 |
+    | 23-dancing | 45245 | 2 | 10090 | 1687 | 11265 |
+    | 32-laugh | 103880 | 17 | 18247 | 1881 | 12531 |
+    | 36-cheer | 59459 | 3 | 14609 | 2617 | 11970 |
+    | **TOTAL 5** | **333849** | **44** | **71133** | **13749** | - |
+    | 26 场景全套 | 777390 | 44 | 168833 | 85723 | - |
+  - **抽帧确认 5 场景视觉**: 17-celebrate 全帧章鱼完整 + 姿势自然 + 彩带保留;
+    32-laugh f030/f042/f044 大笑姿势一致, 半脸治本 (f030 RGB-only 是大笑姿势
+    + alpha 完整覆盖 = 视觉上大笑姿势章鱼, 无左右撕裂); 22/23/36 关键帧视觉
+    干净无 flicker. stable_mask & alpha<200 像素 = 0 跨所有抽帧 (f0/f15/f30/
+    f42/f50/f68/f98) — Pass 4 完全 fill 残留 body 透明像素.
+  - **执行位置**: `scripts/extract-v10-final-postfix-flicker.py` (~205 行),
+    Pass 1 + Pass 2 + Pass 3 + Pass 4. 任何走 v10-final 输出的 APNG 上桌前
+    必跑一次 (idempotent). 升级自 v6 (commit `0cb566b`).
+- **5 V3 H3 场景 v10-final 整章鱼空白帧模板替换修复 v5 (2026-09-16)**:
 - **5 V3 H3 场景 v10-final 整章鱼空白帧模板替换修复 v5 (2026-09-16)**:
   v3 5-frame window 部署后用户反馈"还是有问题, 有几帧章鱼变成空白的只有
   轮廓了". 排查: 17-celebrate 8 帧连续 alpha_mean<10 (CorridorKey 跨帧

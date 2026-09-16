@@ -1,6 +1,6 @@
 # Handoff: octopus-pet V3.0 H3 视频资产管线 (2026-09-16)
 
-> **状态 (2026-09-16 15:06)**: H3 视频生成 ✅ | 首尾帧验证 ✅ | mp4 归档 ✅ | **v4 fallback ❌ (右眼/身体有白方块, 颜色阈值无法治本)** | **v10-final 重生成中 (3/18 完成, BiRefNet+CorridorKey 治本, 31-apologize/13-debug-snack 验证零白方块)**
+> **状态 (2026-09-16 19:00)**: H3 视频生成 ✅ | 首尾帧验证 ✅ | mp4 归档 ✅ | v10-final 重生成 18 APNG ✅ (BiRefNet+CorridorKey 治本白方块) | flicker post-fix **v7 four-pass** ✅ (Pass 4 global majority voting 70% 治本残留 body 透明 + Pass 2 硬阈值 alpha<100>28000 + full silhouette 模板替换治本半脸; 5 场景 44 bad-frames 100% 清零 + 13749 majority-voting 像素; 26 场景全套 85723 像素; 32-laugh f030/f042/f044 大笑姿势一致无半脸) | scenes.json 8→26 ✅ | check-scenes-sync + lint + test ✅. **待**: `release-plugin.sh` 跑 V3.0 release.
 > **作者**: Mavis (weekbin user, 2026-09-15 23:38 - 2026-09-16 00:03)
 > **接手人**: 当前接手 Mavis (2026-09-16 12:13 → 15:00 切换模型方案)
 > **优先级**: P0 — V3.0 release 阻塞项
@@ -143,14 +143,22 @@
 - **v5 two-pass 修复** (commit `b182fe6`):
   - **Pass 1** — per-pixel temporal fill, ±7 窗口, 333849 flicker 像素修复
   - **Pass 2** — bad-frame template replace, alpha_mean<30 异常帧用 ±15 范围最近模板帧 (alpha_mean>80) silhouette RGB+alpha 替换, 42 frames 修完
-- **v6 three-pass 二次优化** (commit 本次):
+- **v6 three-pass 二次优化** (commit `0cb566b`):
   - **v5 后用户反馈 17/32 还有闪烁**, 排查: 32-laugh f42 raw=37.5 半透明章鱼 (Pass 2 v5 阈值<30 没命中) + 32-laugh f44-f48 大笑爆发帧 silhouette 内部某些像素位置 consistently low alpha (v10-final 位置性 uncertain, Pass 1 ±7 max 抓不到)
   - **Pass 2 阈值放宽**: alpha_mean<30 → <60 (多修 32-laugh f42, f43, 命中 42→44)
   - **Pass 2 sil_mask 阈值放宽**: alpha<100 → <200 (覆盖整个 silhouette, 否则 Pass 3 median 修剩余像素造成 32-laugh f42 半脸)
   - **Pass 3 NEW**: sub-silhouette temporal median filter, ±5 帧 alpha 中位数≥200 → fill, 跳过 Pass 2 命中帧, 71133 pixels 修复
 - **5 场景 bad-frames 100% 清零 + sub-silhouette 大幅改善**: 17-celebrate 17 → 0 / 22-yay-friday 5 → 0 / 23-dancing 2 → 0 / 32-laugh 17 → 0 / 36-cheer 3 → 0
-- **抽帧视觉验证通过** (17-celebrate f27/f43/f47/f48/f50/f54 / 32-laugh f29/f30/f32/f43/f44/f45/f47/f51/f52/f62/f68): 章鱼完整粉色 + 姿势自然 + 道具保留. 仅 32-laugh f42 单帧半脸 (Pass 2 模板 f28 笑姿势 vs f42 爆发姿势 mismatch — 动态播放 66ms 一帧感觉"卡 1 帧", 比完全空白好)
-- **算法权衡**: v10-final 在某些像素位置 consistently 给低 alpha (不是 flicker, 是模型 uncertain), Pass 3 median 抓不到 (median<200). 终极方案候选 Pass 4 全局 per-pixel median (跨 99 帧 median), 待 V3.0 release 后按需启用
+- **抽帧视觉验证**: 17-celebrate 全帧章鱼完整 + 姿势自然 + 彩带保留; 32-laugh 17 frames bad-frames 100% 修复, 仅 f42 单帧半脸 (Pass 2 模板来自 f28 笑姿势 vs f42 爆发姿势 mismatch — 动态播放 66ms 一帧感觉"卡 1 帧", 比完全空白好)
+- **v7 four-pass 治本残留闪烁 + 半脸** (commit 待 push, 2026-09-16 18:50):
+  - **v6 部署后用户反馈"17/32 还是有闪烁, 没处理好"**, 排查两个根因:
+    1. v10-final 在某些稳定身体像素 consistently 给低 alpha (不是 flicker 是模型 uncertain, Pass 3 ±5 median 抓不到 median<200), 5 场景残留 ~38000-44000 per-scene "stable body 但 alpha<200" 像素
+    2. Pass 2 sil_mask=(template_a>200)&(curr_a<200) 让 Pass 1 已经修过的边缘像素 (curr_a=255) 不在 mask 内 → silhouette 边缘 alpha 不对称 → 半脸 (32-laugh f030 验证: 左笑姿势 + 右大笑姿势)
+  - **v7 关键变更**:
+    - **Pass 2 阈值改硬指标 alpha<100 像素数 > 28000**: v6 alpha_mean<60 被 Pass 1 修边抬升后逃过 (32-laugh f042 raw=8.7 经 Pass 1 后 mean=41.3). 硬指标是"完全空白帧"的可靠信号.
+    - **Pass 2 直接模板替换整个 silhouette** (full_sil = template_a>200, RGB + alpha 同步覆盖): 治本半脸. 32-laugh f030/f042/f044 大笑姿势一致, 无左右撕裂.
+    - **Pass 4 NEW — global per-pixel majority voting**: 跨 99 帧计算每像素 alpha>=200 帧数 ≥ 70% → stable_mask (5 场景 stable body 11000-13000 像素). fill stable_mask 内 alpha<200 + RGB sum>300 像素到 alpha=255. RGB sum>300 守卫避免 fill 腐蚀黑色背景. 70% 阈值平衡: 60% fill 姿势切换帧 (嘴张开/合拢时嘴内/嘴外切换), 80% 覆盖不足. 5 场景共 13749 majority-voting 像素修复; 26 场景全套 85723.
+- **v7 抽帧视觉验证通过** (17-celebrate f0/f14/f28/f42/f68/f84 / 32-laugh f0/f30/f42/f44 / 22-yay-friday f68 / 23-dancing f60 / 36-cheer f68): 章鱼完整粉色 + 姿势自然 + 道具保留 + **无半脸** + **无 flicker**. stable_mask & alpha<200 像素 = 0 跨所有抽帧 — Pass 4 完全 fill 残留 body 透明像素.
 
 **v4 fallback + 4 层 post-fix 留作 CPU-only fallback** (无 GPU 时的最终保底). 已 commit `4d02292` 4d02292 (v4 inpaint 32736 像素). 任何走 v4 fallback 输出的 APNG 上桌前必跑 `scripts/extract-v4-postfix-eyes.py` (4 层条件).
 
