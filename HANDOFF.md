@@ -25,8 +25,8 @@
 |---|---|---|
 | H3 视频生成 | ✅ | 28 提交 / 27 成功 / 1 timeout |
 | 首尾帧验证 (≥95%) | ✅ | 18/27 合格 |
-| 归档 (合格 mp4) | ✅ | `docs/h3-source-2026-09-15-verified/` (18 个 symlink) |
-| 验证报告 | ✅ | `docs/h3-source-2026-09-15-verified/verify-report.md` |
+| 归档 (合格 mp4) | ✅ | `docs/h3-source-2026-09-15/passed/` (18 symlink) + `failed/` (9 symlink) |
+| 验证报告 | ✅ | `docs/h3-source/README.md` (目录说明 + 灾备教训 + verify 表) |
 | **抽帧 (192×192 PNG)** | ❌ | 明天 |
 | **去绿幕 + 抠图 (APNG)** | ❌ | 明天 — `scripts/extract-v10-final.py` |
 | **scenes.json 更新** | ❌ | 明天 |
@@ -132,34 +132,22 @@
 # 1. 抽帧 (192×192 PNG, 100 帧 @ ~16fps)
 cd /Users/yangweibin/Documents/cute
 mkdir -p app/public/assets/octopus/v2-tmp
-for mp4 in docs/h3-source-2026-09-15-verified/*.mp4; do
+for mp4 in docs/h3-source-2026-09-15/passed/*.mp4; do
   name=$(basename "$mp4" .mp4)
-  ffmpeg -y -i "$mp4" -vf "scale=192:192,fps=15" \
+  # resolved symlink 拿真实路径
+  real_mp4=$(readlink -f "$mp4")
+  ffmpeg -y -i "$real_mp4" -vf "scale=192:192,fps=15" \
     "app/public/assets/octopus/v2-tmp/${name}_%03d.png"
 done
 
-# 2. 用 v10-final pipeline 跑 APNG
-for scene in app/public/assets/octopus/v2-tmp/*; do
-  scene_name=$(basename "$scene" | sed 's/_[0-9]*\.png//' | head -1)
-  # 注: v10-final.py 是视频→APNG, 需要看是否支持单帧 PNG 序列
-  # 如果不支持, 用 PIL 合成 APNG:
-  python3 -c "
-from PIL import Image
-import os
-import glob
-
-frames = sorted(glob.glob('${scene}_*.png'))
-imgs = [Image.open(f).convert('RGBA') for f in frames]
-imgs[0].save('app/public/assets/octopus/v2/${scene_name}.png',
-             save_all=True, append_images=imgs[1:],
-             duration=66, loop=0, format='PNG')
-"
+# 2. 用 v10-final pipeline 跑 APNG (输入源 mp4)
+for mp4 in docs/h3-source-2026-09-15/passed/*.mp4; do
+  real_mp4=$(readlink -f "$mp4")
+  name=$(basename "$mp4" .mp4)
+  python3 scripts/extract-v10-final.py \
+    --input "$real_mp4" \
+    --output "app/public/assets/octopus/v2/${name}.png"
 done
-
-# 或更直接: 跑 extract-v10-final.py 但传 mp4 而非视频
-python3 scripts/extract-v10-final.py \
-  --input docs/h3-source-2026-09-15-verified/24-surprised.mp4 \
-  --output app/public/assets/octopus/v2/24-surprised.png
 ```
 
 **预期时间**: 18 个场景 × 30s/场景 = ~10 分钟
@@ -235,9 +223,10 @@ git push origin main
 
 | 用途 | 路径 |
 |---|---|
-| 合格 mp4 源 | `docs/h3-source-2026-09-15-verified/*.mp4` (symlink) |
-| 原始 mp4 | `docs/h3-source-2026-09-15*/<scene_id>.mp4` |
-| 验证报告 | `docs/h3-source-2026-09-15-verified/verify-report.md` |
+| 合格 mp4 源 | `docs/h3-source-2026-09-15/passed/*.mp4` (symlink → raw/) |
+| 不合格 mp4 | `docs/h3-source-2026-09-15/failed/*.mp4` (symlink → raw/) |
+| 原始 mp4 (源) | `docs/h3-source-2026-09-15/raw/<scene_id>.mp4` (H3 服务下载) |
+| 目录说明 + verify 表 | `docs/h3-source/README.md` |
 | 标准图 (first+last frame) | `art/octopus-frames/standard-char-1x1.png` (gitignore, V2.1 idle 起点) |
 | v10-final pipeline | `scripts/extract-v10-final.py` |
 | scenes.json 源 | 项目根 `scenes.json` |
