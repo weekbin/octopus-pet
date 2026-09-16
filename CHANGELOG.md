@@ -225,6 +225,26 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
   - **`bin/octopus-pet` wrapper 自动从 release URL 下载兜底**: 第一次 `git clone` 后 wrapper 在找不到本地/缓存 binary 时, curl/wget 从 `https://github.com/weekbin/octopus-pet/releases/download/v3.0/octopus-pet.${KERNEL}.bin` 下载并缓存到 `bin/octopus-pet.${KERNEL}.bin`. 设 `OCTOPUS_PET_SKIP_DOWNLOAD=1` 抑制兜底下载.
   - **历史 commit 中的 binary 用 `git filter-repo --path bin/octopus-pet.linux.bin --invert-paths` 从 history 删除**: 强制 force-push 后 repo 不再含 116MB object, 后续 commits 可正常 push.
 
+### Out of scope (方案 G 实证失败, 下版续战, 2026-09-16)
+- **用户反馈**: "17/22/23/32 的抠图效果还是不是很好, 感觉动画有残影, 别的效果反倒不错. 方案 G: 基于 mp4 层 `ffmpeg -vf 'tmix=frames=3:weights=1 1 1'` 3 帧 temporal mix 让动画更流畅无残影". 用户硬约束: 原视频不丢 + 先备份 + 改动在备份副本.
+- **执行回顾**:
+  1. ✅ 完整备份 27 个 mp4 到 `docs/h3-source-2026-09-15/raw-backup-2026-09-16/` (sha256 27/27 与 raw/ 一致)
+  2. ✅ 备份副本上跑 tmix=`frames=3:weights=1 1 1` 处理 4 场景输出到 `/tmp/tmix-output/`, **帧间 MAD 下降 17-30% (优秀)** + 中心点 luma diff <5 + 绿幕背景 (5,241,0) 完全保留
+  3. ✅ 视觉对比原 mp4 vs tmix mp4 (抽 0.5/3.0/5.5s 帧): 内容保留 + 边缘平滑
+  4. ❌ tmix 后 raw v10-final 提取回归: **32-laugh 41 帧 raw v10-final α=0 整章鱼 transparent** (Blink 帧间插入叠加), 17-celebrate 22 帧 BLANK, 22-yay-friday 8 帧 BLANK, 23-dancing 1 帧 BLANK. Pass 2 silhouette fill 对 32-laugh 救回部分: v9 v3 f030 opaque=5681 (vs v9 v2 f030 opaque=13356), 33 帧半截空
+  5. ❌ 视觉确认: 32-laugh f030 v9 v3 身体渲染**深红/泪印** (aRGB=140,140 = (127,6,6,1) 几乎全透 + (248,118,121) 仅半边粉), v9 v2 同帧身体完整粉色大笑. f042 同病. f027-f045 整段问题
+  6. ✅ 立即回滚: 从 `/tmp/v9v2-final-backup/` 恢复 4 个 APNG (sha256 100% 匹配) + 从 `raw-backup-2026-09-16/` 恢复 4 个 mp4 (sha256 100% 匹配). git status clean
+- **根因**: tmix 在 32-laugh 这种"快速姿势变化 + 大动作"场景下:
+  - 32-laugh H3 源视频相邻帧差异极大 (variation >0.3 = 大笑高潮), tmix `frames=3:weights=1 1 1` 把"眯眼/睁眼/举手"叠加成"无脸"混合
+  - CorridorKey alpha 解算看到"几乎全绿"→ 返回 α=0 (transparent)
+  - Pass 2 silhouette median 看到邻居帧 α=0 → silhouette 收缩 → 即使 fill 回来, RGB 用前一帧 (也是大笑帧) → 颜色变深红 (因为前一帧身体边缘被绿幕反射污染)
+  - 17/22/23 动作相对温和 + 道具独立, v9 v3 与 v9 v2 等价 (此 3 场景无改善, 也未变差)
+- **Out of scope 下一版继续**:
+  - 方案 G1 (小气一点): tmix=`frames=2:weights=1 1` 仅帧 i + i-1 平滑, motion blur 减轻少但 α 解算稳定
+  - 方案 G2 (保守): 仅对 32-laugh 试 `mpdecimate` + 12fps 提取 + 跳过"BLANK"raw 帧 + 改用 Pass 1 跨帧 median (而非 Pass 2 silhouette fill)
+  - 方案 G3: 接受 v9 v2 是合理水平, 用户"残影感"实际是 H3 原始 motion blur + 192×192 缩放锐化造成的视觉感, 通过 tauri 窗口设 transparency 阴影 + 调整 APNG 缩放比例缓解 (无需重抠图)
+  - v3.0.1 / V4 release 第一个 P0
+
 ### Added
 - **18 个 V3 H3 场景注册到 scenes.json (8 → 26, 2026-09-16)**:
   13-debug-snack / 16-deadline-sprint / 17-celebrate / 18-monday-morning /

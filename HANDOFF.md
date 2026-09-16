@@ -1,6 +1,7 @@
 # Handoff: octopus-pet V3.0 H3 视频资产管线 (2026-09-16)
 
 > **状态 (2026-09-16 18:25)**: H3 视频生成 ✅ | 首尾帧验证 ✅ | mp4 归档 ✅ | v10-final 重生成 18 APNG ✅ (BiRefNet+CorridorKey 治本白方块) | flicker post-fix **v9 v2 four-pass** ✅ (Pass 2 silhouette 内 transparent fill 治 PIL APNG encoder cascading bug — `frames[i]=frames[i-1].copy()` 在 disposal=2 下被错编码成 raw transparent; 改为保留 raw 背景 + 仅 fill silhouette; Pass 4 改为前一帧 RGB 治 v8 跨帧 median 姿势鬼影; 26 场景全套 777390 flicker + 379592 silhouette + 163021 sub-silhouette + 698274 majority-voting 像素修复) | scenes.json 8→26 ✅ | check-scenes-sync + lint + test ✅ | **tauri.linux.conf.json CWD 假设纠正** ✅ (d4ddcd2 当时假设 NUC CWD=src-tauri/, 实测 CWD=项目根, 跟 macOS conf 同步为 `bash scripts/run-vite.sh`) | **release-plugin.sh V3.0 linux bin 116MB 产出 + MCP initialize/tools_list 冒烟 OK** ✅ | **GitHub Release v3.0 published** ✅ (`octopus-pet.linux.bin` 走 release asset, V3.0+ binary 不入 git, 因 116MB > GitHub 100MB 单文件 commit 限制; `bin/octopus-pet` wrapper 自动从 release URL 下载兜底; 历史 commit 中 binary 用 `git filter-repo --invert-paths` 删除并 force-push 成功).
+> **追加 (2026-09-16 18:55)**: **方案 G 实证失败已回滚** — 用户反馈 17/22/23/32 抠图有"残影感", 决定走方案 G (`ffmpeg -vf 'tmix=frames=3:weights=1 1 1'`). 执行完整 (✅ 备份 27 mp4 + ✅ 抽帧验证 tmix MAD 降 17-30% + ✅ mp4 + raw + APNG 重生成). 但 v10-final 抽帧发现: **32-laugh 41 raw 帧 α=0 (BLANK) + 17-celebrate 22 + 22-yay-friday 8 + 23-dancing 1** (tmix 在大笑高潮帧叠加成"无脸透明" → CorridorKey 返回 α=0). 即便 Pass 2 silhouette fill 救回 32-laugh f025-f045 部分像素 (5681-6348 opaque, **vs v9 v2 的 13356-13876**), 视觉上 f030/f042 身体渲染深红/泪印 (aRGB=(127,6,6,α=1) 几乎全透 + 半边粉). **立即回滚**: 4 APNG (sha256 100% 匹配 v9 v2) + 4 mp4 (sha256 100% 匹配 backup) 全部恢复 v9 v2 状态. git status clean. **当前 26 场景全部 v9 v2 = 当前最佳**. 下一版 V3.0.1 续方案 G1/G2/G3 (见 CHANGELOG [Unreleased] "Out of scope (方案 G 失败, 下版续战)"). 接手人第一件事: 跑 `grep -i 'Out of scope' CHANGELOG.md` 看欠条.
 > **作者**: Mavis (weekbin user, 2026-09-15 23:38 - 2026-09-16 00:03)
 > **接手人**: 当前接手 Mavis (2026-09-16 12:13 → 15:00 切换模型方案)
 > **优先级**: P0 — V3.0 release 阻塞项
@@ -270,6 +271,18 @@ git push origin main
 ### 5.6 P2 (可选) — 不合格 9 个重跑
 
 如果时间允许, 用更简单 prompt 重跑 5 个最有价值的 (touch-fish / soul-leaving / lying-flat / 27-cooking / 21-lunch-break)。每个 ~3 分钟。
+
+### 5.7 P0-7 — 方案 G1/G2/G3 续战 32-laugh 等 4 场景残影感 (2026-09-16 接手人手记, 实证失败)
+
+V3.0 release 后用户反馈 17/22/23/32 抠图"残影感". 已执行方案 G `ffmpeg tmix=frames=3:weights=1 1 1` 实证 **失败**: tmix 在 32-laugh 大笑高潮帧把"眯/睁/举"叠成"无脸透明" → CorridorKey α=0 → 即便 Pass 2 fill 救回, RGB 用前一帧 (同段大笑, 边缘被绿幕反射污染) → 视觉深红/泪印. 已完整回滚 (sha256 100%), 当前 v9 v2 是最佳.
+
+**方案候选** (任何走"改 mp4"路线的先停下, 读完 CHANGELOG [Unreleased] "Out of scope" 段):
+
+- **G1** (保守): 仅 32-laugh 跑 `tmix=frames=2:weights=1 1` 帧 i + i-1 平滑, 验证 raw v10-final BLANK 帧数是否下降
+- **G2** (精准): 仅 32-laugh 跑 `mpdecimate` + 12fps + 跳过 BLANK 帧, 用 Pass 1 跨帧 median (非 Pass 2)
+- **G3** (接受现状): 接受 v9 v2 是合理水平, 通过 tauri 窗口 transparency 阴影 + 调整 APNG 缩放比例缓解"残影感", 不再重抠图
+
+**强约束**: 任何方案第一步必须是 `docs/h3-source-2026-09-15/raw-backup-2026-09-16/` 完整性复检 (md5sum, 27/27 一致), 然后**再次**完整备份. 全部改动在备份副本上进行.
 
 ---
 
