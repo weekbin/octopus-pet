@@ -1,6 +1,6 @@
 # Handoff: octopus-pet V3.0 H3 视频资产管线 (2026-09-16)
 
-> **状态 (2026-09-16 19:00)**: H3 视频生成 ✅ | 首尾帧验证 ✅ | mp4 归档 ✅ | v10-final 重生成 18 APNG ✅ (BiRefNet+CorridorKey 治本白方块) | flicker post-fix **v7 four-pass** ✅ (Pass 4 global majority voting 70% 治本残留 body 透明 + Pass 2 硬阈值 alpha<100>28000 + full silhouette 模板替换治本半脸; 5 场景 44 bad-frames 100% 清零 + 13749 majority-voting 像素; 26 场景全套 85723 像素; 32-laugh f030/f042/f044 大笑姿势一致无半脸) | scenes.json 8→26 ✅ | check-scenes-sync + lint + test ✅. **待**: `release-plugin.sh` 跑 V3.0 release.
+> **状态 (2026-09-16 19:30)**: H3 视频生成 ✅ | 首尾帧验证 ✅ | mp4 归档 ✅ | v10-final 重生成 18 APNG ✅ (BiRefNet+CorridorKey 治本白方块) | flicker post-fix **v8 three-pass** ✅ (Pass 2 取消治标不治本方向错了, Pass 4 跨帧 median RGB fill stable_mask 治本 32-laugh 19 transparent 帧撕裂; 26 场景全套 1042647 majority-voting 像素修复) | scenes.json 8→26 ✅ | check-scenes-sync + lint + test ✅. **待**: `release-plugin.sh` 跑 V3.0 release.
 > **作者**: Mavis (weekbin user, 2026-09-15 23:38 - 2026-09-16 00:03)
 > **接手人**: 当前接手 Mavis (2026-09-16 12:13 → 15:00 切换模型方案)
 > **优先级**: P0 — V3.0 release 阻塞项

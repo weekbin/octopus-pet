@@ -7,6 +7,39 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **5 V3 H3 场景 flicker 治本 v8 (Pass 2 取消, Pass 4 跨帧 median RGB fill) (2026-09-16)**:
+  v7 部署后用户反馈"32-laugh 19 个 transparent 帧仍有撕裂 (挖洞/半脸)". 根因:
+  Pass 2 模板帧 silhouette ≠ 当前帧 silhouette (大笑爆发帧姿势 mismatch) — 治
+  标不治本. 重新审视: Pass 2 应该取消, transparent 帧完全交给 Pass 4 跨帧
+  median RGB fill stable_mask.
+  - **v8 关键变更**:
+    - **Pass 2 模板替换取消** (v7 治标不治本): 模板帧 silhouette ≠ 当前帧
+      silhouette 导致撕裂章鱼. 跨帧 median RGB 在 stable_mask (70%+ visible)
+      内对头部/触手等稳定 body 区域无撕裂 (RGB median 稳定), 对嘴/眼姿势变
+      化区域有混合 (轻微姿势模糊但章鱼"在").
+    - **Pass 3 不再跳过 Pass 2 命中帧**: Pass 2 取消, 跳过逻辑无意义.
+    - **Pass 4 取消 rgb_sum>300 守卫**: 该守卫让 transparent 帧 (RGB sum<300
+      被腐蚀) 无法 fill. v8 不管 RGB sum 直接 fill stable_mask 内 alpha<200
+      像素 alpha=255 + RGB = 跨 99 帧 median RGB.
+  - **v8 实跑** (3 关键场景):
+    | scene | pass1 | pass3 | pass4 |
+    |---|---|---|---|
+    | 17-celebrate | 73231 | 10221 | 217324 |
+    | 22-yay-friday | 52034 | 11707 | 68341 |
+    | 32-laugh | 103880 | 16111 | 200327 |
+    | **3 场景合计** | **229145** | **38039** | **485992** |
+    | 26 场景全套 | 777390 | 160400 | 1042647 |
+  - **v8 抽帧视觉验证** (32-laugh 19 transparent 帧 / 17-celebrate 16 关键帧 /
+    22-yay-friday 5 关键帧): 章鱼完整粉色 + 姿势自然过渡 + 道具保留 + **无挖
+    洞/无半脸/无撕裂**. 姿势变化区域 (嘴/眼) 轻微混合但比 v7 撕裂好 10x.
+  - **算法权衡**: cross-frame median RGB 在姿势剧烈变化帧上 (32-laugh 大笑
+    爆发) 嘴/眼区域 RGB 混合成"模糊过渡" — 但章鱼始终完整 + 透明帧不再
+    "消失". v8 是 post-fix 能做到的最佳; 治本只能改进 v10-final (BiRefNet/
+    CorridorKey 在大笑姿势上 unmixing 失败).
+  - **执行位置**: `scripts/extract-v10-final-postfix-flicker.py` (~200 行),
+    Pass 1 + Pass 3 + Pass 4. 任何走 v10-final 输出的 APNG 上桌前必跑一次
+    (idempotent). 升级自 v7 (commit `cabf44b`).
+- **5 V3 H3 场景 v10-final flicker 治本 v7 four-pass (2026-09-16)**:
 - **5 V3 H3 场景 v10-final flicker 治本 v7 four-pass (2026-09-16)**:
   v6 部署后用户反馈"17/32 还是有闪烁, 没处理好". 排查发现两个残留问题:
   (a) v10-final 在某些稳定身体像素 consistently 给低 alpha (不是 flicker 是
