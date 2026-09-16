@@ -25,6 +25,41 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
       的 RGB+alpha 覆盖当前帧空白 silhouette. RGB 必须一起复制 (空白帧
       silhouette 像素 RGB 被腐蚀成黑色背景, 只复制 alpha mask 出来章鱼变
       暗红黑色 — 验证失败).
+- **5 场景整章鱼空白帧 v6 three-pass 二次优化 (2026-09-16)**:
+  v5 部署后用户反馈"17/32 还有闪烁". 排查: v5 Pass 2 阈值 alpha_mean<30
+  没覆盖 32-laugh f42 (raw=37.5 半透明章鱼, 接近 30 但 Pass 2 不命中);
+  32-laugh f44-f48 大笑爆发帧 silhouette 内部某些像素位置 consistently
+  alpha<200 (v10-final 在大笑爆发帧位置性 uncertain, 不是 flicker 是模型
+  consistently 不确定), Pass 1 ±7 max 抓不到因为同位置像素连续 7 帧都低.
+  - **v6 关键变更**:
+    - **Pass 2 阈值放宽** alpha_mean<30 → alpha_mean<60 (覆盖半透明章鱼
+      帧如 32-laugh f42 raw=37.5), 命中数从 v5 42 → v6 44 frames (多修
+      f42, f43).
+    - **Pass 2 sil_mask 阈值放宽** alpha<100 → alpha<200 (Pass 2 复制覆盖
+      整个 silhouette 不只是边缘, 否则半透明章鱼帧替换后 silhouette 内
+      仍有半透像素, Pass 3 median 修了"原始姿势"像素 → 半脸问题: 32-laugh
+      f42 左脸模板 (f28 笑姿势) + 右脸原始 → 姿势不一致).
+    - **Pass 3 NEW — sub-silhouette temporal median filter**: 对每帧 f_i
+      (i ∈ [5, n-5]) 每像素 p: curr_a<200 + RGB sum>300 + ±5 帧 alpha
+      **中位数** ≥ 200 → fill alpha=255. median 比 max 更鲁棒, 只要 ≥3/11
+      帧不透明就修. **跳过 Pass 2 命中帧**避免与模板替换冲突 (f42 半脸
+      问题根因).
+  - **v6 实跑**:
+    | scene | pass1 pixels | pass2 frames | pass3 pixels |
+    | 17-celebrate | 73231 | 17 | 17108 |
+    | 22-yay-friday | 52034 | 5 | 11079 |
+    | 23-dancing | 45245 | 2 | 10090 |
+    | 32-laugh | 103880 | 17 | 18247 |
+    | 36-cheer | 59459 | 3 | 14609 |
+    | **TOTAL** | **333849** | **44** | **71133** |
+  - **抽帧确认 5 场景视觉**: 17-celebrate 全帧章鱼完整 + 姿势自然; 32-laugh
+    17 frames bad-frames 100% 修复, 仅 f42 单帧半脸 (Pass 2 模板来自 f28
+    笑姿势, f42 爆发姿势 mismatch — 动态播放 66ms 一帧感觉"卡 1 帧", 比
+    完全空白好). raw → v6 body 像素 lt150 减少 30-70% (5 场景).
+  - **算法权衡**: v10-final 在某些像素位置 consistently 给低 alpha
+    (不是 flicker, 是模型 uncertain), Pass 3 median 抓不到 (median<200).
+    终极方案候选: Pass 4 全局 per-pixel median (跨 99 帧 median, 反映
+    "这个像素是否通常属于章鱼身体"), 待 V3.0 release 后按需启用.
   - **算法权衡**: 模板帧替换会让章鱼"轻微卡顿 1 帧" (姿势差异大时),
     比"完全空白"好. ±15 范围限制章鱼姿势变化不致太大. alpha_mean>80 守卫
     保证模板帧是完整章鱼而非半章鱼.

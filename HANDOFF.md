@@ -140,12 +140,17 @@
 
 **v3 5-frame window flicker post-fix 部署后用户第二轮反馈**: "还是有问题, 有几帧章鱼变成空白的只有轮廓了".
 - 排查: v3 修 1-frame 像素级抖动 OK, 但 5 场景有 44 帧 (raw alpha_mean<30) 是整章鱼 silhouette 完全透明, 像素级检测抓不到.
-- **v5 two-pass 修复** (commit 本次):
+- **v5 two-pass 修复** (commit `b182fe6`):
   - **Pass 1** — per-pixel temporal fill, ±7 窗口, 333849 flicker 像素修复
   - **Pass 2** — bad-frame template replace, alpha_mean<30 异常帧用 ±15 范围最近模板帧 (alpha_mean>80) silhouette RGB+alpha 替换, 42 frames 修完
-- **5 场景 bad-frames 100% 清零**: 17-celebrate 17 → 0 / 22-yay-friday 5 → 0 / 23-dancing 2 → 0 / 32-laugh 17 → 0 / 36-cheer 3 → 0
-- **抽帧视觉验证通过** (f11/f12/f17/f21/f26 / f39 / f54 / f30/f32 / f64/f65): 章鱼完整粉色 + 姿势自然 + 道具保留
-- **算法权衡**: 模板帧替换让章鱼"轻微卡顿 1 帧" (姿势差异大时), 比完全空白好. ±15 范围限制 + alpha_mean>80 守卫保证模板帧是完整章鱼.
+- **v6 three-pass 二次优化** (commit 本次):
+  - **v5 后用户反馈 17/32 还有闪烁**, 排查: 32-laugh f42 raw=37.5 半透明章鱼 (Pass 2 v5 阈值<30 没命中) + 32-laugh f44-f48 大笑爆发帧 silhouette 内部某些像素位置 consistently low alpha (v10-final 位置性 uncertain, Pass 1 ±7 max 抓不到)
+  - **Pass 2 阈值放宽**: alpha_mean<30 → <60 (多修 32-laugh f42, f43, 命中 42→44)
+  - **Pass 2 sil_mask 阈值放宽**: alpha<100 → <200 (覆盖整个 silhouette, 否则 Pass 3 median 修剩余像素造成 32-laugh f42 半脸)
+  - **Pass 3 NEW**: sub-silhouette temporal median filter, ±5 帧 alpha 中位数≥200 → fill, 跳过 Pass 2 命中帧, 71133 pixels 修复
+- **5 场景 bad-frames 100% 清零 + sub-silhouette 大幅改善**: 17-celebrate 17 → 0 / 22-yay-friday 5 → 0 / 23-dancing 2 → 0 / 32-laugh 17 → 0 / 36-cheer 3 → 0
+- **抽帧视觉验证通过** (17-celebrate f27/f43/f47/f48/f50/f54 / 32-laugh f29/f30/f32/f43/f44/f45/f47/f51/f52/f62/f68): 章鱼完整粉色 + 姿势自然 + 道具保留. 仅 32-laugh f42 单帧半脸 (Pass 2 模板 f28 笑姿势 vs f42 爆发姿势 mismatch — 动态播放 66ms 一帧感觉"卡 1 帧", 比完全空白好)
+- **算法权衡**: v10-final 在某些像素位置 consistently 给低 alpha (不是 flicker, 是模型 uncertain), Pass 3 median 抓不到 (median<200). 终极方案候选 Pass 4 全局 per-pixel median (跨 99 帧 median), 待 V3.0 release 后按需启用
 
 **v4 fallback + 4 层 post-fix 留作 CPU-only fallback** (无 GPU 时的最终保底). 已 commit `4d02292` 4d02292 (v4 inpaint 32736 像素). 任何走 v4 fallback 输出的 APNG 上桌前必跑 `scripts/extract-v4-postfix-eyes.py` (4 层条件).
 
