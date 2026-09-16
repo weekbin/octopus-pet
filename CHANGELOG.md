@@ -7,6 +7,32 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
+- **5 V3 H3 场景 v10-final 输出 1-frame flicker 修复 (2026-09-16)**:
+  18 V3 场景部署后用户反馈"17/22/23/32/36 处理完成的 apng 有闪烁的效果,
+  其他效果都还不错". 排查: 5 场景共同特征 = 含大量飞舞道具 (彩带/酒杯/音符/
+  哈哈字/彩旗). v10-final (CorridorKey) 在这种帧上 alpha mask 偶发掉到
+  <150 (CorridorKey 跨帧 unmixing 不稳定, RGB 高但 alpha 偶发透明).
+  disposal=2 (每帧擦背景再画) 下视觉闪. 17-celebrate 累计 7185 像素 flicker
+  (vs 不闪的 13-debug-snack 只有 1295, 5.5× 多).
+  - **修复算法 (5-frame window + 宽松阈值)**:
+    对每帧 f_i, 检测像素 p: curr_a < 150 (本帧半透/透明) + curr RGB sum>300
+    (身体色, 不是绿幕) + 近邻 4 帧 max alpha≥200 (近邻不透明) → fill alpha=255
+  - **为什么 ±2 vs ±1**: 实际 flicker 模式可能跨 2 帧 (200→80→80→200),
+    单看 ±1 抓不到. ±2 滚动窗口 max alpha 确保覆盖.
+  - **为什么 <150 vs <100**: 真实 alpha 抖动可能到 80-150 区间 (不完全 0),
+    阈值放宽避免漏. RGB 颜色 sum>300 作"身体色而非绿幕" 守卫避免误保.
+  - **执行位置**: `scripts/extract-v10-final-postfix-flicker.py` (~95 行),
+    任何走 v10-final 输出的 APNG 上桌前必跑一次 (5-frame window 算法 idempotent).
+  - **5 场景实跑** (17/22/23/32/36):
+    | scene | fixed | flicker_remaining | 修复率 |
+    | 17-celebrate | 14408 | 17 | 99.9% |
+    | 22-yay-friday | 7183 | 31 | 99.6% |
+    | 23-dancing | 8608 | 84 | 99.0% |
+    | 32-laugh | 15012 | 90 | 99.4% |
+    | 36-cheer | 7858 | 16 | 99.8% |
+    | **TOTAL** | **53069** | **238** | **99.5%+** |
+    残留 238 像素 (<0.05%) 是 2-frame consecutive flicker (前后 ±2 帧都
+    alpha <200 不命中), 视觉无感.
 - **18 V3 H3 场景 v10-final 重生成治本"白方块" (2026-09-16)**:
   v4 fallback + 4 层 post-fix 部署后用户第三次反馈"眼睛还有明显的像正方形的
   白色区域". 排查: 颜色阈值路线物理上限 ~95%, post-fix 用肤色 inpaint ≠
