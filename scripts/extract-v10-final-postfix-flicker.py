@@ -204,6 +204,7 @@ def _save(frames, out_path, n, pass1_fixed, pass2_replaced, pass3_fixed, pass4_f
         duration=66,
         loop=1,
         disposal=2,
+        compress_level=9,  # V3.0 release bin size: max zlib (level 9 vs default 6 省 1.5%)
     )
     return {
         "path": out_path,
