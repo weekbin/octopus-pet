@@ -33,10 +33,14 @@ describe("octopus-fsm (V2.1: N V2 场景 + 事件驱动)", () => {
   });
 
   describe("SCENE_ORDER (V2.1 N 场景)", () => {
-    it("contains 8 V2 scenes", () => {
+    it("contains 26 V2 + V3 scenes", () => {
       expect(SCENE_ORDER).toEqual([
         "detective-study", "worker-construction", "drink-coffee",
         "breakdown", "friday-5pm", "pretend-busy", "stay-late", "treat-milk-tea",
+        "13-debug-snack", "16-deadline-sprint", "17-celebrate", "18-monday-morning",
+        "19-thumbs-up", "20-thinking", "22-yay-friday", "23-dancing",
+        "24-surprised", "29-shy", "30-wave", "31-apologize", "32-laugh",
+        "33-magic", "34-meditation", "35-blink", "36-cheer", "payday",
       ]);
     });
   });
@@ -96,7 +100,7 @@ describe("octopus-fsm (V2.1: N V2 场景 + 事件驱动)", () => {
       expect(actor.getSnapshot().context.bubble).toBeNull();
     });
 
-    it("8 场景 N=5 多次 SCENE_LOOPED 必不连续重复 (覆盖大部分场景)", () => {
+    it("26 场景 N=5 多次 SCENE_LOOPED 必不连续重复 (覆盖大部分场景)", () => {
       const actor = createActor(octopusMachine).start();
       const history: OctopusScene[] = [actor.getSnapshot().context.scene];
       for (let i = 0; i < 10; i++) {
@@ -108,7 +112,7 @@ describe("octopus-fsm (V2.1: N V2 场景 + 事件驱动)", () => {
           expect(history[history.length - 1]).not.toBe(history[history.length - 2]);
         }
       }
-      // 8 场景 N=5 recent window, 10 步内最少覆盖 3 个 unique (recent=5 + 1 current + 4 后续)
+      // 26 场景 N=5 recent window, 10 步内最少覆盖 3 个 unique (recent=5 + 1 current + 4 后续)
       expect(new Set(history).size).toBeGreaterThanOrEqual(3);
     });
 

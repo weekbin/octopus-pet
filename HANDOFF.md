@@ -1,11 +1,11 @@
 # Handoff: octopus-pet V3.0 H3 视频资产管线 (2026-09-16)
 
-> **状态**: H3 视频生成 ✅ | 首尾帧验证 ✅ | **本地 mp4 归档 ✅ (rsync 同步 2026-09-16 12:05)** | **抽帧+去绿幕 ✅ (18 APNG 已交付 v2/, 全 RGBA 192×192 99 帧 0 不健康)** | **scenes.json ❌ (待扩 8 → 14+)**
+> **状态 (2026-09-16 15:06)**: H3 视频生成 ✅ | 首尾帧验证 ✅ | mp4 归档 ✅ | **v4 fallback ❌ (右眼/身体有白方块, 颜色阈值无法治本)** | **v10-final 重生成中 (3/18 完成, BiRefNet+CorridorKey 治本, 31-apologize/13-debug-snack 验证零白方块)**
 > **作者**: Mavis (weekbin user, 2026-09-15 23:38 - 2026-09-16 00:03)
-> **接手人**: 当前接手 Mavis (2026-09-16 12:13)
-> **优先级**: P0 — V3.0 release 阻塞项 (剩 scenes.json 扩 + release)
+> **接手人**: 当前接手 Mavis (2026-09-16 12:13 → 15:00 切换模型方案)
+> **优先级**: P0 — V3.0 release 阻塞项
 
-> **重要事实**: mp4 不入 repo (`.gitignore` 第 19-22 行), 跨开发机靠 rsync 同步. 18 合格 mp4 走 `scripts/extract-v4-chromakey-cpu-fallback.py` (v10-final 因依赖 v52 已删不可用, v4 fallback 0.01% 绿残留满足要求) → 18 APNG 全交付 `app/public/assets/octopus/v2/`, 待 `scenes.json` 加 entry 注册.
+> **重要事实**: mp4 不入 repo (`.gitignore` 第 19-22 行), 跨开发机靠 rsync 同步. 18 合格 mp4 走 `scripts/extract-v10-final.py` (BiRefNet 1024 fp16 + CorridorKey GreenFormer 2048 tiled fp16 linear alpha + straight FG + v10.3 strict gate + forehead ROI 缝补) → 替换 v4 fallback 物理治本的白方块. v52 依赖已从 git 历史 `922b642~1` 恢复.
 
 ---
 
@@ -128,11 +128,17 @@
 
 **建议**: 选项 B (可推迟到 V3.0 release 后, 18 合格已足够 V3.0 默认场景扩到 14+)。
 
-### 5.2 P0-2 — 18 个合格 mp4 → APNG (抽帧 + 去绿幕) — **✅ 已完成 2026-09-16 14:02**
+### 5.2 P0-2 — 18 个合格 mp4 → APNG (抽帧 + 去绿幕) — **🔄 v10-final 重生成中 2026-09-16 15:06 (BiRefNet+CorridorKey 治本白方块)**
 
-走 `scripts/extract-v4-chromakey-cpu-fallback.py` (v10-final 因依赖已删 v52 不可用, v4 兜底 0.01% 绿残留). 18 APNG 全交付 `app/public/assets/octopus/v2/`.
+**v4 fallback 物理上限被用户戳穿** (2026-09-16 14:54 "眼睛这里有很明显的像正方形的白色区域"): v4 chroma key 把皮肤误判为绿 → alpha=0 → post-fix 用肤色 inpaint ≠ 黑色眼白 → 仍有白方块残留. 颜色阈值路线极限 ~95%, 剩余 5% 必须换 unmixing 模型.
 
-**v4 共性错杀修复** (2026-09-16 用户反馈 "眼睛这里被处理成透明"): v4 把脸部黑色眼睛瞳孔/嘴部/触手中下部 (y=44-59%, x=48-58%) 误判为"低置信度绿幕" alpha=0, 18 场景共 ~75000 像素被错杀. 已写 `scripts/extract-v4-postfix-eyes.py` 一次性修复 (ROI y=40-60% x=20-80% 内 alpha=0 + max(R,G,B)<60 → alpha=255). 修复后 0 错杀残留, 眼睛/嘴/触手清晰. **v4 fallback 任何输出上桌前必跑 post-fix**.
+**v10-final 重生成 (2026-09-16 15:00 启动)**:
+1. 从 git 历史 `922b642~1` 恢复 `scripts/extract-v52-apng.py` (v10-final 依赖)
+2. `scripts/extract-v10-final.py` 加 `H3_VIDEOS_V3` 字典 (18 新场景 mp4) + CLI 模式 `python3 scripts/extract-v10-final.py scene1 scene2 ...`
+3. BiRefNet 1024 fp16 alpha hint → CorridorKey GreenFormer 2048 tiled fp16 linear alpha + straight FG → v10.3 strict gate → forehead_white_mask H3 源 ROI 缝补 → borrow+recolor+inpaint 道具治本 → ROI demote 放大镜/桌子
+4. 已完成: 31-apologize (验证零白方块) / 13-debug-snack / 16-deadline-sprint / 17-celebrate (4/18). 其余 14 场景后台跑 (~25 分钟, 单场景 ~84s)
+
+**v4 fallback + 4 层 post-fix 留作 CPU-only fallback** (无 GPU 时的最终保底). 已 commit `4d02292` 4d02292 (v4 inpaint 32736 像素). 任何走 v4 fallback 输出的 APNG 上桌前必跑 `scripts/extract-v4-postfix-eyes.py` (4 层条件).
 
 ```bash
 # CWD = 项目根 (scripts/run-vite.sh wrapper 已兼容 Tauri 2 三套 CWD 假设)

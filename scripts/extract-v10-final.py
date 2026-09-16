@@ -28,15 +28,36 @@ os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
 
 ROOT = "/home/weekbin/Works/repositories/octopus-pet"
 H3_VIDEOS = {
+    # 8 V2 base scenes
     "detective-study":     f"{ROOT}/docs/v2-01-detective-study/v2-01-detective-study-h3.mp4",
     "worker-construction": f"{ROOT}/docs/v2-02-worker-construction/v2-02-worker-construction-h3.mp4",
     "drink-coffee":        f"{ROOT}/docs/v2-03-drink-coffee/v2-03-drink-coffee-h3.mp4",
-    # 5 new scenes — 2026-09-10 H3 batch
     "breakdown":           f"{ROOT}/docs/h3-source-2026-09-10/breakdown-h3.mp4",
     "friday-5pm":          f"{ROOT}/docs/h3-source-2026-09-10/friday-5pm-h3.mp4",
     "pretend-busy":        f"{ROOT}/docs/h3-source-2026-09-10/pretend-busy-h3.mp4",
     "stay-late":           f"{ROOT}/docs/h3-source-2026-09-10/stay-late-h3.mp4",
     "treat-milk-tea":      f"{ROOT}/docs/h3-source-2026-09-10/treat-milk-tea-h3.mp4",
+}
+# 18 V3 H3 scenes from 2026-09-15 batch (added 2026-09-16 v10-final rebuild)
+H3_VIDEOS_V3 = {
+    "13-debug-snack":      f"{ROOT}/docs/h3-source-2026-09-15/passed/13-debug-snack.mp4",
+    "16-deadline-sprint":  f"{ROOT}/docs/h3-source-2026-09-15/passed/16-deadline-sprint.mp4",
+    "17-celebrate":        f"{ROOT}/docs/h3-source-2026-09-15/passed/17-celebrate.mp4",
+    "18-monday-morning":   f"{ROOT}/docs/h3-source-2026-09-15/passed/18-monday-morning.mp4",
+    "19-thumbs-up":        f"{ROOT}/docs/h3-source-2026-09-15/passed/19-thumbs-up.mp4",
+    "20-thinking":         f"{ROOT}/docs/h3-source-2026-09-15/passed/20-thinking.mp4",
+    "22-yay-friday":       f"{ROOT}/docs/h3-source-2026-09-15/passed/22-yay-friday.mp4",
+    "23-dancing":          f"{ROOT}/docs/h3-source-2026-09-15/passed/23-dancing.mp4",
+    "24-surprised":        f"{ROOT}/docs/h3-source-2026-09-15/passed/24-surprised.mp4",
+    "29-shy":              f"{ROOT}/docs/h3-source-2026-09-15/passed/29-shy.mp4",
+    "30-wave":             f"{ROOT}/docs/h3-source-2026-09-15/passed/30-wave.mp4",
+    "31-apologize":        f"{ROOT}/docs/h3-source-2026-09-15/passed/31-apologize.mp4",
+    "32-laugh":            f"{ROOT}/docs/h3-source-2026-09-15/passed/32-laugh.mp4",
+    "33-magic":            f"{ROOT}/docs/h3-source-2026-09-15/passed/33-magic.mp4",
+    "34-meditation":       f"{ROOT}/docs/h3-source-2026-09-15/passed/34-meditation.mp4",
+    "35-blink":            f"{ROOT}/docs/h3-source-2026-09-15/passed/35-blink.mp4",
+    "36-cheer":            f"{ROOT}/docs/h3-source-2026-09-15/passed/36-cheer.mp4",
+    "payday":              f"{ROOT}/docs/h3-source-2026-09-15/passed/payday.mp4",
 }
 # Default output goes into the v2 APNG folder the app actually loads
 OUTPUT_DIR = f"{ROOT}/app/public/assets/octopus/v2"
@@ -253,12 +274,13 @@ def main():
     corrkey = load_corridorkey(DEVICE)
     print("[v10-final] models loaded")
 
-    for scene in [
-        "detective-study", "worker-construction", "drink-coffee",
-        "breakdown", "friday-5pm", "pretend-busy", "stay-late", "treat-milk-tea",
-    ]:
+    scenes = list(H3_VIDEOS.keys()) + list(H3_VIDEOS_V3.keys())
+    for scene in scenes:
         print(f"\n=== {scene} ===")
-        video = H3_VIDEOS[scene]
+        if scene in H3_VIDEOS:
+            video = H3_VIDEOS[scene]
+        else:
+            video = H3_VIDEOS_V3[scene]
         paths = extract_video_frames(video, fps=15, count=99, size=192)
         print(f"  {len(paths)} frames extracted")
 
@@ -320,4 +342,63 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1:
+        # CLI mode: process specified scenes only
+        # Usage: extract-v10-final.py scene1 scene2 ...
+        all_videos = {**H3_VIDEOS, **H3_VIDEOS_V3}
+        scenes = sys.argv[1:]
+        # Filter to existing scenes
+        scenes = [s for s in scenes if s in all_videos]
+        if not scenes:
+            print(f"❌ no valid scenes. Available: {list(all_videos.keys())}")
+            sys.exit(1)
+        print(f"[v10-final CLI] processing {len(scenes)} scenes")
+        # Monkey-patch main loop to use specified scenes
+        _orig_main_scenes = None
+        # Re-import main body via exec
+        import textwrap
+        # Just run with scenes
+        print("[v10-final] loading models...")
+        birefnet = load_birefnet(DEVICE)
+        corrkey = load_corridorkey(DEVICE)
+        print("[v10-final] models loaded")
+
+        for scene in scenes:
+            print(f"\n=== {scene} ===")
+            video = all_videos[scene]
+            paths = extract_video_frames(video, fps=15, count=99, size=192)
+            print(f"  {len(paths)} frames extracted")
+            out_frames = []
+            t0 = time.time()
+            for i, path in enumerate(paths):
+                bgr = cv2.imread(path, cv2.IMREAD_COLOR)
+                rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+                pil = Image.fromarray(rgb)
+                hint = birefnet_hint(birefnet, pil, device=DEVICE, size=192)
+                result = corrkey_unmix(corrkey, rgb, hint)
+                alpha = np.clip(result["alpha"].squeeze(), 0.0, 1.0)
+                fg = np.clip(result["fg"], 0.0, 1.0)
+                rgb_u8 = (fg * 255).astype(np.uint8)
+                alpha_u8 = (alpha * 255).astype(np.uint8)
+                rgba_u8 = np.dstack([rgb_u8, alpha_u8])
+                rgba_u8 = post_green_residual_mask_v103(rgba_u8)
+                rgba_u8, _ = post_forehead_white_mask(rgba_u8)
+                out_frames.append(rgba_u8)
+                if (i + 1) % 20 == 0 or i == len(paths) - 1:
+                    elapsed = time.time() - t0
+                    rate = (i + 1) / elapsed
+                    eta = (len(paths) - i - 1) / rate if rate > 0 else 0
+                    print(f"    f{i+1}/{len(paths)}  {rate:.2f} f/s  ETA {eta:.0f}s")
+            # cleanup tmp
+            try:
+                for p in paths:
+                    os.remove(p)
+                os.rmdir(os.path.dirname(paths[0]))
+            except Exception:
+                pass
+            out_path = f"{OUTPUT_DIR}/{scene}.png"
+            save_apng(out_frames, out_path)
+            archive_path = f"{ARCHIVE}/v10-final-{scene}.png"
+            save_apng(out_frames, archive_path)
+    else:
+        main()

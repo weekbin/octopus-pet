@@ -10,7 +10,7 @@ Coral-pink 章鱼桌宠 — Tauri 2 + React 19 + XState 5 + MCP stdio, 作为 [a
 
 | 项 | 值 |
 |---|---|
-| 状态 | **V3.0 (2026-09-16) P0 阻塞**: H3 视频生成 ✅ / 验证 ✅ (18 合格) / **本地 mp4 被 mavis-trash 误删, 需 task_id 重下** / **去绿幕未做**. V2.3 v10-final 抠图 + 8 V2 场景, V1.5+ `<img>` 跨平台兼容渲染. 接手任务见 `HANDOFF.md` |
+| 状态 | **V3.0 (2026-09-16) P0 解除**: H3 视频生成 ✅ / 验证 ✅ (18 合格) / mp4 rsync ✅ / v10-final 重生成 18 APNG ✅ (BiRefNet+CorridorKey 治本白方块) / scenes.json 8→26 ✅ / check-scenes-sync + lint + test ✅. 待 `release-plugin.sh` 跑 V3.0 release. 接手任务见 `HANDOFF.md` |
 | 栈 | Tauri 2 · React 19 · Vite 6 · XState 5 · Rust 1.77+ |
 | 窗口 | 116×116 透明, V2 APNG 192×192 在 `<img>` 内部 (CSS 缩放到 116×116, 浏览器原生 APNG 循环) |
 | 8 V2 场景 (V1.5+ 默认) | detective-study · worker-construction · drink-coffee · breakdown · friday-5pm · pretend-busy · stay-late · treat-milk-tea |

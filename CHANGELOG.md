@@ -6,6 +6,41 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **18 V3 H3 场景 v10-final 重生成治本"白方块" (2026-09-16)**:
+  v4 fallback + 4 层 post-fix 部署后用户第三次反馈"眼睛还有明显的像正方形的
+  白色区域". 排查: 颜色阈值路线物理上限 ~95%, post-fix 用肤色 inpaint ≠
+  黑色眼白 (chroma key 已把皮肤当绿 → alpha=0 → inpaint 也只能填周围皮肤色,
+  不是眼白黑色瞳孔). 治本方案: 走 `scripts/extract-v10-final.py` 神经网络
+  unmixing 路径 (BiRefNet 1024 fp16 alpha hint → CorridorKey GreenFormer
+  2048 tiled fp16 linear alpha + straight FG → v10.3 strict gate →
+  forehead_white_mask H3 源 ROI 缝补 → borrow+recolor+inpaint 道具治本).
+  - 从 git 历史 `922b642~1` 恢复 `scripts/extract-v52-apng.py` (v10-final 依赖,
+    2026-09-10 cleanup 误删)
+  - `scripts/extract-v10-final.py` 加 `H3_VIDEOS_V3` 字典 (18 新场景 mp4 路径) +
+    CLI 模式 `python3 scripts/extract-v10-final.py scene1 scene2 ...`
+  - 单场景 ~84s, 18 场景串行 ~22 分钟 (含模型加载), v4 fallback 5-6× faster 但
+    物理上限治不到白方块
+  - 验证: 18 场景 × f50 frame contact sheet, 全部零白方块. 31-apologize
+    v10-final vs v4+postfix 4d02292 对比: 右眼 (用户视角左) 白方块消失.
+  - 文件大小: v4 fallback 5.4-5.9 MB → v10-final 3.2-4.5 MB (clean alpha 压缩更好)
+  - v4 fallback + 4 层 post-fix (`scripts/extract-v4-postfix-eyes.py`) 仍保留
+    作 CPU-only fallback. 任何走 v4 fallback 输出的 APNG 上桌前必跑 post-fix.
+
+### Added
+- **18 个 V3 H3 场景注册到 scenes.json (8 → 26, 2026-09-16)**:
+  13-debug-snack / 16-deadline-sprint / 17-celebrate / 18-monday-morning /
+  19-thumbs-up / 20-thinking / 22-yay-friday / 23-dancing / 24-surprised /
+  29-shy / 30-wave / 31-apologize / 32-laugh / 33-magic / 34-meditation /
+  35-blink / 36-cheer / payday. 全部走 v10-final 输出, 99 帧 × 66ms × 192×192
+  × ~3.5 MB 各, APNG default `loop=0` (浏览器原生循环).
+  - `scenes.json` 加 18 entry (id / source / bubbleLines 7 条中文台词)
+  - `app/src/state/scene-registry.generated.ts` + `src-tauri/src/scene_registry_generated.rs`
+    自动重新生成, `check-scenes-sync.sh` 通过
+  - `app/src/state/octopus-fsm.test.ts` "contains 8 V2 scenes" 断言更新到 26 个
+    V2 + V3 场景, 24/24 vitest 通过
+  - `cargo test --lib` build OK (无新增 #[test], 仅 build warnings pre-existing)
+
 ### Changed
 - **Pipeline cleanup (2026-09-10)**: Single source of truth for video production
   pipeline. Removes 4 deprecated/obsolete extract scripts, 3 overlapping pipeline

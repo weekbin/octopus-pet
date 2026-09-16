@@ -41,6 +41,96 @@
       "id": "treat-milk-tea",
       "source": "H3 请奶茶 (h3-dual-image-video-gen skill)",
       "bubbleLines": ["喝奶茶", "好喝", "续杯", "奶茶", "吨吨吨", "加糖", "放松"]
+    },
+    {
+      "id": "13-debug-snack",
+      "source": "H3 V3 debug-snack 解bug吃零食",
+      "bubbleLines": ["解bug", "吃点啥", "薯片", "可乐", "嘴馋", "再来一口", "真香"]
+    },
+    {
+      "id": "16-deadline-sprint",
+      "source": "H3 V3 deadline-sprint 截止日冲刺",
+      "bubbleLines": ["还有1h", "救命", "加快", "赶DDL", "要死了", "来不及", "冲刺"]
+    },
+    {
+      "id": "17-celebrate",
+      "source": "H3 V3 celebrate 撒彩带庆祝",
+      "bubbleLines": ["完成", "耶", "庆祝", "撒花", "撒彩", "搞定", "欢呼"]
+    },
+    {
+      "id": "18-monday-morning",
+      "source": "H3 V3 monday-morning 周一被闹钟叫醒",
+      "bubbleLines": ["周一", "再睡5分钟", "不想起", "好困", "闹钟响", "挣扎", "罢工"]
+    },
+    {
+      "id": "19-thumbs-up",
+      "source": "H3 V3 thumbs-up 点赞认可",
+      "bubbleLines": ["棒", "不错", "好赞", "可以", "认可", "确认", "顶你"]
+    },
+    {
+      "id": "20-thinking",
+      "source": "H3 V3 thinking 沉思托腮",
+      "bubbleLines": ["想想", "思考", "嗯", "让我想想", "有点难", "该怎么办", "也许"]
+    },
+    {
+      "id": "22-yay-friday",
+      "source": "H3 V3 yay-friday 周五举杯下班",
+      "bubbleLines": ["周五", "下班啦", "干杯", "走起", "起飞", "周末", "cheers"]
+    },
+    {
+      "id": "23-dancing",
+      "source": "H3 V3 dancing 跟着音乐跳舞",
+      "bubbleLines": ["跳", "动次", "蹦迪", "音乐", "律动", "撒欢", "嗨起来"]
+    },
+    {
+      "id": "24-surprised",
+      "source": "H3 V3 surprised 睁大眼睛惊讶",
+      "bubbleLines": ["啥", "惊", "什么鬼", "真的假的", "哇", "哦豁", "震惊"]
+    },
+    {
+      "id": "29-shy",
+      "source": "H3 V3 shy 害羞捂脸",
+      "bubbleLines": ["害羞", "好害臊", "别看", "脸红", "捂脸", "甜", "诶嘿"]
+    },
+    {
+      "id": "30-wave",
+      "source": "H3 V3 wave 招手打招呼",
+      "bubbleLines": ["嗨", "你好", "过来", "招呼", "挥手", "好久不见", "哟"]
+    },
+    {
+      "id": "31-apologize",
+      "source": "H3 V3 apologize 道歉",
+      "bubbleLines": ["抱歉", "对不起", "我错", "求原谅", "别生气", "呜呜", "sorry"]
+    },
+    {
+      "id": "32-laugh",
+      "source": "H3 V3 laugh 大笑哈哈",
+      "bubbleLines": ["哈哈", "笑死", "太逗", "笑哭", "哈哈哈", "逗我呢", "笑"]
+    },
+    {
+      "id": "33-magic",
+      "source": "H3 V3 magic 魔法棒惊喜",
+      "bubbleLines": ["魔法", "变", "惊喜", "奇迹", "看我", "bilibala", "奇迹时刻"]
+    },
+    {
+      "id": "34-meditation",
+      "source": "H3 V3 meditation 闭眼冥想",
+      "bubbleLines": ["安静", "深呼吸", "冥想", "心静", "放松", "禅", "om"]
+    },
+    {
+      "id": "35-blink",
+      "source": "H3 V3 blink 眨眼示意",
+      "bubbleLines": ["眨", "干嘛", "嗯", "看我", "眨眼", "啥事", "等下"]
+    },
+    {
+      "id": "36-cheer",
+      "source": "H3 V3 cheer 加油欢呼彩旗",
+      "bubbleLines": ["加油", "冲鸭", "go", "we are", "胜利", "团队", "齐心"]
+    },
+    {
+      "id": "payday",
+      "source": "H3 V3 payday 发薪日撒钱",
+      "bubbleLines": ["发薪", "有钱", "爽", "money", "收钱", "豪", "撒钱"]
     }
   ]
 }
