@@ -225,46 +225,32 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
   - **`bin/octopus-pet` wrapper 自动从 release URL 下载兜底**: 第一次 `git clone` 后 wrapper 在找不到本地/缓存 binary 时, curl/wget 从 `https://github.com/weekbin/octopus-pet/releases/download/v3.0/octopus-pet.${KERNEL}.bin` 下载并缓存到 `bin/octopus-pet.${KERNEL}.bin`. 设 `OCTOPUS_PET_SKIP_DOWNLOAD=1` 抑制兜底下载.
   - **历史 commit 中的 binary 用 `git filter-repo --path bin/octopus-pet.linux.bin --invert-paths` 从 history 删除**: 强制 force-push 后 repo 不再含 116MB object, 后续 commits 可正常 push.
 
-### Out of scope (方案 G 实证失败, 续战 G1 — 见下 "方案 G1 实证成功")
-- **用户反馈**: "17/22/23/32 的抠图效果还是不是很好, 感觉动画有残影, 别的效果反倒不错. 方案 G: 基于 mp4 层 `ffmpeg -vf 'tmix=frames=3:weights=1 1 1'` 3 帧 temporal mix 让动画更流畅无残影". 用户硬约束: 原视频不丢 + 先备份 + 改动在备份副本.
-- **执行回顾**:
+### Out of scope (方案 G/G1 实证均失败, V3.0 baseline 同样有拖影绿幕残留)
+- **用户反馈 #1 (2026-09-16 18:43)**: "17/22/23/32 的抠图效果还是不是很好, 感觉动画有残影, 别的效果反倒不错. 方案 G: 基于 mp4 层 `ffmpeg -vf 'tmix=frames=3:weights=1 1 1'` 3 帧 temporal mix 让动画更流畅无残影". 用户硬约束: 原视频不丢 + 先备份 + 改动在备份副本.
+- **方案 G 执行回顾** (frames=3:weights=1 1 1):
   1. ✅ 完整备份 27 个 mp4 到 `docs/h3-source-2026-09-15/raw-backup-2026-09-16/` (sha256 27/27 与 raw/ 一致)
   2. ✅ 备份副本上跑 tmix=`frames=3:weights=1 1 1` 处理 4 场景输出到 `/tmp/tmix-output/`, **帧间 MAD 下降 17-30% (优秀)** + 中心点 luma diff <5 + 绿幕背景 (5,241,0) 完全保留
-  3. ✅ 视觉对比原 mp4 vs tmix mp4 (抽 0.5/3.0/5.5s 帧): 内容保留 + 边缘平滑
-  4. ❌ tmix 后 raw v10-final 提取回归: **32-laugh 41 帧 raw v10-final α=0 整章鱼 transparent** (Blink 帧间插入叠加), 17-celebrate 22 帧 BLANK, 22-yay-friday 8 帧 BLANK, 23-dancing 1 帧 BLANK. Pass 2 silhouette fill 对 32-laugh 救回部分: v9 v3 f030 opaque=5681 (vs v9 v2 f030 opaque=13356), 33 帧半截空
-  5. ❌ 视觉确认: 32-laugh f030 v9 v3 身体渲染**深红/泪印** (aRGB=140,140 = (127,6,6,1) 几乎全透 + (248,118,121) 仅半边粉), v9 v2 同帧身体完整粉色大笑. f042 同病. f027-f045 整段问题
-  6. ✅ 立即回滚: 从 `/tmp/v9v2-final-backup/` 恢复 4 个 APNG (sha256 100% 匹配) + 从 `raw-backup-2026-09-16/` 恢复 4 个 mp4 (sha256 100% 匹配). git status clean
-- **根因**: tmix 在 32-laugh 这种"快速姿势变化 + 大动作"场景下:
-  - 32-laugh H3 源视频相邻帧差异极大 (variation >0.3 = 大笑高潮), tmix `frames=3:weights=1 1 1` 把"眯眼/睁眼/举手"叠加成"无脸"混合
-  - CorridorKey alpha 解算看到"几乎全绿"→ 返回 α=0 (transparent)
-  - Pass 2 silhouette median 看到邻居帧 α=0 → silhouette 收缩 → 即使 fill 回来, RGB 用前一帧 (也是大笑帧) → 颜色变深红 (因为前一帧身体边缘被绿幕反射污染)
-  - 17/22/23 动作相对温和 + 道具独立, v9 v3 与 v9 v2 等价 (此 3 场景无改善, 也未变差)
-- **续战 G1 路径** (G1 已成功, 见下条):
-  - 方案 G1 (小气一点): tmix=`frames=2:weights=1 1` 仅帧 i + i-1 平滑, motion blur 减轻少但 α 解算稳定 ✅ **已采纳, 实证成功**
-  - 方案 G2 (保守): 仅对 32-laugh 试 `mpdecimate` + 12fps 提取 + 跳过"BLANK"raw 帧 + 改用 Pass 1 跨帧 median (而非 Pass 2 silhouette fill)
-  - 方案 G3: 接受 v9 v2 是合理水平, 用户"残影感"实际是 H3 原始 motion blur + 192×192 缩放锐化造成的视觉感, 通过 tauri 窗口设 transparency 阴影 + 调整 APNG 缩放比例缓解 (无需重抠图)
-
-### Added
-- **方案 G1 实证成功 (V3.0.1 准备, 2026-09-16 19:13)** — `ffmpeg -vf "tmix=frames=2:weights=1 1"` 仅帧 i + i-1 平均:
-  - **mp4 层验证**: MAD 下降 9.5% (温和 vs G3 21%), 中心像素 luma diff <3, 绿幕背景 (2,243,0) 完全保留. 4 场景全跑通, 帧间差异下降但内容不丢失
-  - **raw v10-final BLANK 帧对比**: 32-laugh G1 = 24 (vs G3 41, vs 原 0), Pass 2 fill 救回后 0 bad/0 half/99 full. 17/22/23 0 BLANK (动作相对温和)
-  - **G1 saved final 4 场景对比 (vs v9 v2)**:
-
-    | scene | v9-v2 bad | G1 bad | v9-v2 very_dark | G1 very_dark | 改善 |
-    |---|---|---|---|---|---|
-    | 17-celebrate | 0 | 0 | 71221 | 76875 | +7.9% (略增, 可接受) |
-    | 22-yay-friday | 0 | 0 | 49331 | 50610 | +2.6% (略增, 可接受) |
-    | 23-dancing | 0 | 0 | 56823 | 51178 | -9.9% ✅ |
-    | 32-laugh | 0 | 0 | 71762 | 62541 | -12.9% ✅ |
-
-  - **postfix G1 修像素数**:
-    - 17-celebrate: pass1=95k + pass2=100k + pass3=9k + pass4=176k
-    - 22-yay-friday: pass1=66k + pass2=59k + pass3=14k + pass4=20k
-    - 23-dancing: pass1=61k + pass2=21k + pass3=11k + pass4=43k
-    - 32-laugh: pass1=137k + pass2=164k + pass3=21k + pass4=149k
-  - **可视化 4 场景 v9 v2 vs G1**: 32-laugh f030/f032/f042 G1 视觉粉色大笑完整 (vs G3 之前深红/泪印), 23-dancing G1 道具+身体干净, 17/22 G1 道具保留+身体干净
-  - **结论**: G1 (tmix=frames=2:weights=1 1) 是 mp4 层残影修复的合适上限. 比 G3 (frames=3) 温和很多, raw v10-final BLANK 帧数从 41 降到 24 (32-laugh), Pass 2 fill 完全救回, 视觉粉色大笑. **G1 当前 = 4 场景最佳 baseline**. 22 场景保持 v9 v2 不动 (无残影感). 26 场景** V3.0.1 baseline = 4 v9 v4 (G1) + 22 v9 v2**
-  - **下一版 release 准备**: V3.0.1 = release-plugin.sh 跑出新 116M linux bin (含 4 G1 APNG) + `gh release upload v3.0.1` 覆盖 v3.0.0 asset
+  3. ❌ tmix 后 raw v10-final 提取回归: **32-laugh 41 帧 raw v10-final α=0 整章鱼 transparent**, 17-celebrate 22 帧 BLANK, 22-yay-friday 8 帧 BLANK, 23-dancing 1 帧 BLANK. Pass 2 silhouette fill 对 32-laugh 救回部分: v9 v3 f030 opaque=5681 (vs v9 v2 f030 opaque=13356), 33 帧半截空
+  4. ❌ 视觉确认: 32-laugh f030 v9 v3 身体渲染**深红/泪印** (aRGB=140,140 = (127,6,6,1) 几乎全透 + (248,118,121) 仅半边粉), v9 v2 同帧身体完整粉色大笑. f042 同病. f027-f045 整段问题
+  5. ✅ 立即回滚 (commit `196e376`): 从 `/tmp/v9v2-final-backup/` 恢复 4 个 APNG (sha256 100% 匹配) + 从 `raw-backup-2026-09-16/` 恢复 4 个 mp4 (sha256 100% 匹配). git status clean
+- **用户反馈 #2 (2026-09-16 18:55)**: 接受方案 G1 选项. `tmix=frames=2:weights=1 1` (仅帧 i + i-1 平均).
+- **方案 G1 执行回顾** (frames=2:weights=1 1):
+  1. ✅ 备份上跑 G1 mp4 处理, MAD 下降 9.5% (温和), 中心像素 diff <3, 绿幕背景完美保留
+  2. ✅ raw v10-final BLANK: 32-laugh 24 (vs G3 41), Pass 2 fill 救回, saved final 0 bad
+  3. ✅ 像素统计: 32-laugh very_dark -12.9%, 23-dancing -9.9%, 17/22 略增
+  4. ❌ **用户反馈 #3 (2026-09-16 19:23)**: "拖影比较严重, 还出现了绿幕没处理干净的情况. 在没处理好 apng 的效果之前不要忙着打包". **用户视觉复查发现 G1 仍有拖影 + 绿幕残留**: 32-laugh f15-f54, 17-celebrate f38-f43, 22-yay-friday f37-f38, 23-dancing f57-f59 — **dark green spike artifacts** 在大笑爆发/彩带挥舞段周围
+  5. ✅ **关键发现**: 用户**对 v9 v2 baseline 全 99 帧 contact sheet 对比**也看到同样拖影 + 绿幕残留 — 这是 v3.0 既有 baseline 问题, **不是 G1 引入的回归**. v9 v2 与 G1 都有 artifacts, G1 在某些帧甚至让 artifacts 更明显 (因 tmix 让 RGB cross-frame 污染扩散)
+  6. ✅ **立即撤销** (commit 19:24): 4 APNG + 4 mp4 sha256 100% 恢复 v9 v2 baseline. `gh release delete v3.0.1 --cleanup-tag` 撤销 V3.0.1 release. V3.0 恢复为 Latest. git status clean
+- **根因** (G + G1 都解决不了):
+  - H3 源视频本身有 motion blur + 道具 (彩带/酒杯/音符/哈哈字) 在大笑爆发/快速挥舞帧周边会反射绿幕反射
+  - CorridorKey GreenFormer 看到"反射 + 运动模糊"组合返回 α<200 → 边缘 partial alpha
+  - Pass 2 silhouette fill 用前一帧 RGB → 当前帧周围 green spike = 前一帧道具 RGB 残留
+  - **tmix 既不能消除 H3 源 motion blur, 也不能让 CorridorKey 提取更准** — 它只是改变帧间时序权重, 对 artifact 是中性或负面
+- **真正可行的方向** (从根因治):
+  - **方向 H1** (治根): 改 v10-final green gate 阈值 (当前 `G>150 AND R<150 AND B<150 AND ratio>1.3`). 对 32-laugh / 17-celebrate / 22-yay-friday / 23-dancing 单独放宽 (`G>140 AND R<170 AND B<170 AND ratio>1.1`), 让道具边缘 alpha 提到 200+. 改 v10.3 strict gate 参数
+  - **方向 H2** (降门槛): 添加 **Pass 5 道具边缘硬清**: 检测 silhouette 外 8px 范围内 alpha 10-200 像素 (即"边缘绿刺"), 直接 α=0. 这能消除"道具周边绿刺" artifacts, 代价是道具边缘略硬
+  - **方向 H3** (改源): 重新 H3 生成这 4 个场景, 加 prompt 约束 "no reflection of background in props / clean matte props / no green tint reflection"
+  - **方向 H4** (UI 层): 接受 artifacts, 通过 tauri 窗口设 transparency + 阴影模糊, 让用户视觉感受减轻. 不重抠图, ~30 分钟代码改动
 
 ### Added
 - **18 个 V3 H3 场景注册到 scenes.json (8 → 26, 2026-09-16)**:

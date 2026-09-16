@@ -1,8 +1,8 @@
 # Handoff: octopus-pet V3.0 H3 视频资产管线 (2026-09-16)
 
 > **状态 (2026-09-16 18:25)**: H3 视频生成 ✅ | 首尾帧验证 ✅ | mp4 归档 ✅ | v10-final 重生成 18 APNG ✅ (BiRefNet+CorridorKey 治本白方块) | flicker post-fix **v9 v2 four-pass** ✅ (Pass 2 silhouette 内 transparent fill 治 PIL APNG encoder cascading bug — `frames[i]=frames[i-1].copy()` 在 disposal=2 下被错编码成 raw transparent; 改为保留 raw 背景 + 仅 fill silhouette; Pass 4 改为前一帧 RGB 治 v8 跨帧 median 姿势鬼影; 26 场景全套 777390 flicker + 379592 silhouette + 163021 sub-silhouette + 698274 majority-voting 像素修复) | scenes.json 8→26 ✅ | check-scenes-sync + lint + test ✅ | **tauri.linux.conf.json CWD 假设纠正** ✅ (d4ddcd2 当时假设 NUC CWD=src-tauri/, 实测 CWD=项目根, 跟 macOS conf 同步为 `bash scripts/run-vite.sh`) | **release-plugin.sh V3.0 linux bin 116MB 产出 + MCP initialize/tools_list 冒烟 OK** ✅ | **GitHub Release v3.0 published** ✅ (`octopus-pet.linux.bin` 走 release asset, V3.0+ binary 不入 git, 因 116MB > GitHub 100MB 单文件 commit 限制; `bin/octopus-pet` wrapper 自动从 release URL 下载兜底; 历史 commit 中 binary 用 `git filter-repo --invert-paths` 删除并 force-push 成功).
-> **追加 (2026-09-16 18:55)**: **方案 G 实证失败已回滚** — 用户反馈 17/22/23/32 抠图有"残影感", 决定走方案 G (`ffmpeg -vf 'tmix=frames=3:weights=1 1 1'`). 执行完整 (✅ 备份 27 mp4 + ✅ 抽帧验证 tmix MAD 降 17-30% + ✅ mp4 + raw + APNG 重生成). 但 v10-final 抽帧发现: **32-laugh 41 raw 帧 α=0 (BLANK) + 17-celebrate 22 + 22-yay-friday 8 + 23-dancing 1** (tmix 在大笑高潮帧叠加成"无脸透明" → CorridorKey 返回 α=0). 即便 Pass 2 silhouette fill 救回 32-laugh f025-f045 部分像素 (5681-6348 opaque, **vs v9 v2 的 13356-13876**), 视觉上 f030/f042 身体渲染深红/泪印 (aRGB=(127,6,6,α=1) 几乎全透 + 半边粉). **立即回滚**: 4 APNG (sha256 100% 匹配 v9 v2) + 4 mp4 (sha256 100% 匹配 backup) 全部恢复 v9 v2 状态. git status clean. **当前 26 场景全部 v9 v2 = 当前最佳**.
-> **追加 (2026-09-16 19:13)**: **方案 G1 实证成功 V3.0.1 准备** — 用户接续 G1 选项. `ffmpeg -vf "tmix=frames=2:weights=1 1"` (仅帧 i+i-1 平均). 4 场景覆盖 (17/22/23/32): MAD 9.5%↓ + 32-laugh raw BLANK 24 (vs G3 41) + saved final 0 bad + 32-laugh/23-dancing very_dark -9.9%~-12.9% 改善 + 17/22 very_dark +5-8% (可接受). 抽帧可视化 G1 vs v9 v2 全 4 场景确认视觉达预期. 当前 4 场景 v9 v4 (G1) + 22 场景 v9 v2 = **26 场景 V3.0.1 baseline**. 详 CHANGELOG [Unreleased] "方案 G1 实证成功" + AGENTS.md 状态行 G1 段. 接手人第一件事: 跑 `release-plugin.sh` 出新 116M linux bin + `gh release create v3.0.1` 上传覆盖 v3.0.0 asset (V3.0.1 release 步骤).
+> **追加 (2026-09-16 18:55)**: **方案 G 实证失败已回滚** — 用户反馈 17/22/23/32 抠图有"残影感", 决定走方案 G (`ffmpeg -vf 'tmix=frames=3:weights=1 1 1'`). 执行完整 (✅ 备份 27 mp4 + ✅ 抽帧验证 tmix MAD 降 17-30% + ✅ mp4 + raw + APNG 重生成). 但 v10-final 抽帧发现: **32-laugh 41 raw 帧 α=0 (BLANK) + 17-celebrate 22 + 22-yay-friday 8 + 23-dancing 1** (tmix 在大笑高潮帧叠加成"无脸透明" → CorridorKey 返回 α=0). 即便 Pass 2 silhouette fill 救回 32-laugh f025-f045 部分像素 (5681-6348 opaque, **vs v9 v2 的 13356-13876**), 视觉上 f030/f042 身体渲染深红/泪印 (aRGB=(127,6,6,α=1) 几乎全透 + 半边粉). **立即回滚**: 4 APNG (sha256 100% 匹配 v9 v2) + 4 mp4 (sha256 100% 匹配 backup) 全部恢复 v9 v2 状态. git status clean.
+> **追加 (2026-09-16 19:13)**: **方案 G1 像素统计 OK, 视觉复查同样有拖影 + 绿幕残留, 已撤回** — 用户接续 G1 选项. `ffmpeg -vf "tmix=frames=2:weights=1 1"` (仅帧 i+i-1 平均). 像素统计 G1 vs v9 v2 看似 OK (32-laugh very_dark -12.9% 改善). **用户在打包前全 99 帧 contact sheet 视觉复查发现 G1 仍有拖影 + 绿幕残留** — dark green spike artifacts 在大笑爆发/彩带挥舞段周围 (32-laugh f15-f54, 17-celebrate f38-f43, 22-yay-friday f37-f38, 23-dancing f57-f59). **关键发现**: v9 v2 baseline 全 99 帧对比同样有这些 artifacts — 这是 V3.0 既有 baseline 问题, 不是 G1 引入回归. G1 在某些帧让 artifacts 更明显 (因 tmix cross-frame 污染扩散). **撤销 V3.0.1 release**: 4 APNG + 4 mp4 sha256 100% 恢复 v9 v2 baseline + `gh release delete v3.0.1 --cleanup-tag` (V3.0 恢复 Latest). 当前 26 场景全部 v9 v2 = V3.0 baseline. 详 CHANGELOG [Unreleased] "方案 G/G1 实证均失败" + AGENTS.md 状态行 G1 段.
 > **作者**: Mavis (weekbin user, 2026-09-15 23:38 - 2026-09-16 00:03)
 > **接手人**: 当前接手 Mavis (2026-09-16 12:13 → 15:00 切换模型方案)
 > **优先级**: P0 — V3.0 release 阻塞项
@@ -273,57 +273,24 @@ git push origin main
 
 如果时间允许, 用更简单 prompt 重跑 5 个最有价值的 (touch-fish / soul-leaving / lying-flat / 27-cooking / 21-lunch-break)。每个 ~3 分钟。
 
-### 5.7 P0-7 — 方案 G1/G2/G3 续战 32-laugh 等 4 场景残影感 (2026-09-16 接手人手记)
+### 5.7 P0-7 — 方案 G/G1 实证均失败, 治拖影+绿幕残留需另起方案 (2026-09-16 接手人手记)
 
-V3.0 release 后用户反馈 17/22/23/32 抠图"残影感". 已执行方案 G `ffmpeg tmix=frames=3:weights=1 1 1` 实证 **失败**: tmix 在 32-laugh 大笑高潮帧把"眯/睁/举"叠成"无脸透明" → CorridorKey α=0 → 即便 Pass 2 fill 救回, RGB 用前一帧 (同段大笑, 边缘被绿幕反射污染) → 视觉深红/泪印. 已完整回滚 (sha256 100%), 当前 v9 v2 是最佳.
+V3.0 release 后用户反馈 17/22/23/32 抠图"残影感". 已执行方案 G `ffmpeg tmix=frames=3:weights=1 1 1` 实证 **失败**: tmix 在 32-laugh 大笑高潮帧把"眯/睁/举"叠成"无脸透明" → CorridorKey α=0 → 即便 Pass 2 fill 救回, RGB 用前一帧 (同段大笑, 边缘被绿幕反射污染) → 视觉深红/泪印. 完整回滚 (sha256 100%) 到 v9 v2 baseline.
 
-✅ **方案 G1 已实证成功** — `ffmpeg tmix=frames=2:weights=1 1` 仅帧 i+i-1 平均. 4 场景覆盖 (17/22/23/32). 32-laugh raw BLANK 41 → 24 (G3 失败) → 24 (G1 温和, Pass 2 fill 救回 0 bad), 视觉粉色大笑完整. 23-dancing very_dark -9.9%. 17/22 视觉等价 v9 v2. **当前 4 场景 v9 v4 (G1) + 22 场景 v9 v2 = 26 场景 V3.0.1 baseline**.
+接续 G1 选项 (`ffmpeg tmix=frames=2:weights=1 1`). 像素统计 OK (32-laugh very_dark -12.9%, 0 bad). 但用户在打包前**全 99 帧 contact sheet 视觉复查**发现 G1 仍有拖影 + 绿幕残留 — dark green spike artifacts 在大笑爆发/彩带挥舞段周围 (32-laugh f15-f54, 17-celebrate f38-f43, 22-yay-friday f37-f38, 23-dancing f57-f59). **关键发现**: 对 v9 v2 baseline 全 99 帧对比同样看到这些 artifacts — **这是 V3.0 既有 baseline 问题, 不是 G1 引入回归**. G1 在某些帧甚至让 artifacts 更明显 (因 tmix cross-frame 污染扩散).
 
-- **G2** (备选, 暂不动): 仅 32-laugh 跑 `mpdecimate` + 12fps + 跳过 BLANK 帧, 用 Pass 1 跨帧 median (非 Pass 2)
-- **G3** (接受现状备选): 通过 tauri 窗口 transparency 阴影 + 调整 APNG 缩放比例缓解"残影感", 不再重抠图
+✅ **撤销 V3.0.1 release**: 4 APNG + 4 mp4 sha256 100% 恢复 v9 v2 baseline + `gh release delete v3.0.1 --cleanup-tag`. V3.0 恢复 Latest. 当前 26 场景 = V3.0 baseline.
+
+**真正可行的方向** (从根因治, 不能走 tmix 路线):
+
+- **方向 H1** (治根, 推荐): 改 v10-final green gate 阈值 (当前 `G>150 AND R<150 AND B<150 AND ratio>1.3`). 对 32-laugh / 17-celebrate / 22-yay-friday / 23-dancing 单独放宽 (`G>140 AND R<170 AND B<170 AND ratio>1.1`), 让道具边缘 alpha 提到 200+. 改 v10.3 strict gate 参数, ~30 分钟
+- **方向 H2** (降门槛): 添加 **Pass 5 道具边缘硬清**: 检测 silhouette 外 8px 范围内 alpha 10-200 像素 (即"边缘绿刺"), 直接 α=0. 这能消除"道具周边绿刺" artifacts, 代价是道具边缘略硬. ~1 小时
+- **方向 H3** (改源): 重新 H3 生成这 4 个场景, 加 prompt 约束 "no reflection of background in props / clean matte props / no green tint reflection". ~30 分钟/场景 (含等待), 4 场景 = 2 小时
+- **方向 H4** (UI 层, 最小改动): 接受 artifacts, 通过 tauri 窗口设 transparency + 阴影模糊, 让用户视觉感受减轻. 不重抠图, ~30 分钟代码改动
 
 **强约束**: 任何方案第一步必须是 `docs/h3-source-2026-09-15/raw-backup-2026-09-16/` 完整性复检 (md5sum, 27/27 一致), 然后**再次**完整备份. 全部改动在备份副本上进行.
 
-### 5.8 P0-8 — V3.0.1 release (4 场景 v9 v4 G1 + 22 场景 v9 v2) (2026-09-16 19:13 当前任务)
-
-```bash
-# 1. git status clean (已完成)
-git status
-
-# 2. 验证 G1 4 APNG + 22 v9 v2 APNG 在 app/public/assets/octopus/v2/
-ls -la app/public/assets/octopus/v2/{17-celebrate,22-yay-friday,23-dancing,32-laugh}.png
-
-# 3. (重要) 确认 raw-backup-2026-09-16 仍在 (用户硬约束原 mp4 不丢)
-ls -la docs/h3-source-2026-09-15/raw-backup-2026-09-16/
-
-# 4. 跑 release-plugin.sh 出 V3.0.1 linux bin
-bash scripts/release-plugin.sh
-# 输出: bin/octopus-pet.linux.bin (116MB, 含 26 V2 APNG 内嵌 91MB + Rust binary 25MB)
-
-# 5. cargo tauri build 冒烟: MCP initialize/tools_list OK
-
-# 6. 上传 V3.0.1 GitHub Release asset (覆盖 v3.0.0)
-gh release create v3.0.1 bin/octopus-pet.linux.bin \
-  --title "V3.0.1 — 方案 G1 残影修复 4 场景 (tmix=frames=2)" \
-  --notes "$(cat <<'EOF'
-V3.0.1 patch release. 替换 4 场景 APNG (17/22/23/32) 用 mp4 层 ffmpeg tmix=frames=2:weights=1 1 处理后重抠图 (v9 v4 = G1). 
-
-变更:
-- 17-celebrate: G1 (very_dark +7.9% 略增, 视觉等价)
-- 22-yay-friday: G1 (very_dark +2.6% 略增, 视觉等价)
-- 23-dancing: G1 (very_dark -9.9% 改善)
-- 32-laugh: G1 (very_dark -12.9% 改善, 修复残影感)
-- 22 场景保持 v9 v2 不动 (无残影感)
-
-残留 (CHANGELOG [Unreleased] Out of scope):
-- 方案 G2 mpdecimate + 12fps (备选, 未实施)
-- 方案 G3 tauri UI 层缓解 (备选, 未实施)
-EOF
-)"
-# OR: gh release upload v3.0.1 bin/octopus-pet.linux.bin (如果 v3.0.1 已存在)
-```
-
-**强约束**: V3.0.1 binary 同样 >100MB 走 release asset, **不入 git**. `bin/octopus-pet` wrapper 已支持自动从 release URL 下载兜底 (`OCTOPUS_PET_SKIP_DOWNLOAD=1` 抑制).
+**用户原话 (2026-09-16 19:23)**: "不要急着打包, 你现在做的效果里, 拖影比较严重, 还出现了绿幕没处理干净的情况. 切忌, 在没处理好 apng 的效果之前不要忙着打包". 接手人务必先**全 99 帧 contact sheet 视觉复查**再决定 release, 不要只看像素统计.
 
 ---
 
