@@ -93,6 +93,7 @@ def fix_flicker(apng_path: str, out_path: str | None = None) -> dict:
     pass2_replaced = 0
     pass3_fixed = 0
     pass4_fixed = 0
+    pass5_fixed = 0
     pass2_hit_frames: set[int] = set()  # Pass 2 命中帧, Pass 3 跳过
 
     # ── Pass 1: per-pixel temporal fill (1-frame flicker) ──
@@ -191,10 +192,39 @@ def fix_flicker(apng_path: str, out_path: str | None = None) -> dict:
             frames[i][mask, 3] = 255
         pass4_fixed += int(mask.sum())
 
-    return _save(frames, out_path or apng_path, n, pass1_fixed, pass2_replaced, pass3_fixed, pass4_fixed)
+    # ── Pass 5: 跨帧稳定度阈值清装饰色残影 (H2) ──
+    # H1 (alpha 5-100 非体色粉清掉) 治了 90-95% 装饰拖影, 但残留 alpha 100-200
+    # 装饰色像素 (彩带/音符/彩旗 partial alpha 边缘) 在 silhouette 内, 不能用
+    # silhouette mask 区分 (装饰紧贴 body, body AA 也在 silhouette 内).
+    # H2 用跨帧位置稳定度分离: body 像素在 99 帧内 ≥70% 帧 alpha>=100 → 保留;
+    # 装饰像素 (跨帧位置变化) 稳定度 <0.7 → 清 alpha 100-200 非体色.
+    # 4 类:
+    #   A body_stable_opaque (稳定+当前 opaque) → 保留
+    #   B body_aa_edge (不稳定+体色粉) → 保留 (body AA 边缘跨帧 alpha 抖动)
+    #   C decoration_core (当前 opaque+非体色) → 保留 (装饰核心不透明主体)
+    #   D decoration_partial (alpha 100-200+非体色+不稳定) → 清 (装饰拖影残影)
+    # 2026-09-16 H2 验证 (4 场景 H1 输出): D = 16k-26k 像素/99 帧 (1.0-1.4%),
+    # A+B+C 全部保留. 体色守卫同 H1 (R>200 & G<150 & B<150).
+    h2_stability_threshold = 0.7
+    h2_stability = (stack_all >= 100).sum(axis=0) / n  # alpha>=100 帧数比例
+    h2_body_stable = h2_stability >= h2_stability_threshold  # (H, W)
+
+    for i in range(n):
+        rgba = frames[i]
+        a = rgba[:, :, 3]
+        rgb = rgba[:, :, :3]
+        R, G, B = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+        body_pink = (R > 200) & (G < 150) & (B < 150)
+        # D: 不稳定 + alpha 100-200 + 非体色
+        h2_decoration = (~h2_body_stable) & (a >= 100) & (a < 200) & ~body_pink
+        if h2_decoration.any():
+            rgba[h2_decoration, 3] = 0
+        pass5_fixed += int(h2_decoration.sum())
+
+    return _save(frames, out_path or apng_path, n, pass1_fixed, pass2_replaced, pass3_fixed, pass4_fixed, pass5_fixed)
 
 
-def _save(frames, out_path, n, pass1_fixed, pass2_replaced, pass3_fixed, pass4_fixed):
+def _save(frames, out_path, n, pass1_fixed, pass2_replaced, pass3_fixed, pass4_fixed, pass5_fixed):
     pil_frames = [Image.fromarray(f, mode="RGBA") for f in frames]
     pil_frames[0].save(
         out_path,
@@ -213,6 +243,7 @@ def _save(frames, out_path, n, pass1_fixed, pass2_replaced, pass3_fixed, pass4_f
         "pass2_frames_replaced": pass2_replaced,
         "pass3_sub_silhouette_fixed": pass3_fixed,
         "pass4_majority_voting_fixed": pass4_fixed,
+        "pass5_stable_threshold_cleaned": pass5_fixed,
     }
 
 
@@ -230,7 +261,8 @@ def main():
     total_p2 = 0
     total_p3 = 0
     total_p4 = 0
-    print(f"[v10-final-postfix-flicker] processing {len(scenes)} scenes (v9 four-pass: prev-frame replace)")
+    total_p5 = 0
+    print(f"[v10-final-postfix-flicker] processing {len(scenes)} scenes (v9 v2 five-pass: H2 stable-threshold decoration cleanup)")
     for scene in scenes:
         archive_path = f"{ARCHIVE}/v10-final-{scene}.png"
         live_path = f"{INPUT_DIR}/{scene}.png"
@@ -242,16 +274,18 @@ def main():
         total_p2 += result["pass2_frames_replaced"]
         total_p3 += result["pass3_sub_silhouette_fixed"]
         total_p4 += result["pass4_majority_voting_fixed"]
+        total_p5 += result["pass5_stable_threshold_cleaned"]
         print(
             f"  {scene}: pass1={result['pass1_flicker_fixed']} flicker pixels, "
             f"pass2={result['pass2_frames_replaced']} bad-frames replaced, "
             f"pass3={result['pass3_sub_silhouette_fixed']} sub-silhouette pixels, "
-            f"pass4={result['pass4_majority_voting_fixed']} majority-voting pixels"
+            f"pass4={result['pass4_majority_voting_fixed']} majority-voting pixels, "
+            f"pass5={result['pass5_stable_threshold_cleaned']} decoration residues"
         )
     print(
         f"[v10-final-postfix-flicker] total pass1={total_p1} flicker pixels, "
         f"pass2={total_p2} bad-frames replaced, pass3={total_p3} sub-silhouette pixels, "
-        f"pass4={total_p4} majority-voting pixels"
+        f"pass4={total_p4} majority-voting pixels, pass5={total_p5} decoration residues"
     )
 
 

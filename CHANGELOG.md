@@ -267,6 +267,28 @@ adheres to [Semantic Versioning 2.0.0](https://semver.org/).
     | 32-laugh | 163,175 → 16,403 (**-90%**) | 71,762 不变 | 1,365,354 不变 |
 
   - **可视化**: 全 99 帧 contact sheet v9-v2 vs H1 并排, 32-laugh f15-f54 上方 dark spike artifacts 几乎完全消失, 17/22/23 装饰保留 + 道具边缘 partial alpha 拖影消失, 体色粉色身体不变
+
+### Added
+- **方案 H2 治 alpha 100-200 装饰色残影成功 (V3.0.1 重新准备, 2026-09-16)** — 用户反馈"还有闪烁 + 部分身体帧帧消失"后逐帧诊断根因: H1 治了 alpha 5-100 装饰拖影 (90-95%), 但残留 alpha 100-200 装饰色像素 (彩带/音符/酒杯 partial alpha 边缘) 在 silhouette 内, 不能用 silhouette mask 区分 (装饰紧贴 body, body AA 也在 silhouette 内):
+  - **策略**: 加 `extract-v10-final-postfix-flicker.py` Pass 5 = 跨帧稳定度阈值清装饰残影. 跨 99 帧 alpha>=100 帧数比例 = 稳定度, 阈值 0.7: body 主体稳定度 >=0.7 → 保留; 装饰像素稳定度 <0.7 (跨帧位置变化) + alpha 100-200 + 非体色粉 → α=0
+  - **覆盖范围**: postfix-flicker.py Pass 5 (4 场景 main + CLI 同路径)
+  - **执行**: backup 完整性复检 ✅ (27/27 sha256 一致). 重跑 postfix 17-celebrate / 22-yay-friday / 23-dancing / 32-laugh. 数据 = `pass5=18847/19357/26298/16717 decoration residues` (与离线模拟完全一致)
+  - **像素统计 (H2 vs H1, 4 场景 99 帧)**:
+
+    | scene | decoration_correctly_cleared | body_aa_wrongly_cleared | body_opaque_wrongly_cleared |
+    |---|---|---|---|
+    | 17-celebrate | 18,847 | 0 | 0 |
+    | 22-yay-friday | 19,357 | 0 | 0 |
+    | 23-dancing | 26,298 | 0 | 0 |
+    | 32-laugh | 16,717 | 0 | 0 |
+
+  - **4 类分离验证 (H2 离线模拟, 99 帧累加)**:
+    - A body_stable_opaque (稳定+当前 opaque): 1.1-1.3M px → 100% 保留
+    - B body_aa_edge (不稳定+体色粉): 100k-171k px → 100% 保留
+    - C decoration_core (当前 opaque+非体色): 478k-535k px → 100% 保留 (彩带/音符/酒杯主体不透明)
+    - D decoration_partial (alpha 100-200+非体色+不稳定): 16k-26k px → 100% 清 (装饰拖影)
+    - 拟清比例 1.0-1.4%, body + body AA + 装饰核心全部保留
+  - **可视化**: 全 99 帧 contact sheet H1 vs H2 并排, 17/22/23 装饰核心保留 (彩带/音符/酒杯) + alpha 100-200 装饰色残影显著减少, 32-laugh f15-f54 几乎干净. 当前 4 场景 v9 v5 = H2 + 22 场景 v9 v2 = **26 场景 V3.0.1 baseline 待发布** (用户硬约束 "在没处理好 apng 的效果之前不要忙着打包")
   - **结论**: H1 治本 v10-final "decorations partial alpha 拖影" artifact, 不影响 body 边缘 anti-aliasing. 当前 4 场景 v9 v5 = H1 + 22 场景 v9 v2 = **26 场景 V3.0.1 baseline 待发布**
   - **强约束 (用户原话)**: "不要急着打包, 你现在做的效果里, 拖影比较严重, 还出现了绿幕没处理干净的情况. 切忌, 在没处理好 apng 的效果之前不要忙着打包". 接手人务必先**全 99 帧 contact sheet 视觉复查**再 release, 不要只看像素统计
 

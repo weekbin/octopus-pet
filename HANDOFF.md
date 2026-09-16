@@ -297,6 +297,43 @@ V3.0 release 后用户反馈 17/22/23/32 抠图"残影感". 已执行方案 G (f
 
 **强约束 (用户原话 2026-09-16 19:23 + 19:48)**: "不要急着打包, 你现在做的效果里, 拖影比较严重, 还出现了绿幕没处理干净的情况. 切忌, 在没处理好 apng 的效果之前不要忙着打包". 接手人务必先**全 99 帧 contact sheet 视觉复查**再 release, 不要只看像素统计.
 
+### 5.8 P0-8 — 方案 H2 治 alpha 100-200 装饰色残影成功, V3.0.1 仍在准备中 (2026-09-16 当前任务)
+
+✅ **方案 H2 实证成功 (2026-09-16 20:30)** — 用户在 H1 视觉复查后反馈"还有点闪烁 + 部分身体帧帧消失". 逐帧诊断根因:
+- H1 治了 alpha 5-100 partial alpha 装饰拖影 (90-95%)
+- 但残留 alpha 100-200 装饰色像素 (彩带/音符/酒杯 partial alpha 边缘) 16k-26k 像素/99帧/场景
+- 这些残留装饰**紧贴身体**, silhouette mask 无法区分装饰 vs body AA
+- 用户视觉 = "alpha 100-200 装饰残影帧间闪烁 + 装饰部分遮挡身体的视觉缺漏"
+
+✅ **H2 算法** (extract-v10-final-postfix-flicker.py Pass 5):
+- 跨 99 帧 alpha>=100 帧数比例 = "稳定度"
+- 阈值 0.7: body 主体稳定度 >=0.7 → 保留 (跨帧稳定)
+- 装饰像素稳定度 <0.7 + alpha 100-200 + 非体色粉 → α=0 (跨帧位置变化)
+- 4 类分离验证 (99 帧累加):
+  - A body_stable_opaque 1.1-1.3M → 100% 保留
+  - B body_aa_edge (不稳定+体色粉) 100k-171k → 100% 保留
+  - C decoration_core (当前 opaque+非体色) 478k-535k → 100% 保留 (彩带/音符/酒杯主体不透明)
+  - D decoration_partial (alpha 100-200+非体色+不稳定) 16k-26k → 100% 清 (1.0-1.4%)
+
+✅ **H2 跑 4 场景**: postfix-flicker.py 17-celebrate / 22-yay-friday / 23-dancing / 32-laugh:
+- pass5=18847/19357/26298/16717 decoration residues (与离线模拟完全一致)
+- 0 误伤 body opaque, 0 误伤 body AA, 0 误伤装饰核心
+- APNG n_frames=99 + size=192x192 全场景
+
+✅ **全 99 帧 contact sheet 视觉复查**: 17/22/23 装饰核心保留 (彩带/音符/酒杯) + alpha 100-200 装饰色残影显著减少, 32-laugh f15-f54 几乎干净
+
+**当前状态**: 4 场景 v9 v5 = H2 + 22 场景 v9 v2 = **26 场景 V3.0.1 baseline 待发布**
+
+**下一版 release 步骤** (用户硬约束: 不要急着打包):
+1. ✅ 4 场景 APNG 在 `app/public/assets/octopus/v2/` (v9 v5 = H2)
+2. ✅ 4 场景 mp4 保持原版 (`docs/h3-source-2026-09-15/raw/`, sha256 100% 匹配 backup)
+3. ✅ postfix-flicker.py 加 Pass 5 + main + 计数同步
+4. ⏸️ **暂停 release**: 等用户验收 H2 视觉后再决定. 跑 release-plugin.sh 出新 linux bin + gh release upload v3.0.1 (用户说 OK 才做)
+
+**下一版续战方向** (若 H2 视觉仍不够):
+- **H4** (tauri UI 层 transparency + 阴影模糊) — ~30 分钟代码改动
+- **H3** ❌ 不考虑 (用户排除)
+
 ---
 
 ## 6. 关键路径速查
